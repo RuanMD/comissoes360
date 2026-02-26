@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, CreditCard, Users, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Settings, CreditCard, Users, UserPlus, Globe } from 'lucide-react';
 
 const adminTabs = [
     { path: '/admin/overview', icon: LayoutDashboard, label: 'Visão Geral' },
     { path: '/admin/settings', icon: Settings, label: 'Formulário' },
+    { path: '/admin/seo', icon: Globe, label: 'Link Preview' },
     { path: '/admin/plans', icon: CreditCard, label: 'Planos' },
     { path: '/admin/users', icon: Users, label: 'Usuários' },
     { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
@@ -30,11 +31,10 @@ export function AdminLayout() {
                         <NavLink
                             key={tab.path}
                             to={tab.path}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl whitespace-nowrap text-sm font-medium transition-all ${
-                                isActive
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl whitespace-nowrap text-sm font-medium transition-all ${isActive
                                     ? 'bg-primary text-background-dark shadow-lg shadow-primary/20'
                                     : 'bg-surface-dark text-text-secondary border border-border-dark hover:bg-surface-highlight hover:text-white'
-                            }`}
+                                }`}
                         >
                             <tab.icon className="w-4 h-4" />
                             {tab.label}

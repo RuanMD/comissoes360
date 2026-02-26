@@ -18,6 +18,7 @@ import { DirectsVsIndirects } from './pages/DirectsVsIndirects';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminSettings } from './pages/admin/AdminSettings';
+import { AdminSeoSettings } from './pages/admin/AdminSeoSettings';
 import { AdminPlans } from './pages/admin/AdminPlans';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminLeads } from './pages/admin/AdminLeads';
@@ -66,6 +67,7 @@ export default function App() {
                                         <Route index element={<Navigate to="/admin/overview" replace />} />
                                         <Route path="overview" element={<AdminOverview />} />
                                         <Route path="settings" element={<AdminSettings />} />
+                                        <Route path="seo" element={<AdminSeoSettings />} />
                                         <Route path="plans" element={<AdminPlans />} />
                                         <Route path="users" element={<AdminUsers />} />
                                         <Route path="leads" element={<AdminLeads />} />
