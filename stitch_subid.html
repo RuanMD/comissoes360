@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Análise de Desempenho por Sub_ID - SaaS Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#f2a20d",
+                        "secondary": "#3b82f6", // Blue for clicks as requested
+                        "surface-dark": "#181611",
+                        "surface-light": "#27231b",
+                        "border-color": "#393328",
+                        "text-muted": "#baaf9c",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"],
+                        "body": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Manrope', sans-serif;
+        }
+        /* Custom scrollbar for table */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #181611; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #393328; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #544b3b; 
+        }
+    </style>
+</head>
+<body class="bg-surface-dark text-white min-h-screen flex flex-col font-display overflow-x-hidden">
+<!-- Top Navigation -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-border-color px-6 lg:px-10 py-3 bg-surface-dark sticky top-0 z-50">
+<div class="flex items-center gap-4 text-white">
+<div class="size-8 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined !text-[32px]">analytics</span>
+</div>
+<h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">SaaS Dashboard</h2>
+</div>
+<div class="hidden lg:flex flex-1 justify-end gap-8">
+<nav class="flex items-center gap-9">
+<a class="text-text-muted hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Dashboard</a>
+<a class="text-white text-sm font-medium leading-normal" href="#">Analytics</a>
+<a class="text-text-muted hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Commissions</a>
+<a class="text-text-muted hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Reports</a>
+<a class="text-text-muted hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Settings</a>
+</nav>
+<div class="flex gap-3">
+<button class="flex items-center justify-center rounded-lg h-10 px-4 bg-primary hover:bg-yellow-500 transition-colors text-surface-dark text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Upload CSV</span>
+</button>
+<button class="flex items-center justify-center rounded-lg size-10 bg-surface-light border border-border-color text-white hover:bg-border-color transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="flex items-center justify-center rounded-lg size-10 bg-surface-light border border-border-color text-white hover:bg-border-color transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+<!-- Mobile Menu Icon -->
+<button class="lg:hidden text-white">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</header>
+<main class="flex-1 w-full max-w-[1400px] mx-auto px-4 lg:px-8 py-6 lg:py-8 flex flex-col gap-6">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div class="flex flex-col gap-2">
+<h1 class="text-white text-3xl md:text-4xl font-black leading-tight tracking-[-0.033em]">Análise de Desempenho por Sub_ID</h1>
+<p class="text-text-muted text-base font-normal leading-normal max-w-2xl">Detailed performance metrics per Sub_ID source. Track clicks, conversions, and revenue generation efficiency.</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-surface-light border border-border-color text-white text-sm font-bold hover:bg-border-color transition-colors">
+<span class="material-symbols-outlined text-[20px]">calendar_today</span>
+<span>Last 30 Days</span>
+</button>
+<button class="flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-surface-light border border-border-color text-white text-sm font-bold hover:bg-border-color transition-colors">
+<span class="material-symbols-outlined text-[20px]">download</span>
+<span>Export Report</span>
+</button>
+</div>
+</div>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="bg-surface-light border border-border-color rounded-xl p-5 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<p class="text-text-muted text-sm font-medium">Total Clicks</p>
+<span class="material-symbols-outlined text-secondary">ads_click</span>
+</div>
+<p class="text-2xl font-bold text-white">245,890</p>
+<div class="flex items-center gap-1 text-green-500 text-xs font-bold">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+12.5%</span>
+<span class="text-text-muted font-normal ml-1">vs last month</span>
+</div>
+</div>
+<div class="bg-surface-light border border-border-color rounded-xl p-5 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<p class="text-text-muted text-sm font-medium">Total Orders</p>
+<span class="material-symbols-outlined text-purple-400">shopping_cart</span>
+</div>
+<p class="text-2xl font-bold text-white">18,402</p>
+<div class="flex items-center gap-1 text-green-500 text-xs font-bold">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+8.2%</span>
+<span class="text-text-muted font-normal ml-1">vs last month</span>
+</div>
+</div>
+<div class="bg-surface-light border border-border-color rounded-xl p-5 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<p class="text-text-muted text-sm font-medium">Avg. Conversion Rate</p>
+<span class="material-symbols-outlined text-teal-400">percent</span>
+</div>
+<p class="text-2xl font-bold text-white">7.48%</p>
+<div class="flex items-center gap-1 text-red-400 text-xs font-bold">
+<span class="material-symbols-outlined text-[16px]">trending_down</span>
+<span>-1.1%</span>
+<span class="text-text-muted font-normal ml-1">vs last month</span>
+</div>
+</div>
+<div class="bg-surface-light border border-border-color rounded-xl p-5 flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<p class="text-text-muted text-sm font-medium">Total Commission</p>
+<span class="material-symbols-outlined text-primary">attach_money</span>
+</div>
+<p class="text-2xl font-bold text-white">$42,350.00</p>
+<div class="flex items-center gap-1 text-green-500 text-xs font-bold">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+15.3%</span>
+<span class="text-text-muted font-normal ml-1">vs last month</span>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Clicks vs Orders Chart -->
+<div class="bg-surface-light border border-border-color rounded-xl p-6 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="text-white font-bold text-lg">Clicks vs Orders</h3>
+<div class="flex gap-2">
+<span class="flex items-center gap-1 text-xs text-text-muted"><div class="w-3 h-3 rounded-full bg-secondary"></div> Clicks</span>
+<span class="flex items-center gap-1 text-xs text-text-muted"><div class="w-3 h-3 rounded-full bg-primary"></div> Orders</span>
+</div>
+</div>
+<!-- Abstract Chart Representation using CSS Gradients/Flex -->
+<div class="h-64 w-full flex items-end justify-between gap-2 pt-4 border-b border-border-color border-dashed">
+<!-- Bar Group 1 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[60%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[40%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Mon</span>
+</div>
+<!-- Bar Group 2 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[80%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[50%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Tue</span>
+</div>
+<!-- Bar Group 3 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[45%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[30%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Wed</span>
+</div>
+<!-- Bar Group 4 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[90%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[60%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Thu</span>
+</div>
+<!-- Bar Group 5 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[70%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[45%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Fri</span>
+</div>
+<!-- Bar Group 6 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[55%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[35%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Sat</span>
+</div>
+<!-- Bar Group 7 -->
+<div class="flex flex-col items-center gap-1 flex-1 h-full justify-end group cursor-pointer">
+<div class="flex items-end gap-1 h-[65%] w-full justify-center">
+<div class="w-2 md:w-4 bg-secondary/80 hover:bg-secondary rounded-t-sm h-full transition-all"></div>
+<div class="w-2 md:w-4 bg-primary/80 hover:bg-primary rounded-t-sm h-[40%] transition-all"></div>
+</div>
+<span class="text-xs text-text-muted mt-2">Sun</span>
+</div>
+</div>
+</div>
+<!-- Conversion Trend Chart -->
+<div class="bg-surface-light border border-border-color rounded-xl p-6 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="text-white font-bold text-lg">Top 5 Sub_ID Conversion Trend</h3>
+<div class="flex gap-2">
+<span class="flex items-center gap-1 text-xs text-text-muted">Last 7 Days</span>
+</div>
+</div>
+<!-- Abstract Line Chart Representation -->
+<div class="h-64 w-full relative pt-4 overflow-hidden">
+<div class="absolute inset-0 flex flex-col justify-between text-xs text-text-muted pointer-events-none z-0">
+<div class="border-b border-border-color border-dashed w-full h-full"></div>
+<div class="border-b border-border-color border-dashed w-full h-full"></div>
+<div class="border-b border-border-color border-dashed w-full h-full"></div>
+<div class="border-b border-border-color border-dashed w-full h-full"></div>
+</div>
+<!-- Lines (Simulated with clip-path and gradients) -->
+<div class="absolute bottom-0 left-0 right-0 h-[80%] z-10 opacity-80" style="background: linear-gradient(90deg, transparent, #f2a20d); clip-path: polygon(0% 80%, 15% 60%, 30% 70%, 50% 40%, 70% 50%, 85% 20%, 100% 30%, 100% 100%, 0% 100%);">
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-[80%] z-10" style="background: transparent; border-top: 2px solid #f2a20d; clip-path: polygon(0% 80%, 15% 60%, 30% 70%, 50% 40%, 70% 50%, 85% 20%, 100% 30%, 100% 32%, 85% 22%, 70% 52%, 50% 42%, 30% 72%, 15% 62%, 0% 82%);">
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-[60%] z-0 opacity-40" style="background: linear-gradient(90deg, transparent, #3b82f6); clip-path: polygon(0% 50%, 20% 60%, 40% 40%, 60% 55%, 80% 30%, 100% 45%, 100% 100%, 0% 100%);">
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-[60%] z-10" style="background: transparent; border-top: 2px solid #3b82f6; clip-path: polygon(0% 50%, 20% 60%, 40% 40%, 60% 55%, 80% 30%, 100% 45%, 100% 47%, 80% 32%, 60% 57%, 40% 42%, 20% 62%, 0% 52%);">
+</div>
+</div>
+</div>
+</div>
+<!-- Search & Filters -->
+<div class="flex flex-col md:flex-row gap-4 justify-between items-center bg-surface-light border border-border-color rounded-t-xl p-4 mt-4">
+<div class="w-full md:w-96 relative">
+<div class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="w-full bg-surface-dark border border-border-color rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-text-muted text-sm" placeholder="Search by Sub_ID..." type="text"/>
+</div>
+<div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+<button class="flex items-center gap-2 px-3 py-2 bg-surface-dark border border-border-color rounded-lg text-text-muted hover:text-white hover:border-white transition-colors text-sm whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]">filter_list</span> Filters
+                 </button>
+<button class="flex items-center gap-2 px-3 py-2 bg-surface-dark border border-border-color rounded-lg text-text-muted hover:text-white hover:border-white transition-colors text-sm whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]">sort</span> Sort: Ranking
+                 </button>
+</div>
+</div>
+<!-- Data Table -->
+<div class="overflow-x-auto bg-surface-light border-x border-b border-border-color rounded-b-xl mb-8">
+<table class="w-full min-w-[1000px] text-left border-collapse">
+<thead>
+<tr class="bg-surface-dark text-text-muted text-xs uppercase tracking-wider border-b border-border-color">
+<th class="p-4 font-semibold w-20">Rank</th>
+<th class="p-4 font-semibold">Sub_ID</th>
+<th class="p-4 font-semibold text-right">Clicks</th>
+<th class="p-4 font-semibold text-right">Orders</th>
+<th class="p-4 font-semibold text-right">Conv. %</th>
+<th class="p-4 font-semibold text-right">Commission</th>
+<th class="p-4 font-semibold text-right">ROI</th>
+<th class="p-4 font-semibold">Share %</th>
+<th class="p-4 font-semibold w-10"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-color text-sm">
+<!-- Row 1 -->
+<tr class="hover:bg-border-color/30 transition-colors group">
+<td class="p-4 text-text-muted font-mono">#01</td>
+<td class="p-4 font-bold text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-500"></span> SID_8921
+                        </td>
+<td class="p-4 text-right text-text-muted">12,450</td>
+<td class="p-4 text-right text-text-muted">1,203</td>
+<td class="p-4 text-right">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-dark text-primary font-bold border border-border-color">9.66%</span>
+</td>
+<td class="p-4 text-right text-green-400 font-medium">$1,250.00</td>
+<td class="p-4 text-right text-text-muted">210%</td>
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-24 h-1.5 bg-surface-dark rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 28%"></div>
+</div>
+<span class="text-xs text-text-muted">28%</span>
+</div>
+</td>
+<td class="p-4 text-right">
+<button class="text-text-muted hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-border-color/30 transition-colors group">
+<td class="p-4 text-text-muted font-mono">#02</td>
+<td class="p-4 font-bold text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-500"></span> SID_4421
+                        </td>
+<td class="p-4 text-right text-text-muted">9,200</td>
+<td class="p-4 text-right text-text-muted">890</td>
+<td class="p-4 text-right">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-dark text-primary font-bold border border-border-color">9.67%</span>
+</td>
+<td class="p-4 text-right text-green-400 font-medium">$950.00</td>
+<td class="p-4 text-right text-text-muted">180%</td>
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-24 h-1.5 bg-surface-dark rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 23%"></div>
+</div>
+<span class="text-xs text-text-muted">23%</span>
+</div>
+</td>
+<td class="p-4 text-right">
+<button class="text-text-muted hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-border-color/30 transition-colors group">
+<td class="p-4 text-text-muted font-mono">#03</td>
+<td class="p-4 font-bold text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-yellow-500"></span> SID_1120
+                        </td>
+<td class="p-4 text-right text-text-muted">8,150</td>
+<td class="p-4 text-right text-text-muted">750</td>
+<td class="p-4 text-right">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-dark text-primary font-bold border border-border-color">9.20%</span>
+</td>
+<td class="p-4 text-right text-green-400 font-medium">$820.00</td>
+<td class="p-4 text-right text-text-muted">150%</td>
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-24 h-1.5 bg-surface-dark rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 17%"></div>
+</div>
+<span class="text-xs text-text-muted">17%</span>
+</div>
+</td>
+<td class="p-4 text-right">
+<button class="text-text-muted hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-border-color/30 transition-colors group">
+<td class="p-4 text-text-muted font-mono">#04</td>
+<td class="p-4 font-bold text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-red-500"></span> SID_0092
+                        </td>
+<td class="p-4 text-right text-text-muted">6,500</td>
+<td class="p-4 text-right text-text-muted">540</td>
+<td class="p-4 text-right">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-dark text-orange-400 font-bold border border-border-color">8.30%</span>
+</td>
+<td class="p-4 text-right text-green-400 font-medium">$600.00</td>
+<td class="p-4 text-right text-text-muted">120%</td>
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-24 h-1.5 bg-surface-dark rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 11%"></div>
+</div>
+<span class="text-xs text-text-muted">11%</span>
+</div>
+</td>
+<td class="p-4 text-right">
+<button class="text-text-muted hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-border-color/30 transition-colors group">
+<td class="p-4 text-text-muted font-mono">#05</td>
+<td class="p-4 font-bold text-white flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-gray-500"></span> SID_3311
+                        </td>
+<td class="p-4 text-right text-text-muted">4,200</td>
+<td class="p-4 text-right text-text-muted">320</td>
+<td class="p-4 text-right">
+<span class="inline-flex items-center px-2 py-1 rounded bg-surface-dark text-orange-400 font-bold border border-border-color">7.61%</span>
+</td>
+<td class="p-4 text-right text-green-400 font-medium">$350.00</td>
+<td class="p-4 text-right text-text-muted">95%</td>
+<td class="p-4">
+<div class="flex items-center gap-3">
+<div class="w-24 h-1.5 bg-surface-dark rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 9%"></div>
+</div>
+<span class="text-xs text-text-muted">9%</span>
+</div>
+</td>
+<td class="p-4 text-right">
+<button class="text-text-muted hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="flex justify-center items-center gap-2 mb-8">
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-border-color text-text-muted hover:bg-border-color hover:text-white transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg bg-border-color text-white font-bold border border-border-color">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-border-color text-text-muted hover:bg-border-color hover:text-white transition-colors">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-border-color text-text-muted hover:bg-border-color hover:text-white transition-colors">3</button>
+<span class="text-text-muted">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-border-color text-text-muted hover:bg-border-color hover:text-white transition-colors">12</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-lg border border-border-color text-text-muted hover:bg-border-color hover:text-white transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</main>
+</body></html>
