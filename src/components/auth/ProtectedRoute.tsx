@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute() {
-    const { session, loading, subscriptionStatus } = useAuth();
+    const { session, loading, subscriptionStatus, mustChangePassword } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -19,10 +19,11 @@ export function ProtectedRoute() {
         return <Navigate to="/login" replace />;
     }
 
-    const mustReset = localStorage.getItem('mustReset') === 'true';
+    // O redirect local ainda é suportado, mas agora temos verificação do BD
+    const localMustReset = localStorage.getItem('mustReset') === 'true';
     const isResetPage = location.pathname === '/reset-password';
 
-    if (mustReset && !isResetPage) {
+    if ((localMustReset || mustChangePassword) && !isResetPage) {
         return <Navigate to="/reset-password" replace />;
     }
 
@@ -48,7 +49,7 @@ export function PublicOnlyRoute() {
 }
 
 export function AdminRoute() {
-    const { session, loading, isAdmin } = useAuth();
+    const { session, loading, isAdmin, mustChangePassword } = useAuth();
 
     if (loading) {
         return (
@@ -62,7 +63,10 @@ export function AdminRoute() {
         return <Navigate to="/login" replace />;
     }
 
-    if (localStorage.getItem('mustReset') === 'true') {
+    // O redirect local ainda é suportado, mas agora temos verificação do BD
+    const localMustReset = localStorage.getItem('mustReset') === 'true';
+
+    if (localMustReset || mustChangePassword) {
         return <Navigate to="/reset-password" replace />;
     }
 

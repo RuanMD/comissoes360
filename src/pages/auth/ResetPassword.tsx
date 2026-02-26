@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Lock, ArrowRight, Loader2, PlaySquare, Eye, EyeOff } from 'lucide-react';
 
 export function ResetPassword() {
-    const { updatePassword } = useAuth();
+    const { updatePassword, clearMustResetBlock } = useAuth();
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,8 +38,11 @@ export function ResetPassword() {
             const { error } = await updatePassword(password);
             if (error) throw error;
 
-            // Sucesso! Limpa o flag e vai para o dashboard
-            localStorage.removeItem('mustReset');
+            // Chama a RPC para baixar a flag no banco de dados, caso estivesse ativa
+            await supabase.rpc('clear_force_password_change');
+
+            // Sucesso! Limpa o flag local e vai para o dashboard
+            clearMustResetBlock();
             navigate('/dashboard');
         } catch (err: any) {
             setErrorMsg(err.message || 'Erro ao tentar atualizar a senha.');

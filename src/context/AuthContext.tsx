@@ -9,11 +9,13 @@ interface AuthContextType {
     user: User | null;
     subscriptionStatus: SubscriptionStatus;
     isAdmin: boolean;
+    mustChangePassword: boolean;
     loading: boolean;
     signInWithPassword: (email: string, password: string) => Promise<{ data: any; error: Error | null }>;
     updatePassword: (password: string) => Promise<{ data: any; error: Error | null }>;
     sendPasswordResetEmail: (email: string) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
+    clearMustResetBlock: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('unknown');
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
+    const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -50,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
                 setSubscriptionStatus('unknown');
                 setIsAdmin(false);
+                setMustChangePassword(false);
                 setLoading(false);
             }
         });
@@ -61,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             const { data, error } = await supabase
                 .from('users')
-                .select('subscription_status, subscription_expires_at, is_admin')
+                .select('subscription_status, subscription_expires_at, is_admin, force_password_change')
                 .eq('id', userId)
                 .single();
 
@@ -83,14 +87,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 setIsAdmin(data.is_admin || false);
+                setMustChangePassword(data.force_password_change || false);
             } else {
                 setSubscriptionStatus('inactive'); // Usuário não existe na tabela pública ou sem assinatura
                 setIsAdmin(false);
+                setMustChangePassword(false);
             }
         } catch (err) {
             console.error(err);
             setSubscriptionStatus('unknown');
             setIsAdmin(false);
+            setMustChangePassword(false);
         } finally {
             setLoading(false);
         }
@@ -122,10 +129,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut();
     };
 
+    const clearMustResetBlock = () => {
+        setMustChangePassword(false);
+        localStorage.removeItem('mustReset');
+    };
+
     return (
         <AuthContext.Provider value={{
-            session, user, subscriptionStatus, isAdmin, loading,
-            signInWithPassword, updatePassword, sendPasswordResetEmail, signOut
+            session, user, subscriptionStatus, isAdmin, mustChangePassword, loading,
+            signInWithPassword, updatePassword, sendPasswordResetEmail, signOut, clearMustResetBlock
         }}>
             {children}
         </AuthContext.Provider>
