@@ -100,11 +100,10 @@ export function SubIdAnalysis() {
                     <button
                         onClick={() => setHideNames(prev => !prev)}
                         title={hideNames ? 'Mostrar Sub IDs' : 'Ocultar Sub IDs'}
-                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                            hideNames
+                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${hideNames
                                 ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
                                 : 'bg-surface-highlight text-text-secondary border-border-dark hover:text-white'
-                        }`}
+                            }`}
                     >
                         {hideNames ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         {hideNames ? 'Sub IDs ocultos' : 'Ocultar Sub IDs'}
@@ -183,27 +182,24 @@ export function SubIdAnalysis() {
                                                         <div className="flex gap-2 mb-4">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('products'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                                                    detailTab === 'products' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                }`}
+                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'products' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
+                                                                    }`}
                                                             >
                                                                 <ShoppingBag className="w-3.5 h-3.5" />
                                                                 Produtos ({details.products.length})
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('channels'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                                                    detailTab === 'channels' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                }`}
+                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'channels' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
+                                                                    }`}
                                                             >
                                                                 <Radio className="w-3.5 h-3.5" />
                                                                 Canais ({details.channelBreakdown.length})
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('orders'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                                                    detailTab === 'orders' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                }`}
+                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'orders' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
+                                                                    }`}
                                                             >
                                                                 <FileText className="w-3.5 h-3.5" />
                                                                 Pedidos ({details.orders.length})
@@ -242,12 +238,14 @@ export function SubIdAnalysis() {
                                                         {/* Channels Tab */}
                                                         {detailTab === 'channels' && (
                                                             <div className="rounded-xl overflow-hidden border border-border-dark">
-                                                                <table className="w-full text-left">
+                                                                <table className="w-full text-left border-collapse">
                                                                     <thead>
                                                                         <tr className="bg-surface-dark/50">
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">Canal</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right">Cliques</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right">% do Total</th>
+                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary whitespace-nowrap">Canal</th>
+                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Cliques</th>
+                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">% Cliques</th>
+                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Vendas</th>
+                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Comissão</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody className="divide-y divide-border-dark">
@@ -258,24 +256,25 @@ export function SubIdAnalysis() {
                                                                                 <tr key={i} className="hover:bg-surface-dark/30">
                                                                                     <td className="px-4 py-2.5 text-sm text-white">
                                                                                         <div className="flex items-center gap-2">
-                                                                                            <div className="w-2 h-2 rounded-full bg-primary" />
-                                                                                            {ch.channel}
+                                                                                            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                                                                            <span className="truncate max-w-[150px]" title={ch.channel}>{ch.channel}</span>
                                                                                         </div>
                                                                                     </td>
                                                                                     <td className="px-4 py-2.5 text-sm text-white text-right font-mono">{ch.clicks}</td>
                                                                                     <td className="px-4 py-2.5 text-sm text-right">
                                                                                         <div className="flex items-center justify-end gap-2">
-                                                                                            <div className="w-16 h-1.5 bg-background-dark rounded-full overflow-hidden">
-                                                                                                <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
-                                                                                            </div>
                                                                                             <span className="font-mono text-text-secondary">{pct}%</span>
                                                                                         </div>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-sm text-white text-right font-mono">{ch.orders}</td>
+                                                                                    <td className="px-4 py-2.5 text-sm text-primary font-bold text-right font-mono">
+                                                                                        R$ {ch.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                                     </td>
                                                                                 </tr>
                                                                             );
                                                                         })}
                                                                         {details.channelBreakdown.length === 0 && (
-                                                                            <tr><td colSpan={3} className="px-4 py-6 text-center text-text-secondary text-sm">Nenhum canal encontrado.</td></tr>
+                                                                            <tr><td colSpan={5} className="px-4 py-6 text-center text-text-secondary text-sm">Nenhum canal encontrado.</td></tr>
                                                                         )}
                                                                     </tbody>
                                                                 </table>
@@ -301,11 +300,10 @@ export function SubIdAnalysis() {
                                                                                 <td className="px-4 py-2.5 text-xs text-text-secondary font-mono">{order.orderId}</td>
                                                                                 <td className="px-4 py-2.5 text-sm text-white max-w-[200px] truncate" title={order.product}>{order.product}</td>
                                                                                 <td className="px-4 py-2.5">
-                                                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                                                                        order.status.toLowerCase() === 'concluído' ? 'bg-green-500/10 text-green-400' :
-                                                                                        order.status.toLowerCase() === 'cancelado' ? 'bg-red-500/10 text-red-400' :
-                                                                                        'bg-yellow-500/10 text-yellow-400'
-                                                                                    }`}>
+                                                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${order.status.toLowerCase() === 'concluído' ? 'bg-green-500/10 text-green-400' :
+                                                                                            order.status.toLowerCase() === 'cancelado' ? 'bg-red-500/10 text-red-400' :
+                                                                                                'bg-yellow-500/10 text-yellow-400'
+                                                                                        }`}>
                                                                                         {order.status}
                                                                                     </span>
                                                                                 </td>

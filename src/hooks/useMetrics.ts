@@ -126,7 +126,7 @@ export function useMetrics() {
         const subIdStats: Record<string, { clicks: number, orders: number, commission: number, channels: Set<string> }> = {};
         const subIdDetails: Record<string, {
             products: Record<string, { count: number, commission: number }>,
-            channelBreakdown: Record<string, number>,
+            channelBreakdown: Record<string, { clicks: number, orders: number, commission: number }>,
             orders: Array<{ orderId: string, product: string, commission: number, status: string, date: string }>
         }> = {};
         const channelStats: Record<string, { clicks: number, orders: number, commission: number }> = {};
@@ -152,7 +152,10 @@ export function useMetrics() {
             if (!subIdDetails[canonical]) {
                 subIdDetails[canonical] = { products: {}, channelBreakdown: {}, orders: [] };
             }
-            subIdDetails[canonical].channelBreakdown[ref] = (subIdDetails[canonical].channelBreakdown[ref] || 0) + 1;
+            if (!subIdDetails[canonical].channelBreakdown[ref]) {
+                subIdDetails[canonical].channelBreakdown[ref] = { clicks: 0, orders: 0, commission: 0 };
+            }
+            subIdDetails[canonical].channelBreakdown[ref].clicks += 1;
 
             if (!channelStats[ref]) {
                 channelStats[ref] = { clicks: 0, orders: 0, commission: 0 };
@@ -247,18 +250,26 @@ export function useMetrics() {
             categoryStats[categoryName].commission += netComm;
 
             // Channel attribution (heuristic: use the first available channel for this subId)
+            let assignedChannel = 'Desconhecido';
             if (subIdStats[canonical] && subIdStats[canonical].channels.size > 0) {
-                const primaryChannel = Array.from(subIdStats[canonical].channels)[0];
-                if (!channelStats[primaryChannel]) {
-                    channelStats[primaryChannel] = { clicks: 0, orders: 0, commission: 0 };
+                assignedChannel = Array.from(subIdStats[canonical].channels)[0];
+                if (!channelStats[assignedChannel]) {
+                    channelStats[assignedChannel] = { clicks: 0, orders: 0, commission: 0 };
                 }
-                channelStats[primaryChannel].orders += 1;
-                channelStats[primaryChannel].commission += netComm;
+                channelStats[assignedChannel].orders += 1;
+                channelStats[assignedChannel].commission += netComm;
             } else {
                 if (!channelStats['Desconhecido']) channelStats['Desconhecido'] = { clicks: 0, orders: 0, commission: 0 };
                 channelStats['Desconhecido'].orders += 1;
                 channelStats['Desconhecido'].commission += netComm;
             }
+
+            // Also add orders and commission to subIdDetails channelBreakdown
+            if (!subIdDetails[canonical].channelBreakdown[assignedChannel]) {
+                subIdDetails[canonical].channelBreakdown[assignedChannel] = { clicks: 0, orders: 0, commission: 0 };
+            }
+            subIdDetails[canonical].channelBreakdown[assignedChannel].orders += 1;
+            subIdDetails[canonical].channelBreakdown[assignedChannel].commission += netComm;
 
             // Daily chart logic
             const dateObj = parseShopeeDate(item['Horário do pedido']);
@@ -333,14 +344,14 @@ export function useMetrics() {
                             .map(([name, stats]) => ({ name, count: stats.count, commission: stats.commission }))
                             .sort((a, b) => b.commission - a.commission),
                         channelBreakdown: Object.entries(detail.channelBreakdown)
-                            .map(([channel, clicks]) => ({ channel, clicks }))
+                            .map(([channel, stats]) => ({ channel, clicks: stats.clicks, orders: stats.orders, commission: stats.commission }))
                             .sort((a, b) => b.clicks - a.clicks),
                         orders: detail.orders.sort((a, b) => b.commission - a.commission),
                     }
                 ])
             ) as Record<string, {
                 products: Array<{ name: string, count: number, commission: number }>,
-                channelBreakdown: Array<{ channel: string, clicks: number }>,
+                channelBreakdown: Array<{ channel: string, clicks: number, orders: number, commission: number }>,
                 orders: Array<{ orderId: string, product: string, commission: number, status: string, date: string }>
             }>,
             conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(2) : '0.00',
