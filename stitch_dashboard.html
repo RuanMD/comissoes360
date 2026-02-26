@@ -1,16 +1,23 @@
 <!DOCTYPE html>
 
-<html class="dark" lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Comissões Inteligentes Dashboard</title>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Comissões 360 Dashboard</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -18,7 +25,7 @@
                     colors: {
                         "primary": "#f2a20d",
                         "background-light": "#f8f7f5",
-                        "background-dark": "#181611", 
+                        "background-dark": "#181611",
                         "surface-dark": "#221c10",
                         "surface-highlight": "#2d261a",
                         "border-dark": "#393328",
@@ -27,418 +34,498 @@
                     fontFamily: {
                         "display": ["Manrope", "sans-serif"]
                     },
-                    borderRadius: {"DEFAULT": "0.5rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                    borderRadius: { "DEFAULT": "0.5rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
                 },
             },
         }
     </script>
-<style>
+    <style>
         /* Custom scrollbar for dark mode */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
+
         ::-webkit-scrollbar-track {
             background: #181611;
         }
+
         ::-webkit-scrollbar-thumb {
             background: #393328;
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: #544b3b;
         }
     </style>
 </head>
+
 <body class="bg-background-dark text-white font-display antialiased overflow-hidden">
-<div class="flex h-screen w-full overflow-hidden">
-<!-- Sidebar -->
-<div class="hidden md:flex flex-col w-72 bg-surface-dark border-r border-border-dark h-full justify-between p-4">
-<div class="flex flex-col gap-6">
-<!-- User Profile -->
-<div class="flex items-center gap-3 p-2 rounded-xl bg-surface-highlight/50 border border-border-dark">
-<div class="bg-center bg-no-repeat bg-cover rounded-full size-10 shrink-0" data-alt="User profile picture placeholder" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBwmmLyQ3x-Dv8Z297PN1f_iepo4d1fd_VJCAjGX3zrt5KUqlvWyKAvpjECiWDx9LLalzPKpVOFnkXFaKufXHv_jcFP-XIUHKuV6NMSIo8EwO0PmsDeWjWh8iJsUrmXTiVK48t82zCKhgDji2zLgDal1aDUHoNr-_5dC8H5b8eIVKSg5WE1EF2LvHoVt3RK6ByX4ATZYCJO6bU6U2FMIyKprKazmCnIulWXu2wFGUqqe9V1lIVnFdz9iFbeqvJf7clyrxeWNNGpWCxH");'></div>
-<div class="flex flex-col overflow-hidden">
-<h1 class="text-white text-sm font-bold leading-tight truncate">Admin User</h1>
-<p class="text-text-secondary text-xs font-normal leading-normal truncate">admin@company.com</p>
-</div>
-</div>
-<!-- Navigation -->
-<nav class="flex flex-col gap-2">
-<a class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-background-dark shadow-lg shadow-primary/20 transition-all hover:shadow-primary/40 group" href="#">
-<span class="material-symbols-outlined text-background-dark group-hover:scale-110 transition-transform">dashboard</span>
-<span class="text-sm font-bold">Dashboard</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group" href="#">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">bar_chart</span>
-<span class="text-sm font-medium">Relatórios</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group" href="#">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">attach_money</span>
-<span class="text-sm font-medium">Comissões</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group" href="#">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">integration_instructions</span>
-<span class="text-sm font-medium">Integrações</span>
-</a>
-<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group" href="#">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">settings</span>
-<span class="text-sm font-medium">Configurações</span>
-</a>
-</nav>
-</div>
-<div class="flex flex-col gap-4">
-<button class="flex w-full items-center justify-center gap-2 rounded-xl h-12 px-4 bg-surface-highlight border border-primary/30 text-primary hover:bg-primary hover:text-background-dark transition-all text-sm font-bold shadow-md">
-<span class="material-symbols-outlined text-[20px]">upload_file</span>
-<span class="truncate">Nova Importação CSV</span>
-</button>
-</div>
-</div>
-<!-- Main Content -->
-<div class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
-<!-- Header / Filter Bar -->
-<header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6 border-b border-border-dark bg-background-dark/95 backdrop-blur z-10 sticky top-0">
-<div class="flex flex-col">
-<h2 class="text-2xl font-bold tracking-tight text-white">Dashboard Geral</h2>
-<p class="text-text-secondary text-sm">Visão geral de desempenho e comissões</p>
-</div>
-<div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
-<!-- Filters -->
-<div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
-<select class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
-<option>Este Mês</option>
-<option>Mês Passado</option>
-<option>Últimos 7 dias</option>
-</select>
-</div>
-<div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
-<select class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
-<option>Todos Canais</option>
-<option>Facebook Ads</option>
-<option>Google Ads</option>
-<option>Orgânico</option>
-</select>
-</div>
-<div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
-<select class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
-<option>Status: Todos</option>
-<option>Pago</option>
-<option>Pendente</option>
-<option>Cancelado</option>
-</select>
-</div>
-<button class="flex items-center justify-center size-9 rounded-lg bg-surface-highlight text-text-secondary hover:text-white hover:bg-border-dark transition-colors ml-auto md:ml-0">
-<span class="material-symbols-outlined">filter_list</span>
-</button>
-<button class="flex items-center justify-center size-9 rounded-lg bg-primary text-background-dark hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
-<span class="material-symbols-outlined">download</span>
-</button>
-</div>
-</header>
-<!-- Scrollable Content -->
-<main class="flex-1 overflow-y-auto p-6 scroll-smooth">
-<div class="flex flex-col gap-6 max-w-[1600px] mx-auto">
-<!-- KPI Cards Row -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-<!-- Card 1: Net Commission (Primary) -->
-<div class="flex flex-col p-5 rounded-2xl bg-gradient-to-br from-primary/10 to-surface-dark border border-primary/30 relative overflow-hidden group">
-<div class="absolute -right-6 -top-6 bg-primary/20 blur-3xl size-32 rounded-full pointer-events-none group-hover:bg-primary/30 transition-all duration-500"></div>
-<div class="flex items-start justify-between mb-2 z-10">
-<p class="text-text-secondary text-sm font-medium">Comissão Líquida</p>
-<span class="bg-primary/20 text-primary text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">trending_up</span> 15%
+    <div class="flex h-screen w-full overflow-hidden">
+        <!-- Sidebar -->
+        <div
+            class="hidden md:flex flex-col w-72 bg-surface-dark border-r border-border-dark h-full justify-between p-4">
+            <div class="flex flex-col gap-6">
+                <!-- User Profile -->
+                <div class="flex items-center gap-3 p-2 rounded-xl bg-surface-highlight/50 border border-border-dark">
+                    <div class="bg-center bg-no-repeat bg-cover rounded-full size-10 shrink-0"
+                        data-alt="User profile picture placeholder"
+                        style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBwmmLyQ3x-Dv8Z297PN1f_iepo4d1fd_VJCAjGX3zrt5KUqlvWyKAvpjECiWDx9LLalzPKpVOFnkXFaKufXHv_jcFP-XIUHKuV6NMSIo8EwO0PmsDeWjWh8iJsUrmXTiVK48t82zCKhgDji2zLgDal1aDUHoNr-_5dC8H5b8eIVKSg5WE1EF2LvHoVt3RK6ByX4ATZYCJO6bU6U2FMIyKprKazmCnIulWXu2wFGUqqe9V1lIVnFdz9iFbeqvJf7clyrxeWNNGpWCxH");'>
+                    </div>
+                    <div class="flex flex-col overflow-hidden">
+                        <h1 class="text-white text-sm font-bold leading-tight truncate">Admin User</h1>
+                        <p class="text-text-secondary text-xs font-normal leading-normal truncate">admin@company.com</p>
+                    </div>
+                </div>
+                <!-- Navigation -->
+                <nav class="flex flex-col gap-2">
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary text-background-dark shadow-lg shadow-primary/20 transition-all hover:shadow-primary/40 group"
+                        href="#">
+                        <span
+                            class="material-symbols-outlined text-background-dark group-hover:scale-110 transition-transform">dashboard</span>
+                        <span class="text-sm font-bold">Dashboard</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group"
+                        href="#">
+                        <span
+                            class="material-symbols-outlined group-hover:scale-110 transition-transform">bar_chart</span>
+                        <span class="text-sm font-medium">Relatórios</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group"
+                        href="#">
+                        <span
+                            class="material-symbols-outlined group-hover:scale-110 transition-transform">attach_money</span>
+                        <span class="text-sm font-medium">Comissões</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group"
+                        href="#">
+                        <span
+                            class="material-symbols-outlined group-hover:scale-110 transition-transform">integration_instructions</span>
+                        <span class="text-sm font-medium">Integrações</span>
+                    </a>
+                    <a class="flex items-center gap-3 px-4 py-3 rounded-xl text-text-secondary hover:bg-surface-highlight hover:text-white transition-colors group"
+                        href="#">
+                        <span
+                            class="material-symbols-outlined group-hover:scale-110 transition-transform">settings</span>
+                        <span class="text-sm font-medium">Configurações</span>
+                    </a>
+                </nav>
+            </div>
+            <div class="flex flex-col gap-4">
+                <button
+                    class="flex w-full items-center justify-center gap-2 rounded-xl h-12 px-4 bg-surface-highlight border border-primary/30 text-primary hover:bg-primary hover:text-background-dark transition-all text-sm font-bold shadow-md">
+                    <span class="material-symbols-outlined text-[20px]">upload_file</span>
+                    <span class="truncate">Nova Importação CSV</span>
+                </button>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+            <!-- Header / Filter Bar -->
+            <header
+                class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6 border-b border-border-dark bg-background-dark/95 backdrop-blur z-10 sticky top-0">
+                <div class="flex flex-col">
+                    <h2 class="text-2xl font-bold tracking-tight text-white">Dashboard Geral</h2>
+                    <p class="text-text-secondary text-sm">Visão geral de desempenho e comissões</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <!-- Filters -->
+                    <div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
+                        <select
+                            class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
+                            <option>Este Mês</option>
+                            <option>Mês Passado</option>
+                            <option>Últimos 7 dias</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
+                        <select
+                            class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
+                            <option>Todos Canais</option>
+                            <option>Facebook Ads</option>
+                            <option>Google Ads</option>
+                            <option>Orgânico</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-lg p-1">
+                        <select
+                            class="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium">
+                            <option>Status: Todos</option>
+                            <option>Pago</option>
+                            <option>Pendente</option>
+                            <option>Cancelado</option>
+                        </select>
+                    </div>
+                    <button
+                        class="flex items-center justify-center size-9 rounded-lg bg-surface-highlight text-text-secondary hover:text-white hover:bg-border-dark transition-colors ml-auto md:ml-0">
+                        <span class="material-symbols-outlined">filter_list</span>
+                    </button>
+                    <button
+                        class="flex items-center justify-center size-9 rounded-lg bg-primary text-background-dark hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+                        <span class="material-symbols-outlined">download</span>
+                    </button>
+                </div>
+            </header>
+            <!-- Scrollable Content -->
+            <main class="flex-1 overflow-y-auto p-6 scroll-smooth">
+                <div class="flex flex-col gap-6 max-w-[1600px] mx-auto">
+                    <!-- KPI Cards Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                        <!-- Card 1: Net Commission (Primary) -->
+                        <div
+                            class="flex flex-col p-5 rounded-2xl bg-gradient-to-br from-primary/10 to-surface-dark border border-primary/30 relative overflow-hidden group">
+                            <div
+                                class="absolute -right-6 -top-6 bg-primary/20 blur-3xl size-32 rounded-full pointer-events-none group-hover:bg-primary/30 transition-all duration-500">
+                            </div>
+                            <div class="flex items-start justify-between mb-2 z-10">
+                                <p class="text-text-secondary text-sm font-medium">Comissão Líquida</p>
+                                <span
+                                    class="bg-primary/20 text-primary text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">trending_up</span> 15%
                                 </span>
-</div>
-<p class="text-white text-3xl font-bold tracking-tight z-10">R$ 12.450</p>
-<p class="text-text-secondary text-xs mt-1 z-10">vs. R$ 10.820 (mês ant.)</p>
-</div>
-<!-- Card 2: Total Sales -->
-<div class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
-<div class="flex items-start justify-between mb-2">
-<p class="text-text-secondary text-sm font-medium">Vendas Totais</p>
-<span class="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">trending_up</span> 8%
+                            </div>
+                            <p class="text-white text-3xl font-bold tracking-tight z-10">R$ 12.450</p>
+                            <p class="text-text-secondary text-xs mt-1 z-10">vs. R$ 10.820 (mês ant.)</p>
+                        </div>
+                        <!-- Card 2: Total Sales -->
+                        <div
+                            class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
+                            <div class="flex items-start justify-between mb-2">
+                                <p class="text-text-secondary text-sm font-medium">Vendas Totais</p>
+                                <span
+                                    class="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">trending_up</span> 8%
                                 </span>
-</div>
-<p class="text-white text-3xl font-bold tracking-tight">R$ 145.2k</p>
-<div class="w-full bg-surface-highlight h-1 mt-3 rounded-full overflow-hidden">
-<div class="bg-white h-full w-[70%]"></div>
-</div>
-</div>
-<!-- Card 3: Total Orders -->
-<div class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
-<div class="flex items-start justify-between mb-2">
-<p class="text-text-secondary text-sm font-medium">Total Pedidos</p>
-<span class="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">trending_up</span> 12%
+                            </div>
+                            <p class="text-white text-3xl font-bold tracking-tight">R$ 145.2k</p>
+                            <div class="w-full bg-surface-highlight h-1 mt-3 rounded-full overflow-hidden">
+                                <div class="bg-white h-full w-[70%]"></div>
+                            </div>
+                        </div>
+                        <!-- Card 3: Total Orders -->
+                        <div
+                            class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
+                            <div class="flex items-start justify-between mb-2">
+                                <p class="text-text-secondary text-sm font-medium">Total Pedidos</p>
+                                <span
+                                    class="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">trending_up</span> 12%
                                 </span>
-</div>
-<p class="text-white text-3xl font-bold tracking-tight">890</p>
-<p class="text-text-secondary text-xs mt-1">~30 pedidos/dia</p>
-</div>
-<!-- Card 4: Ticket Average -->
-<div class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
-<div class="flex items-start justify-between mb-2">
-<p class="text-text-secondary text-sm font-medium">Ticket Médio</p>
-<span class="bg-surface-highlight text-text-secondary text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">remove</span> 1%
+                            </div>
+                            <p class="text-white text-3xl font-bold tracking-tight">890</p>
+                            <p class="text-text-secondary text-xs mt-1">~30 pedidos/dia</p>
+                        </div>
+                        <!-- Card 4: Ticket Average -->
+                        <div
+                            class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
+                            <div class="flex items-start justify-between mb-2">
+                                <p class="text-text-secondary text-sm font-medium">Ticket Médio</p>
+                                <span
+                                    class="bg-surface-highlight text-text-secondary text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">remove</span> 1%
                                 </span>
-</div>
-<p class="text-white text-3xl font-bold tracking-tight">R$ 163</p>
-<p class="text-text-secondary text-xs mt-1">Estável</p>
-</div>
-<!-- Card 5: Conversion Rate -->
-<div class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
-<div class="flex items-start justify-between mb-2">
-<p class="text-text-secondary text-sm font-medium">Taxa Conversão</p>
-<span class="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">trending_down</span> 0.5%
+                            </div>
+                            <p class="text-white text-3xl font-bold tracking-tight">R$ 163</p>
+                            <p class="text-text-secondary text-xs mt-1">Estável</p>
+                        </div>
+                        <!-- Card 5: Conversion Rate -->
+                        <div
+                            class="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
+                            <div class="flex items-start justify-between mb-2">
+                                <p class="text-text-secondary text-sm font-medium">Taxa Conversão</p>
+                                <span
+                                    class="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">trending_down</span> 0.5%
                                 </span>
-</div>
-<p class="text-white text-3xl font-bold tracking-tight">2.4%</p>
-<div class="w-full bg-surface-highlight h-1 mt-3 rounded-full overflow-hidden">
-<div class="bg-primary h-full w-[24%]"></div>
-</div>
-</div>
-</div>
-<!-- Charts Section -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-<!-- Main Chart: Daily Commissions -->
-<div class="lg:col-span-2 flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
-<div class="flex items-center justify-between mb-6">
-<div>
-<h3 class="text-lg font-bold text-white">Comissões Diárias</h3>
-<p class="text-sm text-text-secondary">Evolução dos últimos 30 dias</p>
-</div>
-<button class="p-2 hover:bg-surface-highlight rounded-lg transition-colors">
-<span class="material-symbols-outlined text-text-secondary">more_horiz</span>
-</button>
-</div>
-<!-- Custom CSS Chart Implementation -->
-<div class="relative h-[300px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8">
-<!-- Grid Lines Background -->
-<div class="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
-<div class="w-full h-px bg-border-dark/50"></div>
-<div class="w-full h-px bg-border-dark/30"></div>
-<div class="w-full h-px bg-border-dark/30"></div>
-<div class="w-full h-px bg-border-dark/30"></div>
-<div class="w-full h-px bg-border-dark/50"></div>
-</div>
-<!-- SVG Line Chart -->
-<svg class="absolute inset-0 h-full w-full overflow-visible z-10" preserveaspectratio="none">
-<defs>
-<lineargradient id="gradientChart" x1="0" x2="0" y1="0" y2="1">
-<stop offset="0%" stop-color="#f2a20d" stop-opacity="0.3"></stop>
-<stop offset="100%" stop-color="#f2a20d" stop-opacity="0"></stop>
-</lineargradient>
-</defs>
-<path class="w-full transform scale-y-[0.85] origin-bottom opacity-50" d="M0,250 C50,250 50,150 100,140 C150,130 150,180 200,160 C250,140 250,80 300,90 C350,100 350,140 400,120 C450,100 450,40 500,60 C550,80 550,140 600,130 C650,120 650,180 700,170 C750,160 750,100 800,80 L800,300 L0,300 Z" fill="url(#gradientChart)"></path>
-<path d="M0,250 C50,250 50,150 100,140 C150,130 150,180 200,160 C250,140 250,80 300,90 C350,100 350,140 400,120 C450,100 450,40 500,60 C550,80 550,140 600,130 C650,120 650,180 700,170 C750,160 750,100 800,80" fill="none" stroke="#f2a20d" stroke-width="3" vector-effect="non-scaling-stroke"></path>
-<!-- Data Points -->
-<circle class="hover:r-6 transition-all cursor-pointer" cx="100" cy="140" fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
-<circle class="hover:r-6 transition-all cursor-pointer" cx="300" cy="90" fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
-<circle class="hover:r-6 transition-all cursor-pointer" cx="500" cy="60" fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
-<circle class="hover:r-6 transition-all cursor-pointer" cx="800" cy="80" fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
-</svg>
-<!-- X Axis Labels -->
-<div class="absolute bottom-0 w-full flex justify-between text-xs text-text-secondary px-2">
-<span>01 Set</span>
-<span>05 Set</span>
-<span>10 Set</span>
-<span>15 Set</span>
-<span>20 Set</span>
-<span>25 Set</span>
-<span>30 Set</span>
-</div>
-</div>
-</div>
-<!-- Secondary Chart: Orders by Hour -->
-<div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
-<div class="flex items-center justify-between mb-6">
-<div>
-<h3 class="text-lg font-bold text-white">Pedidos por Hora</h3>
-<p class="text-sm text-text-secondary">Distribuição diária</p>
-</div>
-</div>
-<div class="flex-1 flex items-end justify-between gap-2 min-h-[250px] pt-4 pb-6">
-<!-- Bars -->
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-surface-highlight rounded-t-sm h-[30%] group-hover:bg-primary/50 transition-all relative"></div>
-<span class="text-[10px] text-text-secondary">00h</span>
-</div>
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-surface-highlight rounded-t-sm h-[15%] group-hover:bg-primary/50 transition-all"></div>
-<span class="text-[10px] text-text-secondary">04h</span>
-</div>
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-surface-highlight rounded-t-sm h-[45%] group-hover:bg-primary/50 transition-all"></div>
-<span class="text-[10px] text-text-secondary">08h</span>
-</div>
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-primary rounded-t-sm h-[85%] group-hover:bg-primary/80 transition-all shadow-[0_0_15px_rgba(242,162,13,0.3)]"></div>
-<span class="text-[10px] text-white font-bold">12h</span>
-</div>
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-surface-highlight rounded-t-sm h-[60%] group-hover:bg-primary/50 transition-all"></div>
-<span class="text-[10px] text-text-secondary">16h</span>
-</div>
-<div class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
-<div class="w-full bg-surface-highlight rounded-t-sm h-[40%] group-hover:bg-primary/50 transition-all"></div>
-<span class="text-[10px] text-text-secondary">20h</span>
-</div>
-</div>
-</div>
-</div>
-<!-- Bottom Section: Rankings -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-<!-- Top Sub_IDs -->
-<div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
-<h3 class="text-base font-bold text-white mb-4">Top 5 Sub_IDs</h3>
-<div class="flex flex-col gap-4">
-<div class="flex flex-col gap-1">
-<div class="flex justify-between text-sm">
-<span class="text-white">SID_4920</span>
-<span class="text-text-secondary">R$ 4.2k</span>
-</div>
-<div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-primary w-[85%]"></div>
-</div>
-</div>
-<div class="flex flex-col gap-1">
-<div class="flex justify-between text-sm">
-<span class="text-white">SID_1032</span>
-<span class="text-text-secondary">R$ 3.1k</span>
-</div>
-<div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-primary/80 w-[65%]"></div>
-</div>
-</div>
-<div class="flex flex-col gap-1">
-<div class="flex justify-between text-sm">
-<span class="text-white">SID_8831</span>
-<span class="text-text-secondary">R$ 2.8k</span>
-</div>
-<div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-primary/60 w-[55%]"></div>
-</div>
-</div>
-<div class="flex flex-col gap-1">
-<div class="flex justify-between text-sm">
-<span class="text-white">SID_2210</span>
-<span class="text-text-secondary">R$ 1.5k</span>
-</div>
-<div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-primary/40 w-[35%]"></div>
-</div>
-</div>
-<div class="flex flex-col gap-1">
-<div class="flex justify-between text-sm">
-<span class="text-white">SID_0092</span>
-<span class="text-text-secondary">R$ 900</span>
-</div>
-<div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-primary/20 w-[20%]"></div>
-</div>
-</div>
-</div>
-</div>
-<!-- Top Products -->
-<div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
-<h3 class="text-base font-bold text-white mb-4">Produtos Mais Vendidos</h3>
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">01</div>
-<div class="flex-1">
-<div class="flex justify-between text-sm mb-1">
-<span class="text-white truncate">Curso Marketing Digital</span>
-<span class="text-primary font-bold">320 un.</span>
-</div>
-<div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-emerald-500 w-[90%]"></div>
-</div>
-</div>
-</div>
-<div class="flex items-center gap-3">
-<div class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">02</div>
-<div class="flex-1">
-<div class="flex justify-between text-sm mb-1">
-<span class="text-white truncate">Ebook Finanças</span>
-<span class="text-primary font-bold">210 un.</span>
-</div>
-<div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-emerald-500/80 w-[70%]"></div>
-</div>
-</div>
-</div>
-<div class="flex items-center gap-3">
-<div class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">03</div>
-<div class="flex-1">
-<div class="flex justify-between text-sm mb-1">
-<span class="text-white truncate">Mentoria VIP</span>
-<span class="text-primary font-bold">105 un.</span>
-</div>
-<div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
-<div class="h-full bg-emerald-500/60 w-[45%]"></div>
-</div>
-</div>
-</div>
-</div>
-<button class="mt-auto w-full py-2 text-sm text-text-secondary hover:text-white hover:bg-surface-highlight rounded-lg transition-colors">
+                            </div>
+                            <p class="text-white text-3xl font-bold tracking-tight">2.4%</p>
+                            <div class="w-full bg-surface-highlight h-1 mt-3 rounded-full overflow-hidden">
+                                <div class="bg-primary h-full w-[24%]"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Charts Section -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Main Chart: Daily Commissions -->
+                        <div
+                            class="lg:col-span-2 flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white">Comissões Diárias</h3>
+                                    <p class="text-sm text-text-secondary">Evolução dos últimos 30 dias</p>
+                                </div>
+                                <button class="p-2 hover:bg-surface-highlight rounded-lg transition-colors">
+                                    <span class="material-symbols-outlined text-text-secondary">more_horiz</span>
+                                </button>
+                            </div>
+                            <!-- Custom CSS Chart Implementation -->
+                            <div class="relative h-[300px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8">
+                                <!-- Grid Lines Background -->
+                                <div class="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
+                                    <div class="w-full h-px bg-border-dark/50"></div>
+                                    <div class="w-full h-px bg-border-dark/30"></div>
+                                    <div class="w-full h-px bg-border-dark/30"></div>
+                                    <div class="w-full h-px bg-border-dark/30"></div>
+                                    <div class="w-full h-px bg-border-dark/50"></div>
+                                </div>
+                                <!-- SVG Line Chart -->
+                                <svg class="absolute inset-0 h-full w-full overflow-visible z-10"
+                                    preserveaspectratio="none">
+                                    <defs>
+                                        <lineargradient id="gradientChart" x1="0" x2="0" y1="0" y2="1">
+                                            <stop offset="0%" stop-color="#f2a20d" stop-opacity="0.3"></stop>
+                                            <stop offset="100%" stop-color="#f2a20d" stop-opacity="0"></stop>
+                                        </lineargradient>
+                                    </defs>
+                                    <path class="w-full transform scale-y-[0.85] origin-bottom opacity-50"
+                                        d="M0,250 C50,250 50,150 100,140 C150,130 150,180 200,160 C250,140 250,80 300,90 C350,100 350,140 400,120 C450,100 450,40 500,60 C550,80 550,140 600,130 C650,120 650,180 700,170 C750,160 750,100 800,80 L800,300 L0,300 Z"
+                                        fill="url(#gradientChart)"></path>
+                                    <path
+                                        d="M0,250 C50,250 50,150 100,140 C150,130 150,180 200,160 C250,140 250,80 300,90 C350,100 350,140 400,120 C450,100 450,40 500,60 C550,80 550,140 600,130 C650,120 650,180 700,170 C750,160 750,100 800,80"
+                                        fill="none" stroke="#f2a20d" stroke-width="3"
+                                        vector-effect="non-scaling-stroke"></path>
+                                    <!-- Data Points -->
+                                    <circle class="hover:r-6 transition-all cursor-pointer" cx="100" cy="140"
+                                        fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
+                                    <circle class="hover:r-6 transition-all cursor-pointer" cx="300" cy="90"
+                                        fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
+                                    <circle class="hover:r-6 transition-all cursor-pointer" cx="500" cy="60"
+                                        fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
+                                    <circle class="hover:r-6 transition-all cursor-pointer" cx="800" cy="80"
+                                        fill="#181611" r="4" stroke="#f2a20d" stroke-width="2"></circle>
+                                </svg>
+                                <!-- X Axis Labels -->
+                                <div
+                                    class="absolute bottom-0 w-full flex justify-between text-xs text-text-secondary px-2">
+                                    <span>01 Set</span>
+                                    <span>05 Set</span>
+                                    <span>10 Set</span>
+                                    <span>15 Set</span>
+                                    <span>20 Set</span>
+                                    <span>25 Set</span>
+                                    <span>30 Set</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Secondary Chart: Orders by Hour -->
+                        <div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white">Pedidos por Hora</h3>
+                                    <p class="text-sm text-text-secondary">Distribuição diária</p>
+                                </div>
+                            </div>
+                            <div class="flex-1 flex items-end justify-between gap-2 min-h-[250px] pt-4 pb-6">
+                                <!-- Bars -->
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-surface-highlight rounded-t-sm h-[30%] group-hover:bg-primary/50 transition-all relative">
+                                    </div>
+                                    <span class="text-[10px] text-text-secondary">00h</span>
+                                </div>
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-surface-highlight rounded-t-sm h-[15%] group-hover:bg-primary/50 transition-all">
+                                    </div>
+                                    <span class="text-[10px] text-text-secondary">04h</span>
+                                </div>
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-surface-highlight rounded-t-sm h-[45%] group-hover:bg-primary/50 transition-all">
+                                    </div>
+                                    <span class="text-[10px] text-text-secondary">08h</span>
+                                </div>
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-primary rounded-t-sm h-[85%] group-hover:bg-primary/80 transition-all shadow-[0_0_15px_rgba(242,162,13,0.3)]">
+                                    </div>
+                                    <span class="text-[10px] text-white font-bold">12h</span>
+                                </div>
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-surface-highlight rounded-t-sm h-[60%] group-hover:bg-primary/50 transition-all">
+                                    </div>
+                                    <span class="text-[10px] text-text-secondary">16h</span>
+                                </div>
+                                <div
+                                    class="flex flex-col justify-end items-center h-full gap-2 group cursor-pointer w-full">
+                                    <div
+                                        class="w-full bg-surface-highlight rounded-t-sm h-[40%] group-hover:bg-primary/50 transition-all">
+                                    </div>
+                                    <span class="text-[10px] text-text-secondary">20h</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Bottom Section: Rankings -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Top Sub_IDs -->
+                        <div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
+                            <h3 class="text-base font-bold text-white mb-4">Top 5 Sub_IDs</h3>
+                            <div class="flex flex-col gap-4">
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-white">SID_4920</span>
+                                        <span class="text-text-secondary">R$ 4.2k</span>
+                                    </div>
+                                    <div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary w-[85%]"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-white">SID_1032</span>
+                                        <span class="text-text-secondary">R$ 3.1k</span>
+                                    </div>
+                                    <div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary/80 w-[65%]"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-white">SID_8831</span>
+                                        <span class="text-text-secondary">R$ 2.8k</span>
+                                    </div>
+                                    <div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary/60 w-[55%]"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-white">SID_2210</span>
+                                        <span class="text-text-secondary">R$ 1.5k</span>
+                                    </div>
+                                    <div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary/40 w-[35%]"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-white">SID_0092</span>
+                                        <span class="text-text-secondary">R$ 900</span>
+                                    </div>
+                                    <div class="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                        <div class="h-full bg-primary/20 w-[20%]"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Top Products -->
+                        <div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
+                            <h3 class="text-base font-bold text-white mb-4">Produtos Mais Vendidos</h3>
+                            <div class="flex flex-col gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">
+                                        01</div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span class="text-white truncate">Curso Marketing Digital</span>
+                                            <span class="text-primary font-bold">320 un.</span>
+                                        </div>
+                                        <div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                            <div class="h-full bg-emerald-500 w-[90%]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">
+                                        02</div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span class="text-white truncate">Ebook Finanças</span>
+                                            <span class="text-primary font-bold">210 un.</span>
+                                        </div>
+                                        <div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                            <div class="h-full bg-emerald-500/80 w-[70%]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="size-8 rounded bg-surface-highlight flex items-center justify-center text-xs font-bold text-text-secondary">
+                                        03</div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span class="text-white truncate">Mentoria VIP</span>
+                                            <span class="text-primary font-bold">105 un.</span>
+                                        </div>
+                                        <div class="h-1 w-full bg-surface-highlight rounded-full overflow-hidden">
+                                            <div class="h-full bg-emerald-500/60 w-[45%]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                class="mt-auto w-full py-2 text-sm text-text-secondary hover:text-white hover:bg-surface-highlight rounded-lg transition-colors">
                                 Ver todos os produtos
                             </button>
-</div>
-<!-- Channels Breakdown -->
-<div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
-<h3 class="text-base font-bold text-white mb-4">Canais de Aquisição</h3>
-<div class="flex flex-col justify-center flex-1 gap-6">
-<div class="flex items-center gap-4">
-<div class="size-10 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center">
-<span class="material-symbols-outlined">public</span>
-</div>
-<div class="flex-1">
-<p class="text-sm font-bold text-white">Facebook Ads</p>
-<p class="text-xs text-text-secondary">45% do tráfego</p>
-</div>
-<span class="text-sm font-bold text-white">R$ 52.4k</span>
-</div>
-<div class="flex items-center gap-4">
-<div class="size-10 rounded-full bg-red-600/20 text-red-500 flex items-center justify-center">
-<span class="material-symbols-outlined">smart_display</span>
-</div>
-<div class="flex-1">
-<p class="text-sm font-bold text-white">Google Ads</p>
-<p class="text-xs text-text-secondary">30% do tráfego</p>
-</div>
-<span class="text-sm font-bold text-white">R$ 38.1k</span>
-</div>
-<div class="flex items-center gap-4">
-<div class="size-10 rounded-full bg-green-600/20 text-green-500 flex items-center justify-center">
-<span class="material-symbols-outlined">alternate_email</span>
-</div>
-<div class="flex-1">
-<p class="text-sm font-bold text-white">Email Marketing</p>
-<p class="text-xs text-text-secondary">15% do tráfego</p>
-</div>
-<span class="text-sm font-bold text-white">R$ 18.2k</span>
-</div>
-<div class="flex items-center gap-4">
-<div class="size-10 rounded-full bg-gray-600/20 text-gray-400 flex items-center justify-center">
-<span class="material-symbols-outlined">link</span>
-</div>
-<div class="flex-1">
-<p class="text-sm font-bold text-white">Direto / Orgânico</p>
-<p class="text-xs text-text-secondary">10% do tráfego</p>
-</div>
-<span class="text-sm font-bold text-white">R$ 12.5k</span>
-</div>
-</div>
-</div>
-</div>
-</div>
-<footer class="mt-8 text-center text-xs text-text-secondary pb-4">
-<p>© 2023 Comissões Inteligentes. All rights reserved.</p>
-</footer>
-</main>
-</div>
-</div>
-</body></html>
+                        </div>
+                        <!-- Channels Breakdown -->
+                        <div class="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark">
+                            <h3 class="text-base font-bold text-white mb-4">Canais de Aquisição</h3>
+                            <div class="flex flex-col justify-center flex-1 gap-6">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="size-10 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center">
+                                        <span class="material-symbols-outlined">public</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-bold text-white">Facebook Ads</p>
+                                        <p class="text-xs text-text-secondary">45% do tráfego</p>
+                                    </div>
+                                    <span class="text-sm font-bold text-white">R$ 52.4k</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="size-10 rounded-full bg-red-600/20 text-red-500 flex items-center justify-center">
+                                        <span class="material-symbols-outlined">smart_display</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-bold text-white">Google Ads</p>
+                                        <p class="text-xs text-text-secondary">30% do tráfego</p>
+                                    </div>
+                                    <span class="text-sm font-bold text-white">R$ 38.1k</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="size-10 rounded-full bg-green-600/20 text-green-500 flex items-center justify-center">
+                                        <span class="material-symbols-outlined">alternate_email</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-bold text-white">Email Marketing</p>
+                                        <p class="text-xs text-text-secondary">15% do tráfego</p>
+                                    </div>
+                                    <span class="text-sm font-bold text-white">R$ 18.2k</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="size-10 rounded-full bg-gray-600/20 text-gray-400 flex items-center justify-center">
+                                        <span class="material-symbols-outlined">link</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-bold text-white">Direto / Orgânico</p>
+                                        <p class="text-xs text-text-secondary">10% do tráfego</p>
+                                    </div>
+                                    <span class="text-sm font-bold text-white">R$ 12.5k</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <footer class="mt-8 text-center text-xs text-text-secondary pb-4">
+                    <p>© 2023 Comissões 360. All rights reserved.</p>
+                </footer>
+            </main>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -29,10 +29,17 @@ import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { CheckoutRedirect } from './pages/auth/CheckoutRedirect';
 import { LandingPage } from './pages/LandingPage';
+import { useSiteSettings } from './hooks/useSiteSettings';
+
+function SiteHead() {
+    useSiteSettings();
+    return null;
+}
 
 export default function App() {
     return (
         <AuthProvider>
+            <SiteHead />
             <ToastProvider>
                 <DataProvider>
                     <BrowserRouter>
