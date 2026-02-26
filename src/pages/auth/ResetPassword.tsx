@@ -35,16 +35,27 @@ export function ResetPassword() {
         setErrorMsg('');
 
         try {
+            // 1. Limpa a flag no banco ANTES de atualizar a senha
+            //    Isso evita race condition: updatePassword dispara onAuthStateChange,
+            //    que chama checkSubscription e re-lê force_password_change do BD.
+            //    Se a flag ainda fosse true, o usuário seria redirecionado de volta.
+            const { error: rpcError } = await supabase.rpc('clear_force_password_change');
+            if (rpcError) {
+                console.error('Erro ao limpar flag de troca de senha:', rpcError);
+            }
+
+            // 2. Limpa o estado local (localStorage + context) antes do updatePassword
+            clearMustResetBlock();
+
+            // 3. Agora atualiza a senha (onAuthStateChange vai disparar, mas a flag já está false)
             const { error } = await updatePassword(password);
             if (error) throw error;
 
-            // Chama a RPC para baixar a flag no banco de dados, caso estivesse ativa
-            await supabase.rpc('clear_force_password_change');
-
-            // Sucesso! Limpa o flag local e vai para o dashboard
-            clearMustResetBlock();
+            // 4. Sucesso! Redireciona para o dashboard
             navigate('/dashboard');
         } catch (err: any) {
+            // Se a atualização da senha falhou, re-ativar a flag local para forçar nova tentativa
+            localStorage.setItem('mustReset', 'true');
             setErrorMsg(err.message || 'Erro ao tentar atualizar a senha.');
         } finally {
             setLoading(false);
