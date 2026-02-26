@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/ToastContext';
-import { Loader2, Search, ChevronLeft, ChevronRight, Shield, ShieldOff, CalendarPlus, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, Shield, ShieldOff, CalendarPlus, ToggleLeft, ToggleRight, Trash2, X, AlertTriangle } from 'lucide-react';
 import { format, addDays, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -27,9 +27,11 @@ export function AdminUsers() {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<FilterType>('all');
     const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [extendingUser, setExtendingUser] = useState<string | null>(null);
+    const [extendingUser, setExtendingUser] = useState<UserRow | null>(null);
+    const [deletingUser, setDeletingUser] = useState<UserRow | null>(null);
+    const [adminPassword, setAdminPassword] = useState('');
 
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, signInWithPassword } = useAuth();
     const { showToast } = useToast();
 
     useEffect(() => {
@@ -112,6 +114,47 @@ export function AdminUsers() {
         } catch (error) {
             console.error(error);
             showToast('Erro ao estender assinatura.', 'error');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const confirmAndDeleteUser = async () => {
+        if (!deletingUser || !currentUser?.email) return;
+        if (!adminPassword) {
+            showToast('Digite sua senha para confirmar.', 'error');
+            return;
+        }
+
+        setActionLoading(deletingUser.id);
+
+        try {
+            // 1. Testa se a senha que o Admin digitou é válida logando-o "por trás dos panos"
+            // Retorna erro se a senha estiver errada
+            const { error: authError } = await signInWithPassword(currentUser.email, adminPassword);
+            if (authError) {
+                showToast('Senha de administrador incorreta.', 'error');
+                setActionLoading(null);
+                return;
+            }
+
+            // 2. Chama a RPC que deletará o usuário de fato (exige cargo de admin ativo)
+            const { data, error: rpcError } = await supabase.rpc('delete_user_secure', {
+                target_user_id: deletingUser.id
+            });
+
+            if (rpcError || (data && typeof data === 'object' && data.success === false)) {
+                console.error("RPC Error:", rpcError || data);
+                throw new Error(data?.error || 'Não foi possível excluir o usuário. Falta de permissões.');
+            }
+
+            showToast('Usuário e assinatura excluídos permanentemente.');
+            setDeletingUser(null);
+            setAdminPassword('');
+            fetchUsers();
+        } catch (err: any) {
+            console.error(err);
+            showToast(err.message || 'Erro crítico ao tentar excluir usuário.', 'error');
         } finally {
             setActionLoading(null);
         }
@@ -225,11 +268,10 @@ export function AdminUsers() {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                                                    isExpired
-                                                        ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                                                        : 'bg-green-500/10 text-green-400 border border-green-500/30'
-                                                }`}>
+                                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isExpired
+                                                    ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                                    : 'bg-green-500/10 text-green-400 border border-green-500/30'
+                                                    }`}>
                                                     {isExpired ? 'Expirado' : 'Ativo'}
                                                 </span>
                                             </td>
@@ -242,11 +284,10 @@ export function AdminUsers() {
                                                 <button
                                                     onClick={() => toggleAdmin(user)}
                                                     disabled={actionLoading === user.id}
-                                                    className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${
-                                                        user.is_admin
-                                                            ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
-                                                            : 'bg-surface-highlight text-text-secondary border border-border-dark hover:text-white'
-                                                    }`}
+                                                    className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${user.is_admin
+                                                        ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
+                                                        : 'bg-surface-highlight text-text-secondary border border-border-dark hover:text-white'
+                                                        }`}
                                                 >
                                                     {user.is_admin ? <Shield className="w-3 h-3" /> : <ShieldOff className="w-3 h-3" />}
                                                     {user.is_admin ? 'Admin' : 'Usuário'}
@@ -259,11 +300,10 @@ export function AdminUsers() {
                                                         onClick={() => toggleSubscription(user)}
                                                         disabled={actionLoading === user.id}
                                                         title={isExpired ? 'Ativar assinatura (30 dias)' : 'Desativar assinatura'}
-                                                        className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                                                            isExpired
-                                                                ? 'text-green-400 hover:bg-green-500/10'
-                                                                : 'text-red-400 hover:bg-red-500/10'
-                                                        }`}
+                                                        className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${isExpired
+                                                            ? 'text-green-400 hover:bg-green-500/10'
+                                                            : 'text-red-400 hover:bg-red-500/10'
+                                                            }`}
                                                     >
                                                         {actionLoading === user.id ? (
                                                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -274,37 +314,21 @@ export function AdminUsers() {
                                                         )}
                                                     </button>
                                                     <button
-                                                        onClick={() => setExtendingUser(extendingUser === user.id ? null : user.id)}
+                                                        onClick={() => setExtendingUser(extendingUser?.id === user.id ? null : user)}
                                                         title="Estender assinatura"
                                                         className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
                                                     >
                                                         <CalendarPlus className="w-4 h-4" />
                                                     </button>
+                                                    <button
+                                                        onClick={() => { setDeletingUser(user); setAdminPassword(''); }}
+                                                        disabled={user.id === currentUser?.id || actionLoading === user.id}
+                                                        title={user.id === currentUser?.id ? "Você não pode excluir a si mesmo" : "Excluir Usuário"}
+                                                        className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-20"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
                                                 </div>
-
-                                                {/* Extend Subscription Dropdown */}
-                                                {extendingUser === user.id && (
-                                                    <div className="absolute right-4 mt-2 bg-surface-dark border border-border-dark rounded-xl p-3 shadow-xl z-10 min-w-[180px]">
-                                                        <p className="text-xs text-text-secondary mb-2 font-medium">Estender por:</p>
-                                                        <div className="flex flex-col gap-1">
-                                                            {[
-                                                                { days: 7, label: '7 dias' },
-                                                                { days: 30, label: '30 dias' },
-                                                                { days: 90, label: '90 dias' },
-                                                                { days: 365, label: '1 ano' },
-                                                            ].map(opt => (
-                                                                <button
-                                                                    key={opt.days}
-                                                                    onClick={() => extendSubscription(user.id, opt.days)}
-                                                                    disabled={actionLoading === user.id}
-                                                                    className="text-left text-sm text-white px-3 py-2 rounded-lg hover:bg-surface-highlight transition-colors disabled:opacity-50"
-                                                                >
-                                                                    {opt.label}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -338,6 +362,112 @@ export function AdminUsers() {
                             Próximo
                             <ChevronRight className="w-4 h-4" />
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Estender Assinatura (Correção de Bug de Scroll) */}
+            {extendingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-sm bg-surface-dark border border-border-dark rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-semibold text-white">Estender Assinatura</h3>
+                                <button onClick={() => setExtendingUser(null)} className="text-text-secondary hover:text-white transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-text-secondary mb-4 break-words">
+                                Selecione o período para estender a assinatura de <span className="text-white font-medium">{extendingUser.email}</span>:
+                            </p>
+
+                            <div className="flex flex-col gap-2">
+                                {[
+                                    { days: 7, label: '7 dias' },
+                                    { days: 30, label: '1 Mês' },
+                                    { days: 90, label: '3 Meses' },
+                                    { days: 365, label: '1 Ano' },
+                                ].map(opt => (
+                                    <button
+                                        key={opt.days}
+                                        onClick={() => extendSubscription(extendingUser.id, opt.days)}
+                                        disabled={actionLoading === extendingUser.id}
+                                        className="w-full text-left flex justify-between items-center text-sm text-white px-4 py-3 rounded-lg border border-border-dark hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+                                    >
+                                        <span>+{opt.label}</span>
+                                        {actionLoading === extendingUser.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                        ) : (
+                                            <CalendarPlus className="w-4 h-4 text-text-secondary" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Exclusão Física (Hard Delete) */}
+            {deletingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md bg-surface-dark border border-border-dark rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <div className="flex items-start gap-4 mb-6">
+                                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-semibold text-white mb-1">Excluir Conta Permanentemente</h3>
+                                    <p className="text-sm text-text-secondary break-words">
+                                        Você está prestes a excluir <span className="text-white font-medium">{deletingUser.email}</span>. Isso removerá todos os dados, leads e acesso dessa pessoa imediatamente. Esta ação não pode ser desfeita.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                                        Confirme sua Senha de Administrador
+                                    </label>
+                                    <input
+                                        type="password"
+                                        placeholder="Digite sua senha..."
+                                        className="w-full bg-background-dark border border-border-dark rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500 transition-colors"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && confirmAndDeleteUser()}
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setDeletingUser(null); setAdminPassword(''); }}
+                                        className="flex-1 px-4 py-2.5 rounded-lg border border-border-dark text-white text-sm font-medium hover:bg-surface-highlight transition-colors"
+                                        disabled={!!actionLoading}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={confirmAndDeleteUser}
+                                        disabled={!!actionLoading || !adminPassword}
+                                        className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {actionLoading === deletingUser.id ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Excluindo...</span>
+                                            </>
+                                        ) : (
+                                            <span>Sim, Excluir Conta</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
