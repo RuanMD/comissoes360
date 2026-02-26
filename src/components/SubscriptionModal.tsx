@@ -9,9 +9,10 @@ interface SubscriptionModalProps {
     checkoutUrl: string;
     showName: boolean;
     showPhone: boolean;
+    webhookUrl?: string;
 }
 
-export function SubscriptionModal({ isOpen, onClose, planId, checkoutUrl, showName, showPhone }: SubscriptionModalProps) {
+export function SubscriptionModal({ isOpen, onClose, planId, checkoutUrl, showName, showPhone, webhookUrl }: SubscriptionModalProps) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -43,6 +44,28 @@ export function SubscriptionModal({ isOpen, onClose, planId, checkoutUrl, showNa
                 }]);
 
             if (insertError) throw insertError;
+
+            // Trigger Webhook if configured
+            if (webhookUrl) {
+                try {
+                    await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            name: showName ? name : null,
+                            email,
+                            phone: showPhone ? phone : null,
+                            plan_id: planId,
+                            timestamp: new Date().toISOString()
+                        }),
+                    });
+                } catch (webhookError) {
+                    // Silently fail webhook so it doesn't block the checkout redirect
+                    console.error('Erro ao enviar webhook:', webhookError);
+                }
+            }
 
             // Redireciona para o checkout do Kiwify ou equivalente
             window.location.href = checkoutUrl;

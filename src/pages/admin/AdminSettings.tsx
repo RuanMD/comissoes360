@@ -10,6 +10,7 @@ interface AppSettings {
     hero_image_url: string;
     show_name_field: boolean;
     show_phone_field: boolean;
+    webhook_url: string;
 }
 
 export function AdminSettings() {
@@ -52,6 +53,7 @@ export function AdminSettings() {
                     hero_image_url: settings.hero_image_url,
                     show_name_field: settings.show_name_field,
                     show_phone_field: settings.show_phone_field,
+                    webhook_url: settings.webhook_url,
                 })
                 .eq('id', settings.id);
             if (error) throw error;
@@ -112,6 +114,22 @@ export function AdminSettings() {
                             onChange={(e) => setSettings({ ...settings, whatsapp_message: e.target.value })}
                         />
                         <span className="text-xs text-text-secondary">{(settings.whatsapp_message || '').length} caracteres</span>
+                    </div>
+                </div>
+
+                <div className="border-t border-border-dark pt-6 mt-2">
+                    <h3 className="text-lg font-bold text-white mb-4">Integrações</h3>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-text-secondary">URL do Webhook (Acionado ao gerar Lead)</label>
+                        <input
+                            className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors"
+                            value={settings.webhook_url || ''}
+                            onChange={(e) => setSettings({ ...settings, webhook_url: e.target.value })}
+                            placeholder="https://sua-url-de-webhook.com/api/v1"
+                        />
+                        <p className="text-xs text-neutral-400 mt-1">
+                            Deixe em branco para desativar. Enviaremos um POST JSON com os dados do lead.
+                        </p>
                     </div>
                 </div>
 

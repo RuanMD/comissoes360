@@ -387,6 +387,7 @@ export function LandingPage() {
                 checkoutUrl={selectedCheckoutUrl}
                 showName={settings?.show_name_field ?? true}
                 showPhone={settings?.show_phone_field ?? true}
+                webhookUrl={settings?.webhook_url}
             />
 
         </div>
