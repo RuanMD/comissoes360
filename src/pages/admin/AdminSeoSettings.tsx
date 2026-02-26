@@ -52,14 +52,14 @@ export function AdminSeoSettings() {
         try {
             const { error } = await supabase
                 .from('site_settings')
-                .upsert({
-                    id: 1,
+                .update({
                     title: settings.title,
                     description: settings.description,
                     favicon_url: settings.favicon_url,
                     banner_url: settings.banner_url,
                     updated_at: new Date().toISOString()
-                });
+                })
+                .eq('id', 1);
 
             if (error) throw error;
             showToast('Configurações SEO salvas com sucesso!');
