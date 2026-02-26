@@ -13,6 +13,8 @@ import { Channels } from './pages/Channels';
 import { Products } from './pages/Products';
 import { TemporalAnalysis } from './pages/TemporalAnalysis';
 import { DirectsVsIndirects } from './pages/DirectsVsIndirects';
+import { FunnelAnalysis } from './pages/FunnelAnalysis';
+import { CreativeTrack } from './pages/CreativeTrack';
 
 // Admin
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -59,11 +61,13 @@ export default function App() {
                                 <Route path="/reset-password" element={<ResetPassword />} />
                                 <Route element={<AppLayout><Outlet /></AppLayout>}>
                                     <Route path="/dashboard" element={<Dashboard />} />
+                                    <Route path="/funil" element={<FunnelAnalysis />} />
                                     <Route path="/sub-id" element={<SubIdAnalysis />} />
                                     <Route path="/canais" element={<Channels />} />
                                     <Route path="/produtos" element={<Products />} />
                                     <Route path="/temporal" element={<TemporalAnalysis />} />
                                     <Route path="/diretas-vs-indiretas" element={<DirectsVsIndirects />} />
+                                    <Route path="/criativo-track" element={<CreativeTrack />} />
                                 </Route>
                             </Route>
 

@@ -323,12 +323,214 @@ export function useMetrics() {
             }))
             .sort((a, b) => b.commission - a.commission);
 
+        // === FUNNEL: Match clicks to commissions by exact timestamp ===
+        // Build a Map: click timestamp -> array of commission items
+        const commissionByClickTime = new Map<string, any[]>();
+        filteredCommission.forEach(item => {
+            const clickTime = (item['Tempo dos Cliques'] || '').trim();
+            if (clickTime) {
+                if (!commissionByClickTime.has(clickTime)) {
+                    commissionByClickTime.set(clickTime, []);
+                }
+                commissionByClickTime.get(clickTime)!.push(item);
+            }
+        });
+
+        // Match clicks to commissions: exact timestamp first, then fuzzy (closest Sub_ID + time)
+        const matchedRecords: Array<{
+            clickId: string, clickTime: string, subId: string, channel: string,
+            orderId: string, orderTime: string, product: string, value: number,
+            commission: number, status: string, matchType: 'exact' | 'fuzzy'
+        }> = [];
+        let matchedClicksCount = 0;
+
+        const funnelSubIdMap: Record<string, { clicks: number, matched: number, orders: number, revenue: number, commission: number }> = {};
+        const funnelChannelMap: Record<string, { clicks: number, matched: number, orders: number, revenue: number, commission: number }> = {};
+
+        // Initialize funnel maps from all clicks
+        filteredClicks.forEach(click => {
+            const rawSubId = click['Sub_id'] || '';
+            const subId = rawSubId.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+            const channel = click['Referenciador'] || 'Desconhecido';
+
+            if (!funnelSubIdMap[subId]) funnelSubIdMap[subId] = { clicks: 0, matched: 0, orders: 0, revenue: 0, commission: 0 };
+            funnelSubIdMap[subId].clicks += 1;
+
+            if (!funnelChannelMap[channel]) funnelChannelMap[channel] = { clicks: 0, matched: 0, orders: 0, revenue: 0, commission: 0 };
+            funnelChannelMap[channel].clicks += 1;
+        });
+
+        // Add commission-side orders to funnel maps
+        filteredCommission.forEach(item => {
+            const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
+            let subId = parts.join('-') || 'Sem Sub_id';
+            if (subId !== 'Sem Sub_id' && !funnelSubIdMap[subId]) {
+                const match = Object.keys(funnelSubIdMap).find(k => k.includes(subId) || subId.includes(k));
+                if (match) subId = match;
+            }
+            const channel = item['Canal'] || 'Desconhecido';
+            const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
+            const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
+
+            if (!funnelSubIdMap[subId]) funnelSubIdMap[subId] = { clicks: 0, matched: 0, orders: 0, revenue: 0, commission: 0 };
+            funnelSubIdMap[subId].orders += 1;
+            funnelSubIdMap[subId].revenue += orderVal;
+            funnelSubIdMap[subId].commission += netComm;
+
+            if (!funnelChannelMap[channel]) funnelChannelMap[channel] = { clicks: 0, matched: 0, orders: 0, revenue: 0, commission: 0 };
+            funnelChannelMap[channel].orders += 1;
+            funnelChannelMap[channel].revenue += orderVal;
+            funnelChannelMap[channel].commission += netComm;
+        });
+
+        // Step 1: Exact timestamp matching (click -> commission)
+        const exactMatchedClickTimes = new Set<string>();
+
+        filteredClicks.forEach(click => {
+            const clickTime = (click['Tempo dos Cliques'] || '').trim();
+            const rawSubId = click['Sub_id'] || '';
+            const subId = rawSubId.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+            const channel = click['Referenciador'] || 'Desconhecido';
+
+            const commissionItems = commissionByClickTime.get(clickTime);
+            if (commissionItems && commissionItems.length > 0) {
+                matchedClicksCount++;
+                exactMatchedClickTimes.add(clickTime);
+
+                if (funnelSubIdMap[subId]) funnelSubIdMap[subId].matched += 1;
+                if (funnelChannelMap[channel]) funnelChannelMap[channel].matched += 1;
+
+                commissionItems.forEach(item => {
+                    const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
+                    const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
+                    matchedRecords.push({
+                        clickId: click['ID dos Cliques'] || '—',
+                        clickTime,
+                        subId,
+                        channel,
+                        orderId: item['ID do pedido'] || '—',
+                        orderTime: item['Horário do pedido'] || '—',
+                        product: item['Nome do Item'] || 'Item Desconhecido',
+                        value: orderVal,
+                        commission: netComm,
+                        status: item['Status do Pedido'] || '—',
+                        matchType: 'exact',
+                    });
+                });
+            }
+        });
+
+        // Step 2: Fuzzy matching for unmatched commission items
+        // For each commission without exact match, find closest click with compatible Sub_ID
+        const usedClickIndices = new Set<number>();
+        // Pre-parse click data for fuzzy matching
+        const clicksWithTime = filteredClicks.map((click, idx) => {
+            const clickTime = (click['Tempo dos Cliques'] || '').trim();
+            const d = parseShopeeDate(clickTime);
+            const rawSubId = click['Sub_id'] || '';
+            const subId = rawSubId.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+            return { idx, click, clickTime, date: d, subId, channel: click['Referenciador'] || 'Desconhecido' };
+        });
+
+        filteredCommission.forEach(item => {
+            const commClickTime = (item['Tempo dos Cliques'] || '').trim();
+            // Skip if already exact-matched
+            if (exactMatchedClickTimes.has(commClickTime)) return;
+
+            const commClickDate = parseShopeeDate(commClickTime);
+            if (!commClickDate) return;
+
+            const commParts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
+            const commSubId = commParts.join('-') || 'Sem Sub_id';
+
+            // Find closest click with compatible Sub_ID
+            let bestIdx = -1;
+            let bestDiff = Infinity;
+
+            clicksWithTime.forEach(c => {
+                if (usedClickIndices.has(c.idx)) return;
+                if (!c.date) return;
+
+                // Check Sub_ID compatibility
+                const compatible = c.subId.includes(commSubId) || commSubId.includes(c.subId) ||
+                    (commSubId !== 'Sem Sub_id' && c.subId !== 'Sem Sub_id' &&
+                        commParts.some(p => c.subId.includes(p)));
+
+                if (!compatible) return;
+
+                const diff = Math.abs(c.date.getTime() - commClickDate.getTime());
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestIdx = c.idx;
+                }
+            });
+
+            if (bestIdx >= 0) {
+                usedClickIndices.add(bestIdx);
+                const bestClick = clicksWithTime[bestIdx];
+
+                matchedClicksCount++;
+                if (funnelSubIdMap[bestClick.subId]) funnelSubIdMap[bestClick.subId].matched += 1;
+                if (funnelChannelMap[bestClick.channel]) funnelChannelMap[bestClick.channel].matched += 1;
+
+                const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
+                const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
+                matchedRecords.push({
+                    clickId: bestClick.click['ID dos Cliques'] || '—',
+                    clickTime: bestClick.clickTime,
+                    subId: bestClick.subId,
+                    channel: bestClick.channel,
+                    orderId: item['ID do pedido'] || '—',
+                    orderTime: item['Horário do pedido'] || '—',
+                    product: item['Nome do Item'] || 'Item Desconhecido',
+                    value: orderVal,
+                    commission: netComm,
+                    status: item['Status do Pedido'] || '—',
+                    matchType: 'fuzzy',
+                });
+            }
+        });
+
+        const epc = totalClicks > 0 ? totalNetCommission / totalClicks : 0;
+
+        const funnelBySubId = Object.entries(funnelSubIdMap)
+            .map(([subId, s]) => ({
+                subId,
+                clicks: s.clicks,
+                matched: s.matched,
+                orders: s.orders,
+                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toFixed(2) : '0.00',
+                revenue: s.revenue,
+                commission: s.commission,
+                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+            }))
+            .sort((a, b) => b.commission - a.commission);
+
+        const funnelByChannel = Object.entries(funnelChannelMap)
+            .map(([channel, s]) => ({
+                channel,
+                clicks: s.clicks,
+                matched: s.matched,
+                orders: s.orders,
+                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toFixed(2) : '0.00',
+                revenue: s.revenue,
+                commission: s.commission,
+                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+            }))
+            .sort((a, b) => b.commission - a.commission);
+
         return {
             isEmpty: commissionData.length === 0 && clickData.length === 0,
             totalOrders,
             totalNetCommission,
             totalOrderValue,
             totalClicks,
+            matchedClicks: matchedClicksCount,
+            unmatchedClicks: totalClicks - matchedClicksCount,
+            epc,
+            matchedRecords: matchedRecords.sort((a, b) => b.commission - a.commission),
+            funnelBySubId,
+            funnelByChannel,
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             productRanking,
             allProducts,

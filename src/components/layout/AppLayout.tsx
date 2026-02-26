@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Upload, LayoutDashboard, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings } from 'lucide-react';
+import { Upload, LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard } from 'lucide-react';
 
 interface AppLayoutProps {
     children: ReactNode;
@@ -15,11 +15,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     const navItems = [
         { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { path: '/funil', icon: Filter, label: 'Funil' },
         { path: '/sub-id', icon: Database, label: 'Origens (Sub_ID)' },
         { path: '/canais', icon: TrendingUp, label: 'Canais' },
         { path: '/produtos', icon: Package, label: 'Produtos' },
         { path: '/temporal', icon: BarChart3, label: 'Temporal' },
         { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas' },
+        { path: '/criativo-track', icon: Clapperboard, label: 'Criativo Track' },
     ];
 
     const isCurrent = (path: string) => location.pathname === path;
