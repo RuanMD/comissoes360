@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/ToastContext';
-import { Loader2, Search, ChevronLeft, ChevronRight, Shield, ShieldOff, CalendarPlus, ToggleLeft, ToggleRight, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, Shield, ShieldOff, CalendarPlus, ToggleLeft, ToggleRight, Trash2, X, AlertTriangle, Sliders } from 'lucide-react';
 import { format, addDays, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ALL_FEATURE_KEYS, FEATURE_LABELS, FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface UserRow {
     id: string;
@@ -13,6 +14,14 @@ interface UserRow {
     subscription_expires_at: string | null;
     is_admin: boolean;
     created_at: string;
+    plan_id: string | null;
+    feature_overrides: Record<string, boolean>;
+}
+
+interface PlanOption {
+    id: string;
+    name: string;
+    feature_keys: string[];
 }
 
 type FilterType = 'all' | 'active' | 'expired' | 'admins';
@@ -30,12 +39,16 @@ export function AdminUsers() {
     const [extendingUser, setExtendingUser] = useState<UserRow | null>(null);
     const [deletingUser, setDeletingUser] = useState<UserRow | null>(null);
     const [adminPassword, setAdminPassword] = useState('');
+    const [plans, setPlans] = useState<PlanOption[]>([]);
+    const [overridesUser, setOverridesUser] = useState<UserRow | null>(null);
+    const [tempOverrides, setTempOverrides] = useState<Record<string, boolean>>({});
 
     const { user: currentUser, signInWithPassword } = useAuth();
     const { showToast } = useToast();
 
     useEffect(() => {
         fetchUsers();
+        fetchPlans();
     }, [page, filter]);
 
     const fetchUsers = async () => {
@@ -43,7 +56,7 @@ export function AdminUsers() {
         try {
             let query = supabase
                 .from('users')
-                .select('id, email, subscription_status, subscription_expires_at, is_admin, created_at', { count: 'exact' })
+                .select('id, email, subscription_status, subscription_expires_at, is_admin, created_at, plan_id, feature_overrides', { count: 'exact' })
                 .order('created_at', { ascending: false });
 
             if (filter === 'active') {
@@ -68,6 +81,15 @@ export function AdminUsers() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchPlans = async () => {
+        const { data } = await supabase
+            .from('plans')
+            .select('id, name, feature_keys')
+            .eq('is_active', true)
+            .order('name');
+        setPlans(data || []);
     };
 
     const filteredUsers = useMemo(() => {
@@ -238,6 +260,7 @@ export function AdminUsers() {
                             <tr className="border-b border-border-dark">
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Email</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Status</th>
+                                <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Plano</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Expira em</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Admin</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Cadastro</th>
@@ -247,7 +270,7 @@ export function AdminUsers() {
                         <tbody>
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-10 text-center text-text-secondary">
+                                    <td colSpan={7} className="px-4 py-10 text-center text-text-secondary">
                                         Nenhum usuário encontrado.
                                     </td>
                                 </tr>
@@ -274,6 +297,23 @@ export function AdminUsers() {
                                                     }`}>
                                                     {isExpired ? 'Expirado' : 'Ativo'}
                                                 </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <select
+                                                    value={user.plan_id || ''}
+                                                    onChange={async (e) => {
+                                                        const planId = e.target.value || null;
+                                                        await supabase.from('users').update({ plan_id: planId, updated_at: new Date().toISOString() }).eq('id', user.id);
+                                                        showToast(planId ? 'Plano vinculado!' : 'Plano removido.');
+                                                        fetchUsers();
+                                                    }}
+                                                    className="bg-background-dark border border-border-dark rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-primary max-w-[120px]"
+                                                >
+                                                    <option value="">Sem plano</option>
+                                                    {plans.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                    ))}
+                                                </select>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`text-sm ${isExpired ? 'text-red-400' : 'text-white'}`}>
@@ -319,6 +359,16 @@ export function AdminUsers() {
                                                         className="p-2 rounded-lg text-blue-400 hover:bg-blue-500/10 transition-colors"
                                                     >
                                                         <CalendarPlus className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setOverridesUser(user);
+                                                            setTempOverrides(user.feature_overrides || {});
+                                                        }}
+                                                        title="Gerenciar recursos"
+                                                        className="p-2 rounded-lg text-purple-400 hover:bg-purple-500/10 transition-colors"
+                                                    >
+                                                        <Sliders className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         onClick={() => { setDeletingUser(user); setAdminPassword(''); }}
@@ -466,6 +516,93 @@ export function AdminUsers() {
                                         )}
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Gerenciar Recursos (Feature Overrides) */}
+            {overridesUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md bg-surface-dark border border-border-dark rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-lg font-semibold text-white">Gerenciar Recursos</h3>
+                                <button onClick={() => setOverridesUser(null)} className="text-text-secondary hover:text-white transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-text-secondary mb-4 break-words">
+                                Overrides para <span className="text-white font-medium">{overridesUser.email}</span>.
+                                Use para forçar acesso ou bloqueio independente do plano.
+                            </p>
+
+                            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
+                                {ALL_FEATURE_KEYS.map((key) => {
+                                    const planHas = plans.find(p => p.id === overridesUser.plan_id)?.feature_keys?.includes(key) || false;
+                                    const override = tempOverrides[key];
+                                    const hasOverride = key in tempOverrides;
+
+                                    return (
+                                        <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-background-dark border border-border-dark">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm text-white">{FEATURE_LABELS[key as FeatureKey]}</span>
+                                                <span className="text-[10px] text-text-secondary">
+                                                    Plano: {planHas ? '✅ Incluso' : '❌ Não incluso'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => {
+                                                        const next = { ...tempOverrides };
+                                                        delete next[key];
+                                                        setTempOverrides(next);
+                                                    }}
+                                                    className={`text-[10px] px-2 py-1 rounded ${!hasOverride ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-surface-highlight text-text-secondary border border-border-dark'}`}
+                                                >
+                                                    Padrão
+                                                </button>
+                                                <button
+                                                    onClick={() => setTempOverrides({ ...tempOverrides, [key]: true })}
+                                                    className={`text-[10px] px-2 py-1 rounded ${hasOverride && override === true ? 'bg-green-500/20 text-green-400 border border-green-500/40' : 'bg-surface-highlight text-text-secondary border border-border-dark'}`}
+                                                >
+                                                    Ativar
+                                                </button>
+                                                <button
+                                                    onClick={() => setTempOverrides({ ...tempOverrides, [key]: false })}
+                                                    className={`text-[10px] px-2 py-1 rounded ${hasOverride && override === false ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-surface-highlight text-text-secondary border border-border-dark'}`}
+                                                >
+                                                    Bloquear
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-6">
+                                <button
+                                    onClick={() => setOverridesUser(null)}
+                                    className="flex-1 px-4 py-2.5 rounded-lg border border-border-dark text-white text-sm font-medium hover:bg-surface-highlight transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        await supabase.from('users').update({
+                                            feature_overrides: tempOverrides,
+                                            updated_at: new Date().toISOString(),
+                                        }).eq('id', overridesUser.id);
+                                        showToast('Overrides salvos!');
+                                        setOverridesUser(null);
+                                        fetchUsers();
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-primary text-background-dark font-bold rounded-lg text-sm hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    Salvar Overrides
+                                </button>
                             </div>
                         </div>
                     </div>

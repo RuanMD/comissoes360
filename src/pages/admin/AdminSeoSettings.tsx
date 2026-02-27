@@ -129,7 +129,7 @@ export function AdminSeoSettings() {
                                 className="w-full bg-background-dark border border-border-dark rounded-xl p-3 text-sm text-white outline-none focus:border-primary transition-colors"
                                 value={settings.title}
                                 onChange={(e) => setSettings({ ...settings, title: e.target.value })}
-                                placeholder="Ex: Shopee Analytics 360"
+                                placeholder="Ex: Comissões 360"
                             />
                             <span className="text-xs text-text-secondary">Aparece na aba do navegador e no título em negrito da mensagem.</span>
                         </div>

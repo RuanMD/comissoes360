@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-    let title = "Shopee Analytics";
+    let title = "Comissões 360";
     let description = "Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.";
     let bannerUrl = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop";
     let faviconUrl = "/vite.svg";

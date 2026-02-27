@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../components/ui/ToastContext';
 import { Loader2, Plus, Trash2, Save } from 'lucide-react';
+import { ALL_FEATURE_KEYS, FEATURE_LABELS, FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface Plan {
     id: string;
@@ -13,6 +14,7 @@ interface Plan {
     features: string[];
     is_popular: boolean;
     is_active: boolean;
+    feature_keys: string[];
 }
 
 export function AdminPlans() {
@@ -57,6 +59,7 @@ export function AdminPlans() {
                     features: plan.features,
                     is_popular: plan.is_popular,
                     is_active: plan.is_active,
+                    feature_keys: plan.feature_keys || [],
                 })
                 .eq('id', plan.id);
             if (error) throw error;
@@ -84,6 +87,7 @@ export function AdminPlans() {
                     features: [],
                     is_popular: false,
                     is_active: true,
+                    feature_keys: [],
                 })
                 .select()
                 .single();
@@ -293,6 +297,55 @@ export function AdminPlans() {
                                 className="bg-surface-highlight text-white px-4 py-2 rounded-lg hover:text-primary transition-colors flex items-center gap-1"
                             >
                                 <Plus className="w-4 h-4" /> Adicionar
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Feature Keys (Recursos) */}
+                    <div className="border border-border-dark rounded-xl p-4 bg-background-dark">
+                        <h4 className="text-sm font-bold text-white mb-4">Recursos liberados neste plano</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {ALL_FEATURE_KEYS.map((key) => (
+                                <label key={key} className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer hover:text-white transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={(plan.feature_keys || []).includes(key)}
+                                        onChange={(e) => {
+                                            const newPlans = [...plans];
+                                            const currentKeys = newPlans[index].feature_keys || [];
+                                            if (e.target.checked) {
+                                                newPlans[index].feature_keys = [...currentKeys, key];
+                                            } else {
+                                                newPlans[index].feature_keys = currentKeys.filter((k: string) => k !== key);
+                                            }
+                                            setPlans(newPlans);
+                                        }}
+                                        className="accent-primary"
+                                    />
+                                    {FEATURE_LABELS[key as FeatureKey]}
+                                </label>
+                            ))}
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                onClick={() => {
+                                    const newPlans = [...plans];
+                                    newPlans[index].feature_keys = [...ALL_FEATURE_KEYS];
+                                    setPlans(newPlans);
+                                }}
+                                className="text-xs text-primary hover:underline"
+                            >
+                                Selecionar Todos
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const newPlans = [...plans];
+                                    newPlans[index].feature_keys = [];
+                                    setPlans(newPlans);
+                                }}
+                                className="text-xs text-red-400 hover:underline"
+                            >
+                                Limpar
                             </button>
                         </div>
                     </div>

@@ -34,8 +34,9 @@ export function useMetrics() {
                 start = startOfDay(subDays(now, 1));
                 end = endOfDay(subDays(now, 1));
                 break;
-            case '2days':
+            case 'anteontem':
                 start = startOfDay(subDays(now, 2));
+                end = endOfDay(subDays(now, 2));
                 break;
             case '7days':
                 start = startOfDay(subDays(now, 7));
@@ -75,8 +76,9 @@ export function useMetrics() {
                 start = startOfDay(subDays(now, 1));
                 end = endOfDay(subDays(now, 1));
                 break;
-            case '2days':
+            case 'anteontem':
                 start = startOfDay(subDays(now, 2));
+                end = endOfDay(subDays(now, 2));
                 break;
             case '7days':
                 start = startOfDay(subDays(now, 7));
@@ -317,7 +319,7 @@ export function useMetrics() {
                 subId: name,
                 clicks: stats.clicks,
                 orders: stats.orders,
-                conversion: stats.clicks > 0 ? ((stats.orders / stats.clicks) * 100).toFixed(2) : '0.00',
+                conversion: stats.clicks > 0 ? ((stats.orders / stats.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
                 commission: stats.commission,
                 channels: Array.from(stats.channels).join(', ') || 'N/A'
             }))
@@ -499,7 +501,7 @@ export function useMetrics() {
                 clicks: s.clicks,
                 matched: s.matched,
                 orders: s.orders,
-                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toFixed(2) : '0.00',
+                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
                 revenue: s.revenue,
                 commission: s.commission,
                 epc: s.clicks > 0 ? s.commission / s.clicks : 0,
@@ -512,7 +514,7 @@ export function useMetrics() {
                 clicks: s.clicks,
                 matched: s.matched,
                 orders: s.orders,
-                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toFixed(2) : '0.00',
+                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
                 revenue: s.revenue,
                 commission: s.commission,
                 epc: s.clicks > 0 ? s.commission / s.clicks : 0,
@@ -556,7 +558,7 @@ export function useMetrics() {
                 channelBreakdown: Array<{ channel: string, clicks: number, orders: number, commission: number }>,
                 orders: Array<{ orderId: string, product: string, commission: number, status: string, date: string }>
             }>,
-            conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(2) : '0.00',
+            conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
             directsVsIndirects: [
                 { name: 'Diretas', value: directsCount, fill: '#f2a20d' },
                 { name: 'Indiretas', value: indirectsCount, fill: '#3b82f6' }

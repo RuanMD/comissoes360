@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 import Papa from 'papaparse';
 
 export type ReportType = 'clicks' | 'commission' | 'orders' | 'unknown' | 'multiple';
-export type DateFilterStr = 'today' | 'yesterday' | '2days' | '7days' | '30days' | 'all' | 'custom';
+export type DateFilterStr = 'today' | 'yesterday' | 'anteontem' | '7days' | '30days' | 'all' | 'custom';
 export interface CustomDateRange { start: string; end: string }
 
 export interface DataContextType {

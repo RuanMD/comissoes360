@@ -6,7 +6,7 @@
 -- 1. Cria a tabela de Configurações
 CREATE TABLE IF NOT EXISTS public.site_settings (
     id INT PRIMARY KEY DEFAULT 1,
-    title TEXT NOT NULL DEFAULT 'Shopee Analytics',
+    title TEXT NOT NULL DEFAULT 'Comissões 360',
     description TEXT NOT NULL DEFAULT 'Maximize seus lucros com análises inteligentes.',
     favicon_url TEXT,
     banner_url TEXT,
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.site_settings (
 
 -- 2. Insere os valores padrão (se a tabela estiver vazia)
 INSERT INTO public.site_settings (id, title, description)
-VALUES (1, 'Shopee Analytics', 'Plataforma líder em gestão de afiliados e relatórios.')
+VALUES (1, 'Comissões 360', 'Plataforma líder em gestão de afiliados e relatórios.')
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. Configura RLS (Apenas Leitura Pública, Gravação só para Administradores)

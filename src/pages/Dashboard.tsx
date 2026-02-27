@@ -4,12 +4,12 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
-    Upload, BarChart3, CheckCircle2
+    Upload, BarChart3, CheckCircle2, RefreshCw
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 export function Dashboard() {
-    const { commissionData, clickData, hasStartedAnalysis, setHasStartedAnalysis, handleFileUpload } = useData();
+    const { commissionData, clickData, hasStartedAnalysis, setHasStartedAnalysis, handleFileUpload, clearData } = useData();
     const metrics = useMetrics();
 
     if (!hasStartedAnalysis) {
@@ -104,7 +104,15 @@ export function Dashboard() {
                     <h2 className="text-2xl font-bold tracking-tight text-white">Dashboard Geral</h2>
                     <p className="text-text-secondary text-sm">Visão geral de desempenho e comissões</p>
                 </div>
-                <DateFilter />
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => { if (window.confirm('Deseja substituir os CSVs atuais? Os dados carregados serão removidos.')) { clearData(); } }}
+                        className="px-3 py-2 rounded-lg text-sm flex items-center gap-1.5 text-neutral-400 hover:text-white hover:bg-white/10 border border-border-dark transition-colors"
+                    >
+                        <RefreshCw className="w-4 h-4" /> Trocar CSV
+                    </button>
+                    <DateFilter />
+                </div>
             </header>
 
             {/* KPI Cards Row */}
@@ -113,7 +121,7 @@ export function Dashboard() {
                     <div className="flex items-start justify-between mb-2">
                         <p className="text-text-secondary text-sm font-medium">Vendas Totais</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight break-words">R$ {metrics.totalOrderValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-white text-3xl font-bold tracking-tight break-words">R$ {metrics.totalOrderValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
 
                 <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
@@ -127,7 +135,7 @@ export function Dashboard() {
                     <div className="flex items-start justify-between mb-2">
                         <p className="text-text-secondary text-sm font-medium">Ticket Médio</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">R$ {metrics.totalOrders > 0 ? (metrics.totalOrderValue / metrics.totalOrders).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}</p>
+                    <p className="text-white text-3xl font-bold tracking-tight">R$ {metrics.totalOrders > 0 ? (metrics.totalOrderValue / metrics.totalOrders).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}</p>
                 </div>
 
                 <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
@@ -148,7 +156,7 @@ export function Dashboard() {
                     <div className="flex items-start justify-between mb-2 z-10 w-full min-w-0">
                         <p className="text-text-secondary text-sm font-medium">Comissão Líquida</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight z-10 break-words">R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-white text-3xl font-bold tracking-tight z-10 break-words">R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
             </div>
 
@@ -178,7 +186,7 @@ export function Dashboard() {
                     </div>
                     <div>
                         <p className="text-sm text-red-500">Pedidos Cancelados</p>
-                        <p className="text-xs text-text-secondary mt-0.5">Taxa de Perda: {metrics.totalOrders > 0 ? ((metrics.funnelStats.cancelled / metrics.totalOrders) * 100).toFixed(1) : 0}%</p>
+                        <p className="text-xs text-text-secondary mt-0.5">Taxa de Perda: {metrics.totalOrders > 0 ? ((metrics.funnelStats.cancelled / metrics.totalOrders) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0'}%</p>
                     </div>
                 </div>
             </div>
@@ -193,12 +201,12 @@ export function Dashboard() {
                     <div className="flex items-center gap-4 text-right">
                         <div>
                             <p className="text-xs text-text-secondary">Shopee</p>
-                            <p className="text-sm font-bold text-white font-mono">R$ {metrics.commissionSource.shopee.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                            <p className="text-sm font-bold text-white font-mono">R$ {metrics.commissionSource.shopee.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                         <div className="h-8 w-px bg-border-dark"></div>
                         <div>
                             <p className="text-xs text-primary">Vendedores</p>
-                            <p className="text-sm font-bold text-primary font-mono">R$ {metrics.commissionSource.seller.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                            <p className="text-sm font-bold text-primary font-mono">R$ {metrics.commissionSource.seller.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                     </div>
                 </div>
@@ -257,7 +265,7 @@ export function Dashboard() {
                             <div key={item.name} className="flex flex-col gap-1.5 group">
                                 <div className="flex justify-between items-start text-sm">
                                     <span className="text-white font-medium line-clamp-2 max-w-[70%] leading-tight group-hover:text-primary transition-colors">{item.name}</span>
-                                    <span className="text-primary font-bold ml-2 whitespace-nowrap">R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                    <span className="text-primary font-bold ml-2 whitespace-nowrap">R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs mt-1">
                                     <span className="text-text-secondary">Vendas: {item.count} un.</span>
@@ -279,7 +287,7 @@ export function Dashboard() {
                             <div key={item.category} className="flex flex-col gap-1.5 group">
                                 <div className="flex justify-between items-start text-sm">
                                     <span className="text-white font-medium line-clamp-2 max-w-[70%] leading-tight group-hover:text-[#3b82f6] transition-colors">{item.category}</span>
-                                    <span className="text-[#3b82f6] font-bold ml-2 whitespace-nowrap">R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                                    <span className="text-[#3b82f6] font-bold ml-2 whitespace-nowrap">R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-xs mt-1">
                                     <span className="text-text-secondary">Vendas: {item.count} un.</span>

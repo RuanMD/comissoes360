@@ -30,8 +30,8 @@ export function FunnelAnalysis() {
     };
 
     const matchRate = metrics.totalClicks > 0
-        ? ((metrics.matchedClicks / metrics.totalClicks) * 100).toFixed(1)
-        : '0.0';
+        ? ((metrics.matchedClicks / metrics.totalClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+        : '0,0';
 
     const funnelSteps = [
         { label: 'Cliques Totais', value: metrics.totalClicks, color: '#3b82f6' },
@@ -59,7 +59,7 @@ export function FunnelAnalysis() {
                     {funnelSteps.map((step, idx) => {
                         const widthPct = Math.max((step.value / maxFunnelValue) * 100, 4);
                         const dropOff = idx > 0 && funnelSteps[idx - 1].value > 0
-                            ? (((funnelSteps[idx - 1].value - step.value) / funnelSteps[idx - 1].value) * 100).toFixed(1)
+                            ? (((funnelSteps[idx - 1].value - step.value) / funnelSteps[idx - 1].value) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
                             : null;
                         return (
                             <div key={step.label}>
@@ -370,8 +370,8 @@ export function FunnelAnalysis() {
                                                 <td className="p-3">
                                                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${r.status.toLowerCase() === 'concluído' ? 'bg-green-500/10 text-green-400' :
                                                         r.status.toLowerCase() === 'cancelado' ? 'bg-red-500/10 text-red-400' :
-                                                        r.status.toLowerCase() === 'não pago' ? 'bg-gray-500/10 text-gray-400' :
-                                                            'bg-yellow-500/10 text-yellow-400'
+                                                            r.status.toLowerCase() === 'não pago' ? 'bg-gray-500/10 text-gray-400' :
+                                                                'bg-yellow-500/10 text-yellow-400'
                                                         }`}>
                                                         {r.status}
                                                     </span>

@@ -29,7 +29,7 @@ export function DateFilter() {
                     className="bg-transparent border-0 text-white text-sm focus:ring-0 cursor-pointer py-1.5 pl-3 pr-8 font-medium outline-none">
                     <option value="today">Hoje</option>
                     <option value="yesterday">Ontem</option>
-                    <option value="2days">Últimos 2 dias</option>
+                    <option value="anteontem">Anteontem</option>
                     <option value="7days">Últimos 7 dias</option>
                     <option value="30days">Últimos 30 dias</option>
                     <option value="all">Tudo</option>

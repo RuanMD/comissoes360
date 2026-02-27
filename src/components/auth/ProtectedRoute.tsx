@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useFeatureAccess, ROUTE_TO_FEATURE } from '../../hooks/useFeatureAccess';
 import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute() {
@@ -76,3 +77,27 @@ export function AdminRoute() {
 
     return <Outlet />;
 }
+
+/**
+ * Wrapper component for individual routes that checks feature access.
+ * Uses the current route path to determine the required feature key.
+ * Redirects to /dashboard if user doesn't have access.
+ */
+export function FeatureGuard({ children }: { children: React.ReactNode }) {
+    const { hasAccess, loading } = useFeatureAccess();
+    const location = useLocation();
+
+    if (loading) return null;
+
+    const featureKey = ROUTE_TO_FEATURE[location.pathname];
+
+    // If no feature key mapped (e.g. admin routes), allow access
+    if (!featureKey) return <>{children}</>;
+
+    if (!hasAccess(featureKey)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    return <>{children}</>;
+}
+

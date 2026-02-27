@@ -1,0 +1,43 @@
+--- Authentication Details ---
+App ID: 18364470827
+Timestamp: 1764950602
+Signature: a90fbf141e2d5074a225a0d76385e5c03484078e036176b4985cdbbe59951513
+Payload: {"query":"\nquery {\n  productOfferV2(keyword: \"iphone\", limit: 5) {\n    nodes {\n      productName\n      price\n      commissionRate\n      offerLink\n    }\n  }\n}\n"}
+
+--- API Response ---
+{
+  "productOfferV2": {
+    "nodes": [
+      {
+        "productName": "Capa Capinha Case Iphone 13 Silicone Várias Cores e Modelos Excelente Qualidade  iPhone 15",
+        "price": "15",
+        "commissionRate": "0.83",
+        "offerLink": "https://s.shopee.com.br/4AsfP9EQNB"
+      },
+      {
+        "productName": "Cabo Turbo de Dados e Carregamento Rápido 35W  iPhone 14 / 14 Plus / 14 Pro / 14 Pro Max",
+        "price": "7.99",
+        "commissionRate": "0.56",
+        "offerLink": "https://s.shopee.com.br/4LC5bSDn2E"
+      },
+      {
+        "productName": "Carregador 35W iPhone 15 ao 17 Pro Max Turbo Fonte USB-C + Cabo Tipo-C Tipo C de 1M",
+        "price": "14.5",
+        "commissionRate": "0.55",
+        "offerLink": "https://s.shopee.com.br/4VVVnlD9hH"
+      },
+      {
+        "productName": "THE ROUGH GUIDE TO THE IPHONE",
+        "price": "54.9",
+        "commissionRate": "0.53",
+        "offerLink": "https://s.shopee.com.br/3LJYPcHb44"
+      },
+      {
+        "productName": "Aprenda a Desenvolver Jogos para iPhone e iPad com o cocos2d",
+        "price": "99",
+        "commissionRate": "0.53",
+        "offerLink": "https://s.shopee.com.br/3VcybvGxj7"
+      }
+    ]
+  }
+}

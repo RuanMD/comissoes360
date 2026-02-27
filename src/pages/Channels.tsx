@@ -88,7 +88,7 @@ export function Channels() {
                         </thead>
                         <tbody className="divide-y divide-border-dark">
                             {metrics.channelsRanking.map((item, idx) => {
-                                const conversion = item.clicks > 0 ? ((item.orders / item.clicks) * 100).toFixed(2) : '0.00';
+                                const conversion = item.clicks > 0 ? ((item.orders / item.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00';
                                 return (
                                     <tr key={idx} className="hover:bg-background-dark/30 transition-colors">
                                         <td className="p-4 text-sm font-medium text-white max-w-[300px] truncate" title={item.channel}>

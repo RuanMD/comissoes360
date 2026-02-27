@@ -1,0 +1,1502 @@
+{
+  "data": {
+    "__schema": {
+      "types": [
+        {
+          "name": "AttributionType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "Banner",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "fileName"
+            },
+            {
+              "name": "imageHeight"
+            },
+            {
+              "name": "imageWidth"
+            },
+            {
+              "name": "imageSize"
+            },
+            {
+              "name": "imageUrl"
+            }
+          ]
+        },
+        {
+          "name": "BannerInfo",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "count"
+            },
+            {
+              "name": "banners"
+            }
+          ]
+        },
+        {
+          "name": "BatchShortLinkInput",
+          "kind": "INPUT_OBJECT",
+          "fields": null
+        },
+        {
+          "name": "BatchShortLinkItem",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "originUrl"
+            },
+            {
+              "name": "shortLink"
+            },
+            {
+              "name": "success"
+            },
+            {
+              "name": "errorMessage"
+            }
+          ]
+        },
+        {
+          "name": "BatchShortLinkResult",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "links"
+            },
+            {
+              "name": "total"
+            },
+            {
+              "name": "successCount"
+            }
+          ]
+        },
+        {
+          "name": "Boolean",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "BrandOffer",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            },
+            {
+              "name": "offerDetails"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "offerStatus"
+            },
+            {
+              "name": "offerLink"
+            },
+            {
+              "name": "offerName"
+            },
+            {
+              "name": "periodEndTime"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "offerUpdates"
+            },
+            {
+              "name": "bannerInfo"
+            }
+          ]
+        },
+        {
+          "name": "BrandOfferConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "BrandOfferOrder",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "BuyerType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "CampaignType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "CategoryType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ConversionReport",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "clickTime"
+            },
+            {
+              "name": "purchaseTime"
+            },
+            {
+              "name": "checkoutId"
+            },
+            {
+              "name": "conversionId"
+            },
+            {
+              "name": "conversionStatus"
+            },
+            {
+              "name": "grossCommission"
+            },
+            {
+              "name": "cappedCommission"
+            },
+            {
+              "name": "totalBrandCommission"
+            },
+            {
+              "name": "estimatedTotalCommission"
+            },
+            {
+              "name": "shopeeCommissionCapped"
+            },
+            {
+              "name": "sellerCommission"
+            },
+            {
+              "name": "totalCommission"
+            },
+            {
+              "name": "netCommission"
+            },
+            {
+              "name": "mcnManagementFeeRate"
+            },
+            {
+              "name": "mcnManagementFee"
+            },
+            {
+              "name": "mcnContractId"
+            },
+            {
+              "name": "linkedMcnName"
+            },
+            {
+              "name": "buyerType"
+            },
+            {
+              "name": "utmContent"
+            },
+            {
+              "name": "device"
+            },
+            {
+              "name": "productType"
+            },
+            {
+              "name": "referrer"
+            },
+            {
+              "name": "orders"
+            }
+          ]
+        },
+        {
+          "name": "ConversionReportConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ConversionReportOrder",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "orderId"
+            },
+            {
+              "name": "shopType"
+            },
+            {
+              "name": "orderStatus"
+            },
+            {
+              "name": "items"
+            }
+          ]
+        },
+        {
+          "name": "ConversionReportOrderItem",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "completeTime"
+            },
+            {
+              "name": "promotionId"
+            },
+            {
+              "name": "modelId"
+            },
+            {
+              "name": "itemId"
+            },
+            {
+              "name": "itemName"
+            },
+            {
+              "name": "itemPrice"
+            },
+            {
+              "name": "displayItemStatus"
+            },
+            {
+              "name": "actualAmount"
+            },
+            {
+              "name": "refundAmount"
+            },
+            {
+              "name": "qty"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "itemCommission"
+            },
+            {
+              "name": "grossBrandCommission"
+            },
+            {
+              "name": "itemTotalCommission"
+            },
+            {
+              "name": "itemSellerCommission"
+            },
+            {
+              "name": "itemSellerCommissionRate"
+            },
+            {
+              "name": "itemShopeeCommissionCapped"
+            },
+            {
+              "name": "itemShopeeCommissionRate"
+            },
+            {
+              "name": "itemNotes"
+            },
+            {
+              "name": "categoryLv1Name"
+            },
+            {
+              "name": "categoryLv2Name"
+            },
+            {
+              "name": "categoryLv3Name"
+            },
+            {
+              "name": "globalCategoryLv1Name"
+            },
+            {
+              "name": "globalCategoryLv2Name"
+            },
+            {
+              "name": "globalCategoryLv3Name"
+            },
+            {
+              "name": "fraudStatus"
+            },
+            {
+              "name": "fraudReason"
+            },
+            {
+              "name": "attributionType"
+            },
+            {
+              "name": "channelType"
+            },
+            {
+              "name": "campaignPartnerName"
+            },
+            {
+              "name": "campaignType"
+            }
+          ]
+        },
+        {
+          "name": "ConversionStatus",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "DeltaDataUpdateType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "Detail",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "catName"
+            },
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            }
+          ]
+        },
+        {
+          "name": "DeviceType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "DisplayItemStatus",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "DisplayOrderStatus",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ExtInfo",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "clickId"
+            },
+            {
+              "name": "videoId"
+            },
+            {
+              "name": "userType"
+            }
+          ]
+        },
+        {
+          "name": "FeedMode",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "Float",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "FraudStatus",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ID",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "Int",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "Int64",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "ItemFeed",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "datafeedId"
+            },
+            {
+              "name": "referenceId"
+            },
+            {
+              "name": "datafeedName"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "totalCount"
+            },
+            {
+              "name": "date"
+            },
+            {
+              "name": "feedMode"
+            }
+          ]
+        },
+        {
+          "name": "ItemFeedDataConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "rows"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ItemFeedDataRow",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "columns"
+            },
+            {
+              "name": "updateType"
+            }
+          ]
+        },
+        {
+          "name": "ItemFeedListConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "feeds"
+            }
+          ]
+        },
+        {
+          "name": "ItemFeedPageInfo",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "offset"
+            },
+            {
+              "name": "limit"
+            },
+            {
+              "name": "totalCount"
+            },
+            {
+              "name": "hasMore"
+            }
+          ]
+        },
+        {
+          "name": "Mutation",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "generateShortLink"
+            },
+            {
+              "name": "generateBatchShortLink"
+            },
+            {
+              "name": "syncAffiliateStatus"
+            }
+          ]
+        },
+        {
+          "name": "Offer",
+          "kind": "INTERFACE",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            },
+            {
+              "name": "imageUrl"
+            }
+          ]
+        },
+        {
+          "name": "OfferStatus",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "OfferType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "OfferUpdate",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "originalOfferStatus"
+            },
+            {
+              "name": "updateOfferStatus"
+            },
+            {
+              "name": "updateTime"
+            }
+          ]
+        },
+        {
+          "name": "PageInfo",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "page"
+            },
+            {
+              "name": "limit"
+            },
+            {
+              "name": "hasNextPage"
+            },
+            {
+              "name": "scrollId"
+            }
+          ]
+        },
+        {
+          "name": "PartnerOrder",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "orderId"
+            },
+            {
+              "name": "purchaseTime"
+            },
+            {
+              "name": "completeTime"
+            },
+            {
+              "name": "orderStatus"
+            },
+            {
+              "name": "buyerType"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "productType"
+            },
+            {
+              "name": "items"
+            },
+            {
+              "name": "extInfo"
+            }
+          ]
+        },
+        {
+          "name": "PartnerOrderReportConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "searchNextPageInfo"
+            }
+          ]
+        },
+        {
+          "name": "PartnerReportOrderItem",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "itemId"
+            },
+            {
+              "name": "itemName"
+            },
+            {
+              "name": "categoryLv1Name"
+            },
+            {
+              "name": "categoryLv2Name"
+            },
+            {
+              "name": "categoryLv3Name"
+            },
+            {
+              "name": "itemPrice"
+            },
+            {
+              "name": "qty"
+            },
+            {
+              "name": "actualAmount"
+            },
+            {
+              "name": "refundAmount"
+            }
+          ]
+        },
+        {
+          "name": "ProductOffer",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            },
+            {
+              "name": "commission"
+            },
+            {
+              "name": "price"
+            },
+            {
+              "name": "sales"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "productName"
+            },
+            {
+              "name": "offerStatus"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "itemLink"
+            },
+            {
+              "name": "shopLink"
+            },
+            {
+              "name": "isBrandProduct"
+            },
+            {
+              "name": "periodEndTime"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "offerUpdates"
+            }
+          ]
+        },
+        {
+          "name": "ProductOfferConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ProductOfferConnectionV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ProductOfferOrder",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ProductOfferV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "itemId"
+            },
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            },
+            {
+              "name": "commission"
+            },
+            {
+              "name": "price"
+            },
+            {
+              "name": "sales"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "productName"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "productLink"
+            },
+            {
+              "name": "offerLink"
+            },
+            {
+              "name": "periodEndTime"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "priceMin"
+            },
+            {
+              "name": "priceMax"
+            },
+            {
+              "name": "productCatIds"
+            },
+            {
+              "name": "ratingStar"
+            },
+            {
+              "name": "priceDiscountRate"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "shopType"
+            },
+            {
+              "name": "sellerCommissionRate"
+            },
+            {
+              "name": "shopeeCommissionRate"
+            }
+          ]
+        },
+        {
+          "name": "ProductType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "Query",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "brandOffer"
+            },
+            {
+              "name": "shopOfferV2"
+            },
+            {
+              "name": "shopeeOffer"
+            },
+            {
+              "name": "shopeeOfferV2"
+            },
+            {
+              "name": "productOffer"
+            },
+            {
+              "name": "productOfferV2"
+            },
+            {
+              "name": "conversionReport"
+            },
+            {
+              "name": "validatedReport"
+            },
+            {
+              "name": "checkAffiliateId"
+            },
+            {
+              "name": "partnerOrderReport"
+            },
+            {
+              "name": "listItemFeeds"
+            },
+            {
+              "name": "getItemFeedData"
+            }
+          ]
+        },
+        {
+          "name": "RateUnit",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "Result",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "result"
+            }
+          ]
+        },
+        {
+          "name": "SearchNextPageInfo",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "size"
+            },
+            {
+              "name": "limit"
+            },
+            {
+              "name": "searchNextToken"
+            },
+            {
+              "name": "debugId"
+            }
+          ]
+        },
+        {
+          "name": "ShopOfferConnectionV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ShopOfferV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "offerLink"
+            },
+            {
+              "name": "originalLink"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "periodEndTime"
+            },
+            {
+              "name": "bannerInfo"
+            },
+            {
+              "name": "ratingStar"
+            },
+            {
+              "name": "shopType"
+            },
+            {
+              "name": "remainingBudget"
+            },
+            {
+              "name": "sellerCommCoveRatio"
+            }
+          ]
+        },
+        {
+          "name": "ShopType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ShopeeOffer",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "appExistRate"
+            },
+            {
+              "name": "appNewRate"
+            },
+            {
+              "name": "webExistRate"
+            },
+            {
+              "name": "webNewRate"
+            },
+            {
+              "name": "offerDetails"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "offerLink"
+            },
+            {
+              "name": "offerName"
+            },
+            {
+              "name": "offerStatus"
+            },
+            {
+              "name": "offerType"
+            },
+            {
+              "name": "periodEndTime"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "catId"
+            },
+            {
+              "name": "collectionLabelId"
+            },
+            {
+              "name": "productLabelId"
+            },
+            {
+              "name": "productScope"
+            },
+            {
+              "name": "offerUpdates"
+            }
+          ]
+        },
+        {
+          "name": "ShopeeOfferConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ShopeeOfferConnectionV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ShopeeOfferOrder",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ShopeeOfferType",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "ShopeeOfferV2",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "commissionRate"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "offerLink"
+            },
+            {
+              "name": "originalLink"
+            },
+            {
+              "name": "offerName"
+            },
+            {
+              "name": "offerType"
+            },
+            {
+              "name": "categoryId"
+            },
+            {
+              "name": "collectionId"
+            },
+            {
+              "name": "periodStartTime"
+            },
+            {
+              "name": "periodEndTime"
+            }
+          ]
+        },
+        {
+          "name": "ShortLinkInput",
+          "kind": "INPUT_OBJECT",
+          "fields": null
+        },
+        {
+          "name": "ShortLinkResult",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "shortLink"
+            }
+          ]
+        },
+        {
+          "name": "String",
+          "kind": "SCALAR",
+          "fields": null
+        },
+        {
+          "name": "ValidatedReport",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "clickTime"
+            },
+            {
+              "name": "purchaseTime"
+            },
+            {
+              "name": "conversionId"
+            },
+            {
+              "name": "shopeeCommissionCapped"
+            },
+            {
+              "name": "sellerCommission"
+            },
+            {
+              "name": "totalCommission"
+            },
+            {
+              "name": "buyerType"
+            },
+            {
+              "name": "utmContent"
+            },
+            {
+              "name": "device"
+            },
+            {
+              "name": "productType"
+            },
+            {
+              "name": "referrer"
+            },
+            {
+              "name": "netCommission"
+            },
+            {
+              "name": "mcnManagementFeeRate"
+            },
+            {
+              "name": "mcnManagementFee"
+            },
+            {
+              "name": "mcnContractId"
+            },
+            {
+              "name": "linkedMcnName"
+            },
+            {
+              "name": "orders"
+            }
+          ]
+        },
+        {
+          "name": "ValidatedReportConnection",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "nodes"
+            },
+            {
+              "name": "pageInfo"
+            }
+          ]
+        },
+        {
+          "name": "ValidatedReportOrder",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "orderId"
+            },
+            {
+              "name": "shopType"
+            },
+            {
+              "name": "orderStatus"
+            },
+            {
+              "name": "items"
+            }
+          ]
+        },
+        {
+          "name": "ValidatedReportOrderItem",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "shopId"
+            },
+            {
+              "name": "shopName"
+            },
+            {
+              "name": "completeTime"
+            },
+            {
+              "name": "promotionId"
+            },
+            {
+              "name": "modelId"
+            },
+            {
+              "name": "itemId"
+            },
+            {
+              "name": "itemName"
+            },
+            {
+              "name": "itemPrice"
+            },
+            {
+              "name": "displayItemStatus"
+            },
+            {
+              "name": "actualAmount"
+            },
+            {
+              "name": "refundAmount"
+            },
+            {
+              "name": "qty"
+            },
+            {
+              "name": "imageUrl"
+            },
+            {
+              "name": "itemTotalCommission"
+            },
+            {
+              "name": "itemSellerCommission"
+            },
+            {
+              "name": "itemSellerCommissionRate"
+            },
+            {
+              "name": "itemShopeeCommissionCapped"
+            },
+            {
+              "name": "itemShopeeCommissionRate"
+            },
+            {
+              "name": "itemNotes"
+            },
+            {
+              "name": "globalCategoryLv1Name"
+            },
+            {
+              "name": "globalCategoryLv2Name"
+            },
+            {
+              "name": "globalCategoryLv3Name"
+            },
+            {
+              "name": "fraudStatus"
+            },
+            {
+              "name": "fraudReason"
+            },
+            {
+              "name": "attributionType"
+            },
+            {
+              "name": "channelType"
+            },
+            {
+              "name": "campaignPartnerName"
+            },
+            {
+              "name": "campaignType"
+            }
+          ]
+        },
+        {
+          "name": "__Directive",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "locations"
+            },
+            {
+              "name": "args"
+            }
+          ]
+        },
+        {
+          "name": "__DirectiveLocation",
+          "kind": "ENUM",
+          "fields": null
+        },
+        {
+          "name": "__EnumValue",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "isDeprecated"
+            },
+            {
+              "name": "deprecationReason"
+            }
+          ]
+        },
+        {
+          "name": "__Field",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "args"
+            },
+            {
+              "name": "type"
+            },
+            {
+              "name": "isDeprecated"
+            },
+            {
+              "name": "deprecationReason"
+            }
+          ]
+        },
+        {
+          "name": "__InputValue",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "type"
+            },
+            {
+              "name": "defaultValue"
+            }
+          ]
+        },
+        {
+          "name": "__Schema",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "types"
+            },
+            {
+              "name": "queryType"
+            },
+            {
+              "name": "mutationType"
+            },
+            {
+              "name": "subscriptionType"
+            },
+            {
+              "name": "directives"
+            }
+          ]
+        },
+        {
+          "name": "__Type",
+          "kind": "OBJECT",
+          "fields": [
+            {
+              "name": "kind"
+            },
+            {
+              "name": "name"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "fields"
+            },
+            {
+              "name": "interfaces"
+            },
+            {
+              "name": "possibleTypes"
+            },
+            {
+              "name": "enumValues"
+            },
+            {
+              "name": "inputFields"
+            },
+            {
+              "name": "ofType"
+            }
+          ]
+        },
+        {
+          "name": "__TypeKind",
+          "kind": "ENUM",
+          "fields": null
+        }
+      ]
+    }
+  }
+}

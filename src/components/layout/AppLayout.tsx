@@ -1,8 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Upload, LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard } from 'lucide-react';
+import { Upload, LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard, Target, Link } from 'lucide-react';
+import { ProfileModal } from './ProfileModal';
+import { useFeatureAccess, FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface AppLayoutProps {
     children: ReactNode;
@@ -12,19 +14,26 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { handleFileUpload } = useData();
     const { user, signOut, isAdmin } = useAuth();
     const location = useLocation();
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const { hasAccess } = useFeatureAccess();
 
-    const navItems = [
-        { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { path: '/funil', icon: Filter, label: 'Funil' },
-        { path: '/sub-id', icon: Database, label: 'Origens (Sub_ID)' },
-        { path: '/canais', icon: TrendingUp, label: 'Canais' },
-        { path: '/produtos', icon: Package, label: 'Produtos' },
-        { path: '/temporal', icon: BarChart3, label: 'Temporal' },
-        { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas' },
-        { path: '/criativo-track', icon: Clapperboard, label: 'Criativo Track' },
+    const navItems: { path: string; icon: any; label: string; featureKey: FeatureKey }[] = [
+        { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', featureKey: 'dashboard' },
+        { path: '/relatorio', icon: Filter, label: 'Relatório', featureKey: 'relatorio' },
+        { path: '/funil', icon: Target, label: 'Funil', featureKey: 'funil_builder' },
+        { path: '/sub-id', icon: Database, label: 'Origens (Sub_ID)', featureKey: 'sub_id' },
+        { path: '/canais', icon: TrendingUp, label: 'Canais', featureKey: 'canais' },
+        { path: '/produtos', icon: Package, label: 'Produtos', featureKey: 'produtos' },
+        { path: '/temporal', icon: BarChart3, label: 'Temporal', featureKey: 'temporal' },
+        { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas', featureKey: 'diretas_indiretas' },
+        { path: '/criativo-track', icon: Clapperboard, label: 'Criativo Track', featureKey: 'criativo_track' },
+        { path: '/gerador-links', icon: Link, label: 'Gerador de Links', featureKey: 'gerador_links' },
     ];
 
+    const visibleNavItems = navItems.filter(item => hasAccess(item.featureKey));
+
     const isCurrent = (path: string) => location.pathname === path;
+    const userMetaName = user?.user_metadata?.full_name;
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-background-dark text-white font-sans antialiased text-base">
@@ -32,21 +41,24 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="hidden md:flex flex-col w-72 bg-surface-dark border-r border-border-dark h-full justify-between p-4">
                 <div className="flex flex-col gap-6">
                     {/* User Profile Mock & Logout */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-surface-highlight/50 border border-border-dark">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-surface-highlight/50 border border-border-dark group cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setIsProfileModalOpen(true)}>
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                                CI
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold group-hover:bg-primary/30 transition-colors">
+                                {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
                             </div>
                             <div className="flex flex-col overflow-hidden max-w-[120px]">
-                                <h1 className="text-white text-sm font-bold leading-tight truncate">
-                                    {user?.email ? user.email.split('@')[0] : 'Comissões 360'}
+                                <h1 className="text-white text-sm font-bold leading-tight truncate group-hover:text-primary transition-colors">
+                                    {userMetaName || (user?.email ? user.email.split('@')[0] : 'Comissões 360')}
                                 </h1>
                                 <p className="text-text-secondary text-xs font-normal leading-normal truncate">Dashboard 2.0</p>
                             </div>
                         </div>
                         <button
-                            onClick={signOut}
-                            className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                signOut();
+                            }}
+                            className="p-2 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-400/10 transition-colors"
                             title="Sair"
                         >
                             <LogOut className="w-4 h-4" />
@@ -55,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
                     {/* Navigation */}
                     <nav className="flex flex-col gap-2">
-                        {navItems.map((item) => (
+                        {visibleNavItems.map((item) => (
                             <NavLink
                                 key={item.path}
                                 to={item.path}
@@ -81,7 +93,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     return `flex items-center gap-3 px-4 py-3 rounded-xl transition-all group mt-4 border border-dashed border-primary/30 ${active
                                         ? 'bg-primary/10 text-primary shadow-lg shadow-primary/5'
                                         : 'text-[#f2a20d] hover:bg-[#f2a20d]/10'
-                                    }`;
+                                        }`;
                                 }}
                             >
                                 <Settings className="w-5 h-5 transition-transform group-hover:rotate-90" />
@@ -99,10 +111,19 @@ export function AppLayout({ children }: AppLayoutProps) {
 
                 {/* Mobile Header (replaces sidebar on small screens) */}
                 <div className="md:hidden flex items-center justify-between p-4 border-b border-border-dark bg-surface-dark">
-                    <div className="flex items-center gap-2 font-bold text-primary">
-                        <LayoutDashboard className="w-5 h-5" />
-                        Comissões 2.0
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsProfileModalOpen(true)}
+                            className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30"
+                        >
+                            {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
+                        </button>
+                        <div className="font-bold text-primary flex items-center gap-2">
+                            <LayoutDashboard className="w-5 h-5" />
+                            <span className="truncate max-w-[120px]">Comissões 2.0</span>
+                        </div>
                     </div>
+
                     <label className="flex items-center justify-center size-9 rounded-lg bg-primary text-background-dark shadow-lg">
                         <Upload className="w-4 h-4" />
                         <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
@@ -133,7 +154,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 return `flex items-center gap-1.5 px-3 py-1.5 rounded-full whitespace-nowrap text-xs font-semibold ${active
                                     ? 'bg-[#f2a20d]/20 text-[#f2a20d] border border-[#f2a20d]/50'
                                     : 'bg-surface-highlight text-[#f2a20d] border border-dashed border-[#f2a20d]/30'
-                                }`;
+                                    }`;
                             }}
                         >
                             Admin
@@ -148,6 +169,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </div>
                 </main>
             </div>
+
+            <ProfileModal
+                isOpen={isProfileModalOpen}
+                onClose={() => setIsProfileModalOpen(false)}
+            />
         </div>
     );
 }
