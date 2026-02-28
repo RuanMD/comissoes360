@@ -214,6 +214,179 @@ export default defineConfig(({ mode }) => {
             }
           })
 
+          // Fetch Conversion Report middleware (dev only)
+          server.middlewares.use('/api/fetch-conversions', async (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Method Not Allowed' }))
+              return
+            }
+
+            let body = ''
+            for await (const chunk of req) {
+              body += chunk
+            }
+
+            let parsed
+            try {
+              parsed = JSON.parse(body)
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Invalid JSON body' }))
+              return
+            }
+
+            const { shopeeAppId, shopeeSecret, purchaseTimeStart, purchaseTimeEnd, limit: queryLimit, scrollId } = parsed
+
+            if (!purchaseTimeStart) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'purchaseTimeStart is required' }))
+              return
+            }
+
+            const appId = shopeeAppId || env.SHOPEE_APP_ID || env.VITE_SHOPEE_APP_ID
+            const secret = shopeeSecret || env.SHOPEE_SECRET || env.VITE_SHOPEE_SECRET
+
+            if (!appId || !secret) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Credenciais da Shopee não fornecidas.' }))
+              return
+            }
+
+            try {
+              const timestamp = Math.floor(Date.now() / 1000)
+
+              const args = [`purchaseTimeStart: ${purchaseTimeStart}`]
+              if (purchaseTimeEnd) args.push(`purchaseTimeEnd: ${purchaseTimeEnd}`)
+              args.push(`limit: ${queryLimit || 100}`)
+              if (scrollId) args.push(`scrollId: "${scrollId}"`)
+
+              const query = `{ conversionReport(${args.join(', ')}) { nodes { clickTime purchaseTime checkoutId conversionId conversionStatus grossCommission cappedCommission totalBrandCommission estimatedTotalCommission shopeeCommissionCapped sellerCommission totalCommission netCommission mcnManagementFeeRate mcnManagementFee buyerType utmContent device productType referrer orders { orderId shopType orderStatus items { shopId shopName completeTime promotionId modelId itemId itemName itemPrice displayItemStatus actualAmount refundAmount qty imageUrl itemTotalCommission itemSellerCommission itemSellerCommissionRate itemShopeeCommissionCapped itemShopeeCommissionRate itemNotes globalCategoryLv1Name globalCategoryLv2Name globalCategoryLv3Name fraudStatus fraudReason attributionType channelType campaignPartnerName campaignType } } } pageInfo { hasNextPage scrollId } } }`
+
+              const payload = JSON.stringify({ query })
+              const stringToSign = appId + timestamp + payload + secret
+              const signature = crypto.createHash('sha256').update(stringToSign).digest('hex')
+
+              const shopeeResponse = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`
+                },
+                body: payload
+              })
+
+              const data = await shopeeResponse.json()
+
+              if (data.errors && data.errors.length > 0) {
+                console.error('Shopee conversionReport error:', data.errors)
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: data.errors[0].message || 'Erro na API da Shopee' }))
+                return
+              }
+
+              const report = data?.data?.conversionReport || {}
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                nodes: report.nodes || [],
+                pageInfo: report.pageInfo || { hasNextPage: false }
+              }))
+            } catch (error) {
+              console.error('Conversion report fetch failed:', error)
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Erro interno ao buscar relatório de conversões.' }))
+            }
+          })
+
+          // Fetch Validated Report middleware (dev only)
+          server.middlewares.use('/api/fetch-validated', async (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Method Not Allowed' }))
+              return
+            }
+
+            let body = ''
+            for await (const chunk of req) {
+              body += chunk
+            }
+
+            let parsed
+            try {
+              parsed = JSON.parse(body)
+            } catch {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Invalid JSON body' }))
+              return
+            }
+
+            const { shopeeAppId, shopeeSecret, limit: queryLimit, scrollId } = parsed
+
+            const appId = shopeeAppId || env.SHOPEE_APP_ID || env.VITE_SHOPEE_APP_ID
+            const secret = shopeeSecret || env.SHOPEE_SECRET || env.VITE_SHOPEE_SECRET
+
+            if (!appId || !secret) {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Credenciais da Shopee não fornecidas.' }))
+              return
+            }
+
+            try {
+              const timestamp = Math.floor(Date.now() / 1000)
+
+              const args = [`limit: ${queryLimit || 100}`]
+              if (scrollId) args.push(`scrollId: "${scrollId}"`)
+
+              const query = `{ validatedReport(${args.join(', ')}) { nodes { clickTime purchaseTime conversionId shopeeCommissionCapped sellerCommission totalCommission netCommission mcnManagementFeeRate mcnManagementFee buyerType utmContent device productType referrer orders { orderId shopType orderStatus items { shopId shopName completeTime promotionId modelId itemId itemName itemPrice displayItemStatus actualAmount refundAmount qty imageUrl itemTotalCommission itemSellerCommission itemSellerCommissionRate itemShopeeCommissionCapped itemShopeeCommissionRate itemNotes globalCategoryLv1Name globalCategoryLv2Name globalCategoryLv3Name fraudStatus fraudReason attributionType channelType campaignPartnerName campaignType } } } pageInfo { hasNextPage scrollId } } }`
+
+              const payload = JSON.stringify({ query })
+              const stringToSign = appId + timestamp + payload + secret
+              const signature = crypto.createHash('sha256').update(stringToSign).digest('hex')
+
+              const shopeeResponse = await fetch('https://open-api.affiliate.shopee.com.br/graphql', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`
+                },
+                body: payload
+              })
+
+              const data = await shopeeResponse.json()
+
+              if (data.errors && data.errors.length > 0) {
+                console.error('Shopee validatedReport error:', data.errors)
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ error: data.errors[0].message || 'Erro na API da Shopee' }))
+                return
+              }
+
+              const report = data?.data?.validatedReport || {}
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                nodes: report.nodes || [],
+                pageInfo: report.pageInfo || { hasNextPage: false }
+              }))
+            } catch (error) {
+              console.error('Validated report fetch failed:', error)
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Erro interno ao buscar relatório validado.' }))
+            }
+          })
+
           // Resolve shortened Shopee URL middleware (dev only)
           server.middlewares.use('/api/resolve-shopee-url', async (req, res) => {
             if (req.method !== 'POST') {

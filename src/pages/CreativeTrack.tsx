@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
-import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl, fetchConversionReport, fetchValidatedReport } from '../lib/shopeeApi';
+import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl, fetchConversionReport } from '../lib/shopeeApi';
 import {
     Loader2, Plus, Trash2, Pencil, Save, X,
     DollarSign, ShoppingCart, TrendingUp, MousePointerClick,
@@ -10,13 +10,16 @@ import {
     Link2, RefreshCw, Calendar, Filter, Eye, EyeOff,
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
-    Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle
+    Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
+    ChevronDown
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
 import { formatBRL, formatPct } from '../utils/format';
 import { extractShopeeIds } from '../utils/shopee';
 import { AdPreviewModal } from '../components/AdPreviewModal';
+import { useData } from '../context/DataContext';
+import { DateFilter } from '../components/ui/DateFilter';
 
 const extractFbAdLink = (creative: any): string | null => {
     if (!creative) return null;
@@ -187,6 +190,7 @@ interface ShopeeConversion {
 export function CreativeTrack() {
     const { user } = useAuth();
     const { showToast } = useToast();
+    const { dateFilter, customRange } = useData();
 
     const [tracks, setTracks] = useState<Track[]>([]);
     const [loading, setLoading] = useState(true);
@@ -232,6 +236,9 @@ export function CreativeTrack() {
     const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
     const [inlineEditForm, setInlineEditForm] = useState<EntryForm>({ ...emptyEntryForm });
 
+    // Tabs Navigation State
+    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions'>('metrics');
+
     // Product Details State
     const [editingProduct, setEditingProduct] = useState(false);
     const [productForm, setProductForm] = useState({
@@ -251,6 +258,21 @@ export function CreativeTrack() {
     const [showSyncModal, setShowSyncModal] = useState(false);
     const [fbLinkedAds, setFbLinkedAds] = useState<FbLinkedAd[]>([]);
     const [syncingFb, setSyncingFb] = useState(false);
+
+    // Global Sync state
+    const [isGlobalSyncing, setIsGlobalSyncing] = useState(false);
+    const [showGlobalSyncMenu, setShowGlobalSyncMenu] = useState(false);
+    const globalSyncMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (globalSyncMenuRef.current && !globalSyncMenuRef.current.contains(event.target as Node)) {
+                setShowGlobalSyncMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     const [fbToken, setFbToken] = useState('');
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [previewAdId, setPreviewAdId] = useState<string | null>(null);
@@ -1037,11 +1059,22 @@ export function CreativeTrack() {
         setSyncingConversions(true);
         try {
             const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-            const nodes = await fetchConversionReport({
-                ...creds,
-                purchaseTimeStart: thirtyDaysAgo,
-                limit: 100,
-            });
+            const allNodes: any[] = [];
+            let hasNext = true;
+            let scrollId: string | undefined = undefined;
+            while (hasNext) {
+                const res: any = await fetchConversionReport({
+                    ...creds,
+                    purchaseTimeStart: thirtyDaysAgo,
+                    limit: 100,
+                    scrollId,
+                });
+                allNodes.push(...res.nodes);
+                hasNext = res.hasNextPage;
+                scrollId = res.scrollId;
+                if (allNodes.length > 1000) break;
+            }
+            const nodes = allNodes;
 
             // Denormalize nodes → flat rows per item
             const rows: any[] = [];
@@ -1121,6 +1154,7 @@ export function CreativeTrack() {
     };
 
     // ========== SYNC VALIDATED ==========
+    // Uses conversionReport with conversionStatus filter (validatedReport requires validationId which we don't have)
     const handleSyncValidated = async () => {
         if (!selectedTrack) return;
         const creds = await getShopeeCredentials();
@@ -1132,11 +1166,25 @@ export function CreativeTrack() {
         setSyncingValidated(true);
         try {
             const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
-            const nodes = await fetchValidatedReport({
-                ...creds,
-                purchaseTimeStart: thirtyDaysAgo,
-                limit: 100,
-            });
+            const allNodes: any[] = [];
+            let hasNext = true;
+            let scrollId: string | undefined = undefined;
+            while (hasNext) {
+                const res: any = await fetchConversionReport({
+                    ...creds,
+                    purchaseTimeStart: thirtyDaysAgo,
+                    limit: 100,
+                    scrollId,
+                });
+                allNodes.push(...res.nodes);
+                hasNext = res.hasNextPage;
+                scrollId = res.scrollId;
+                if (allNodes.length > 1000) break;
+            }
+
+            // Filter only validated/paid conversions
+            const validatedStatuses = ['PAID', 'COMPLETED', 'SETTLED'];
+            const nodes = allNodes.filter(n => validatedStatuses.includes(n.conversionStatus));
 
             const rows: any[] = [];
             for (const node of nodes) {
@@ -1151,7 +1199,7 @@ export function CreativeTrack() {
                             conversion_id: node.conversionId || `validated-${order.orderId}-${item.itemId}`,
                             click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                             purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
-                            conversion_status: node.conversionStatus || order.orderStatus || 'COMPLETED',
+                            conversion_status: node.conversionStatus || 'COMPLETED',
                             net_commission: node.netCommission || 0,
                             total_commission: node.totalCommission || 0,
                             seller_commission: node.sellerCommission || 0,
@@ -1194,7 +1242,7 @@ export function CreativeTrack() {
             }
 
             if (rows.length === 0) {
-                showToast(`Nenhuma conversão validada encontrada para este track. (${nodes.length} validações totais na conta)`, 'info');
+                showToast(`Nenhuma conversão validada encontrada para este track. (${allNodes.length} conversões totais, ${nodes.length} validadas)`, 'info');
             } else {
                 const { error } = await supabase
                     .from('shopee_conversions')
@@ -1214,6 +1262,255 @@ export function CreativeTrack() {
     };
 
     // ========== ADD/UPSERT ENTRY ==========
+
+    // ========== GLOBAL SYNC ==========
+    const handleGlobalSync = async (mode: 'all' | 'meta' | 'shopee') => {
+        setIsGlobalSyncing(true);
+        setShowGlobalSyncMenu(false);
+        try {
+            const globalEntriesMap = new Map<string, {
+                ad_clicks?: number;
+                shopee_clicks?: number;
+                cpc?: number;
+                orders?: number;
+                commission_value?: number;
+                investment?: number;
+                orderIds?: Set<string>;
+                clickIds?: Set<string>;
+            }>();
+
+            // 1. Process Shopee Data
+            if ((mode === 'all' || mode === 'shopee') && tracks.length > 0) {
+                const creds = await getShopeeCredentials();
+                if (!creds) {
+                    showToast('Credenciais da Shopee não configuradas.', 'error');
+                } else {
+                    const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+                    showToast('Buscando dados globais da Shopee...', 'info');
+
+                    // Fetch all conversions (conversionReport has all data including status)
+                    const allNodes: any[] = [];
+                    let hasNext = true;
+                    let scrollId: string | undefined = undefined;
+                    while (hasNext) {
+                        const res: any = await fetchConversionReport({ ...creds, purchaseTimeStart: thirtyDaysAgo, limit: 100, scrollId });
+                        allNodes.push(...res.nodes);
+                        hasNext = res.hasNextPage;
+                        scrollId = res.scrollId;
+                        if (allNodes.length > 1000) break;
+                    }
+
+                    const shopeeRowsMap = new Map<string, any>();
+
+                    for (const node of allNodes) {
+                        if (!node.orders) continue;
+
+                        for (const order of node.orders) {
+                            if (!order.items) continue;
+                            for (const item of order.items) {
+                                // Match by product_item_id OR sub_id in utmContent
+                                const matchedTrack = tracks.find(t =>
+                                    (t.product_item_id && item.itemId && Number(item.itemId) === Number(t.product_item_id)) ||
+                                    (t.sub_id && node.utmContent && node.utmContent.includes(t.sub_id))
+                                );
+
+                                if (!matchedTrack) continue;
+
+                                const conversionId = node.conversionId || `${node.checkoutId || 'unknown'}-${item.itemId}`;
+                                const rowKey = `${matchedTrack.id}_${conversionId}_${item.itemId}`;
+
+                                // Determine validation from conversionStatus
+                                const status = node.conversionStatus || '';
+                                const isValidated = status === 'PAID' || status === 'COMPLETED' || status === 'SETTLED';
+
+                                shopeeRowsMap.set(rowKey, {
+                                    track_id: matchedTrack.id,
+                                    conversion_id: conversionId,
+                                    click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
+                                    purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
+                                    conversion_status: node.conversionStatus || null,
+                                    net_commission: node.netCommission || 0,
+                                    total_commission: node.totalCommission || 0,
+                                    seller_commission: node.sellerCommission || 0,
+                                    shopee_commission: node.shopeeCommissionCapped || 0,
+                                    buyer_type: node.buyerType || null,
+                                    device: node.device || null,
+                                    utm_content: node.utmContent || null,
+                                    referrer: node.referrer || null,
+                                    product_type: node.productType || null,
+                                    order_id: order.orderId || null,
+                                    order_status: order.orderStatus || null,
+                                    shop_type: order.shopType || null,
+                                    item_id: item.itemId || null,
+                                    item_name: item.itemName || null,
+                                    item_price: item.itemPrice || null,
+                                    qty: item.qty || 1,
+                                    actual_amount: item.actualAmount || null,
+                                    refund_amount: item.refundAmount || null,
+                                    image_url: item.imageUrl || null,
+                                    item_total_commission: item.itemTotalCommission || 0,
+                                    item_seller_commission: item.itemSellerCommission || 0,
+                                    item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
+                                    item_shopee_commission: item.itemShopeeCommissionCapped || 0,
+                                    item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
+                                    display_item_status: item.displayItemStatus || null,
+                                    attribution_type: item.attributionType || null,
+                                    channel_type: item.channelType || null,
+                                    campaign_type: item.campaignType || null,
+                                    campaign_partner_name: item.campaignPartnerName || null,
+                                    global_category_lv1: item.globalCategoryLv1Name || null,
+                                    global_category_lv2: item.globalCategoryLv2Name || null,
+                                    global_category_lv3: item.globalCategoryLv3Name || null,
+                                    fraud_status: item.fraudStatus || null,
+                                    fraud_reason: item.fraudReason || null,
+                                    is_validated: isValidated,
+                                    synced_at: new Date().toISOString(),
+                                });
+
+                                // Aggregate for entries
+                                const orderStatus = order.orderStatus || node.conversionStatus || '';
+                                if (node.purchaseTime && orderStatus !== 'CANCELLED') {
+                                    const dateStr = new Date(node.purchaseTime * 1000).toISOString().split('T')[0];
+                                    const aggKey = `${matchedTrack.id}_${dateStr}`;
+                                    const curr = globalEntriesMap.get(aggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
+                                    if (order.orderId) curr.orderIds!.add(order.orderId);
+                                    curr.commission_value = (curr.commission_value || 0) + (item.itemTotalCommission || 0);
+                                    globalEntriesMap.set(aggKey, curr);
+                                }
+
+                                // Count shopee clicks (unique clicks per day per track)
+                                if (node.clickTime) {
+                                    const clickDateStr = new Date(node.clickTime * 1000).toISOString().split('T')[0];
+                                    const clickAggKey = `${matchedTrack.id}_${clickDateStr}`;
+                                    const clickCurr = globalEntriesMap.get(clickAggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
+                                    const clickUniqueId = `${node.conversionId || node.checkoutId}_${node.clickTime}`;
+                                    clickCurr.clickIds!.add(clickUniqueId);
+                                    clickCurr.shopee_clicks = clickCurr.clickIds!.size;
+                                    globalEntriesMap.set(clickAggKey, clickCurr);
+                                }
+                            }
+                        }
+                    }
+
+                    const rows = Array.from(shopeeRowsMap.values());
+                    if (rows.length > 0) {
+                        const { error } = await supabase.from('shopee_conversions').upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
+                        if (error) throw error;
+                    }
+
+                    console.log(`[Global Sync] Shopee: ${allNodes.length} conversões encontradas, ${rows.length} linhas vinculadas aos tracks`);
+                }
+            }
+
+            // 2. Process Meta Data
+            if ((mode === 'all' || mode === 'meta') && tracks.length > 0) {
+                if (!fbToken) {
+                    showToast('Token do Facebook não configurado.', 'error');
+                } else {
+                    showToast('Buscando dados globais do Facebook...', 'info');
+                    const { data: allLinkedAds } = await supabase.from('creative_track_fb_ads').select('*');
+
+                    if (allLinkedAds && allLinkedAds.length > 0) {
+                        const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+                        const today = format(new Date(), 'yyyy-MM-dd');
+
+                        const batchSize = 5;
+                        for (let i = 0; i < allLinkedAds.length; i += batchSize) {
+                            const batch = allLinkedAds.slice(i, i + batchSize);
+                            await Promise.all(batch.map(async (linkedAd) => {
+                                try {
+                                    const insightsRes = await fetch(
+                                        `https://graph.facebook.com/v21.0/${linkedAd.ad_id}/insights?access_token=${encodeURIComponent(fbToken)}&fields=clicks,cpc,spend,impressions&time_range={"since":"${thirtyDaysAgo}","until":"${today}"}&time_increment=1&limit=500`
+                                    );
+                                    const insightsData = await insightsRes.json();
+                                    if (!insightsData.data || insightsData.data.length === 0) return;
+
+                                    const metricsRows = insightsData.data.map((day: any) => ({
+                                        track_id: linkedAd.track_id,
+                                        ad_id: linkedAd.ad_id,
+                                        date: day.date_start,
+                                        clicks: parseInt(day.clicks) || 0,
+                                        cpc: parseFloat(day.cpc) || 0,
+                                        spend: parseFloat(day.spend) || 0,
+                                        impressions: parseInt(day.impressions) || 0,
+                                    }));
+
+                                    await supabase.from('creative_track_fb_metrics').upsert(metricsRows, { onConflict: 'track_id,ad_id,date' });
+
+                                    for (const row of metricsRows) {
+                                        const aggKey = `${row.track_id}_${row.date}`;
+                                        const curr = globalEntriesMap.get(aggKey) || {};
+                                        curr.ad_clicks = (curr.ad_clicks || 0) + row.clicks;
+                                        curr.investment = (curr.investment || 0) + row.spend;
+                                        globalEntriesMap.set(aggKey, curr);
+                                    }
+                                } catch (e) { /* ignore */ }
+                            }));
+                        }
+                    }
+                }
+            }
+
+            // 3. Final Unified Entries Upsert
+            if (globalEntriesMap.size > 0) {
+                const keys = Array.from(globalEntriesMap.keys());
+                const updateTrackIds = [...new Set(keys.map(k => k.split('_')[0]))];
+                const updateDates = [...new Set(keys.map(k => k.split('_')[1]))];
+
+                const { data: existingEntries } = await supabase
+                    .from('creative_track_entries')
+                    .select('*')
+                    .in('track_id', updateTrackIds)
+                    .in('date', updateDates);
+
+                const finalUpsertData = keys.map(key => {
+                    const [trackId, date] = key.split('_');
+                    const agg = globalEntriesMap.get(key)!;
+                    const existing = existingEntries?.find(e => e.track_id === trackId && e.date === date);
+
+                    const ordersVal = agg.orderIds && agg.orderIds.size > 0 ? agg.orderIds.size : (existing?.orders ?? 0);
+                    const commVal = agg.commission_value !== undefined && agg.commission_value > 0 ? agg.commission_value : (existing?.commission_value ?? 0);
+                    const clicksVal = agg.ad_clicks !== undefined ? agg.ad_clicks : (existing?.ad_clicks ?? 0);
+                    const investVal = agg.investment !== undefined ? agg.investment : (existing?.investment ?? 0);
+                    const shopeeClicksVal = agg.shopee_clicks !== undefined && agg.shopee_clicks > 0 ? agg.shopee_clicks : (existing?.shopee_clicks ?? 0);
+
+                    const calculatedCpc = (clicksVal > 0 && investVal > 0) ? investVal / clicksVal : 0;
+
+                    return {
+                        track_id: trackId,
+                        date,
+                        orders: ordersVal,
+                        commission_value: Number.isFinite(commVal) ? Math.round(commVal * 100) / 100 : 0,
+                        ad_clicks: clicksVal,
+                        investment: Number.isFinite(investVal) ? Math.round(investVal * 100) / 100 : 0,
+                        shopee_clicks: shopeeClicksVal,
+                        cpc: Number.isFinite(calculatedCpc) ? Math.round(calculatedCpc * 10000) / 10000 : 0
+                    };
+                });
+
+                if (finalUpsertData.length > 0) {
+                    const { error: upsertError } = await supabase.from('creative_track_entries').upsert(finalUpsertData, { onConflict: 'track_id,date' });
+                    if (upsertError) throw upsertError;
+                }
+            }
+
+            await fetchAllEntries();
+            if (selectedTrack) {
+                const { data: trackEntries } = await supabase.from('creative_track_entries').select('*').eq('track_id', selectedTrack.id).order('date', { ascending: false });
+                setEntries(trackEntries || []);
+                fetchShopeeConversions(selectedTrack.id);
+                fetchFbMetrics(selectedTrack.id);
+            }
+
+            showToast('Sincronização global concluída!', 'success');
+        } catch (err: any) {
+            console.error('Global sync error:', err);
+            showToast(`Erro na sincronização: ${err.message || 'Consulte o console'}`, 'error');
+        } finally {
+            setIsGlobalSyncing(false);
+        }
+    };
+
     const handleAddEntry = async () => {
         if (!selectedTrack || !entryForm.date) {
             showToast('Data é obrigatória.', 'error');
@@ -1314,61 +1611,215 @@ export function CreativeTrack() {
         }
     };
 
+    // ========== FILTERED DATA ==========
+    const filteredEntries = useMemo(() => {
+        if (!entries.length) return [];
+        if (dateFilter === 'all') return entries;
+
+        const now = new Date();
+        let start: Date = new Date(0);
+        let end: Date = endOfDay(now);
+
+        switch (dateFilter) {
+            case 'today':
+                start = startOfDay(now);
+                break;
+            case 'yesterday':
+                start = startOfDay(subDays(now, 1));
+                end = endOfDay(subDays(now, 1));
+                break;
+            case 'anteontem':
+                start = startOfDay(subDays(now, 2));
+                end = endOfDay(subDays(now, 2));
+                break;
+            case '7days':
+                start = startOfDay(subDays(now, 7));
+                break;
+            case '30days':
+                start = startOfDay(subDays(now, 30));
+                break;
+            case 'custom':
+                if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                break;
+            default:
+                return entries;
+        }
+
+        return entries.filter(item => {
+            const dateObj = new Date(item.date);
+            if (isNaN(dateObj.getTime())) return true;
+            return isWithinInterval(dateObj, { start, end });
+        });
+    }, [entries, dateFilter, customRange]);
+
+    const filteredAllEntries = useMemo(() => {
+        if (!allEntries.length) return [];
+        if (dateFilter === 'all') return allEntries;
+
+        const now = new Date();
+        let start: Date = new Date(0);
+        let end: Date = endOfDay(now);
+
+        switch (dateFilter) {
+            case 'today':
+                start = startOfDay(now);
+                break;
+            case 'yesterday':
+                start = startOfDay(subDays(now, 1));
+                end = endOfDay(subDays(now, 1));
+                break;
+            case 'anteontem':
+                start = startOfDay(subDays(now, 2));
+                end = endOfDay(subDays(now, 2));
+                break;
+            case '7days':
+                start = startOfDay(subDays(now, 7));
+                break;
+            case '30days':
+                start = startOfDay(subDays(now, 30));
+                break;
+            case 'custom':
+                if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                break;
+            default:
+                return allEntries;
+        }
+
+        return allEntries.filter(item => {
+            const dateObj = new Date(item.date);
+            if (isNaN(dateObj.getTime())) return true;
+            return isWithinInterval(dateObj, { start, end });
+        });
+    }, [allEntries, dateFilter, customRange]);
+
+    const filteredConversions = useMemo(() => {
+        if (!shopeeConversions.length) return [];
+        if (dateFilter === 'all') return shopeeConversions;
+
+        const now = new Date();
+        let start: Date = new Date(0);
+        let end: Date = endOfDay(now);
+
+        switch (dateFilter) {
+            case 'today':
+                start = startOfDay(now);
+                break;
+            case 'yesterday':
+                start = startOfDay(subDays(now, 1));
+                end = endOfDay(subDays(now, 1));
+                break;
+            case 'anteontem':
+                start = startOfDay(subDays(now, 2));
+                end = endOfDay(subDays(now, 2));
+                break;
+            case '7days':
+                start = startOfDay(subDays(now, 7));
+                break;
+            case '30days':
+                start = startOfDay(subDays(now, 30));
+                break;
+            case 'custom':
+                if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                break;
+            default:
+                return shopeeConversions;
+        }
+
+        return shopeeConversions.filter(item => {
+            if (!item.purchase_time) return true;
+            const dateObj = new Date(item.purchase_time);
+            if (isNaN(dateObj.getTime())) return true;
+            return isWithinInterval(dateObj, { start, end });
+        });
+    }, [shopeeConversions, dateFilter, customRange]);
+
     // ========== COMPUTED KPIs ==========
     const kpis = useMemo(() => {
-        if (entries.length === 0) return null;
-        const totalCommission = entries.reduce((s, e) => s + Number(e.commission_value), 0);
-        const totalInvestment = entries.reduce((s, e) => s + Number(e.investment), 0);
-        const totalOrders = entries.reduce((s, e) => s + Number(e.orders), 0);
-        const totalShopeeClicks = entries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
-        const totalAdClicks = entries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+        if (filteredEntries.length === 0) return null;
+        const totalCommission = filteredEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+        const totalInvestment = filteredEntries.reduce((s, e) => s + Number(e.investment), 0);
+        const totalOrders = filteredEntries.reduce((s, e) => s + Number(e.orders), 0);
+        const totalShopeeClicks = filteredEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
+        const totalAdClicks = filteredEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
         const totalProfit = totalCommission - totalInvestment;
-        const avgOrdersPerDay = entries.length > 0 ? totalOrders / entries.length : 0;
+        const avgOrdersPerDay = filteredEntries.length > 0 ? totalOrders / filteredEntries.length : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
 
         return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
-    }, [entries]);
+    }, [filteredEntries]);
 
     // ========== VIDEO KPIs ==========
     const videoKpis = useMemo(() => {
         if (fbMetrics.length === 0) return null;
-        const totalThruplay = fbMetrics.reduce((s, m) => s + Number(m.video_thruplay || 0), 0);
-        const totalP25 = fbMetrics.reduce((s, m) => s + Number(m.video_p25 || 0), 0);
-        const totalP50 = fbMetrics.reduce((s, m) => s + Number(m.video_p50 || 0), 0);
-        const totalP95 = fbMetrics.reduce((s, m) => s + Number(m.video_p95 || 0), 0);
+
+        // Since fbMetrics are daily, we should also filter them by date if possible.
+        // Let's see if fbMetrics have a date field.
+        const filteredFbMetrics = dateFilter === 'all' ? fbMetrics : fbMetrics.filter(item => {
+            const now = new Date();
+            let start: Date = new Date(0);
+            let end: Date = endOfDay(now);
+
+            switch (dateFilter) {
+                case 'today': start = startOfDay(now); break;
+                case 'yesterday': start = startOfDay(subDays(now, 1)); end = endOfDay(subDays(now, 1)); break;
+                case 'anteontem': start = startOfDay(subDays(now, 2)); end = endOfDay(subDays(now, 2)); break;
+                case '7days': start = startOfDay(subDays(now, 7)); break;
+                case '30days': start = startOfDay(subDays(now, 30)); break;
+                case 'custom':
+                    if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                    if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                    break;
+                default: return true;
+            }
+
+            const dateObj = new Date(item.date);
+            if (isNaN(dateObj.getTime())) return true;
+            return isWithinInterval(dateObj, { start, end });
+        });
+
+        if (filteredFbMetrics.length === 0) return null;
+
+        const totalThruplay = filteredFbMetrics.reduce((s, m) => s + Number(m.video_thruplay || 0), 0);
+        const totalP25 = filteredFbMetrics.reduce((s, m) => s + Number(m.video_p25 || 0), 0);
+        const totalP50 = filteredFbMetrics.reduce((s, m) => s + Number(m.video_p50 || 0), 0);
+        const totalP95 = filteredFbMetrics.reduce((s, m) => s + Number(m.video_p95 || 0), 0);
         if (totalThruplay === 0 && totalP25 === 0) return null; // Not a video ad
         const retentionRate = totalP25 > 0 ? (totalP95 / totalP25) * 100 : 0;
         return { totalThruplay, totalP25, totalP50, totalP95, retentionRate };
-    }, [fbMetrics]);
+    }, [fbMetrics, dateFilter, customRange]);
 
     // ========== GLOBAL KPIs (all tracks) ==========
     const globalKpis = useMemo(() => {
-        if (allEntries.length === 0) return null;
-        const totalCommission = allEntries.reduce((s, e) => s + Number(e.commission_value), 0);
-        const totalInvestment = allEntries.reduce((s, e) => s + Number(e.investment), 0);
-        const totalOrders = allEntries.reduce((s, e) => s + Number(e.orders), 0);
-        const totalShopeeClicks = allEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
-        const totalAdClicks = allEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+        if (filteredAllEntries.length === 0) return null;
+        const totalCommission = filteredAllEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+        const totalInvestment = filteredAllEntries.reduce((s, e) => s + Number(e.investment), 0);
+        const totalOrders = filteredAllEntries.reduce((s, e) => s + Number(e.orders), 0);
+        const totalShopeeClicks = filteredAllEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
+        const totalAdClicks = filteredAllEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
         const totalProfit = totalCommission - totalInvestment;
-        const uniqueDates = new Set(allEntries.map(e => e.date));
+        const uniqueDates = new Set(filteredAllEntries.map(e => e.date));
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
         return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
-    }, [allEntries]);
+    }, [filteredAllEntries]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
-        if (tracks.length === 0 || allEntries.length === 0) return [];
+        if (tracks.length === 0 || filteredAllEntries.length === 0) return [];
         return tracks.map(track => {
-            const trackEntries = allEntries.filter(e => e.track_id === track.id);
+            const trackEntries = filteredAllEntries.filter(e => e.track_id === track.id);
             const commission = trackEntries.reduce((s, e) => s + Number(e.commission_value), 0);
             const investment = trackEntries.reduce((s, e) => s + Number(e.investment), 0);
             const orders = trackEntries.reduce((s, e) => s + Number(e.orders), 0);
             const profit = commission - investment;
             const pct = investment > 0 ? (profit / investment) * 100 : 0;
             return { track, orders, commission, investment, profit, pct };
-        }).sort((a, b) => b.profit - a.profit);
-    }, [tracks, allEntries]);
+        }).filter(r => r.orders > 0 || r.investment > 0 || r.commission > 0)
+            .sort((a, b) => b.profit - a.profit);
+    }, [tracks, filteredAllEntries]);
 
     const entryProfit = (parseFloat(entryForm.commission_value) || 0) - (parseFloat(entryForm.investment) || 0);
     const entryProfitPct = (parseFloat(entryForm.investment) || 0) > 0
@@ -1654,12 +2105,15 @@ export function CreativeTrack() {
                     <h1 className="text-2xl font-bold text-white">Criativo Track</h1>
                     <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                 </div>
-                <button
-                    onClick={() => setShowNewForm(!showNewForm)}
-                    className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 shadow-[0_0_15px_rgba(242,162,13,0.3)] flex items-center gap-2 text-sm"
-                >
-                    <Plus className="w-4 h-4" /> Novo Track
-                </button>
+                <div className="flex items-center gap-3">
+                    <DateFilter />
+                    <button
+                        onClick={() => setShowNewForm(!showNewForm)}
+                        className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 shadow-[0_0_15px_rgba(242,162,13,0.3)] flex items-center gap-2 text-sm"
+                    >
+                        <Plus className="w-4 h-4" /> Novo Track
+                    </button>
+                </div>
             </div>
 
             {/* New Track Modal */}
@@ -1731,9 +2185,48 @@ export function CreativeTrack() {
                                     <h2 className="text-xl font-bold text-white">Visão Geral</h2>
                                     <p className="text-text-secondary text-sm">Compilado de todos os criativos</p>
                                 </div>
-                                <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
-                                    {tracks.length} criativos
-                                </span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
+                                        {tracks.length} criativos
+                                    </span>
+
+                                    {/* Global Sync Dropdown */}
+                                    <div className="relative" ref={globalSyncMenuRef}>
+                                        <button
+                                            onClick={() => setShowGlobalSyncMenu(!showGlobalSyncMenu)}
+                                            disabled={isGlobalSyncing}
+                                            className="px-4 py-2 border border-primary/50 text-sm font-semibold text-primary rounded-xl hover:bg-primary hover:text-background-dark transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <RefreshCw className={`w-4 h-4 ${isGlobalSyncing ? 'animate-spin' : ''}`} />
+                                            {isGlobalSyncing ? 'Sincronizando...' : 'Sync Global'}
+                                            {!isGlobalSyncing && <ChevronDown className="w-4 h-4" />}
+                                        </button>
+
+                                        {showGlobalSyncMenu && !isGlobalSyncing && (
+                                            <div className="absolute right-0 mt-2 w-56 bg-surface-dark rounded-xl shadow-xl border border-border-dark py-2 z-50">
+                                                <button
+                                                    onClick={() => handleGlobalSync('all')}
+                                                    className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 transition-colors font-semibold"
+                                                >
+                                                    🚀 Sincronização Total
+                                                </button>
+                                                <div className="h-px w-full bg-border-dark my-1"></div>
+                                                <button
+                                                    onClick={() => handleGlobalSync('meta')}
+                                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
+                                                >
+                                                    Apenas Meta Ads
+                                                </button>
+                                                <button
+                                                    onClick={() => handleGlobalSync('shopee')}
+                                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
+                                                >
+                                                    Apenas Shopee
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Global KPIs */}
@@ -1996,705 +2489,786 @@ export function CreativeTrack() {
                                 </div>
                             </div>
 
-                            {/* Funnel Picker */}
-                            {showFunnelPicker && (
-                                <div className="bg-surface-dark border border-primary/30 rounded-2xl p-4">
-                                    <h4 className="text-xs font-bold text-text-secondary mb-3">Vincular Funil</h4>
-                                    {userFunnels.length === 0 ? (
-                                        <p className="text-xs text-text-secondary">Nenhum funil criado. Acesse a aba Funil para criar.</p>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                            {linkedFunnel && (
-                                                <button
-                                                    onClick={async () => {
-                                                        await supabase.from('creative_tracks').update({ funnel_id: null }).eq('id', selectedTrack!.id);
-                                                        setLinkedFunnel(null);
-                                                        setSelectedTrack({ ...selectedTrack!, funnel_id: null });
-                                                        setShowFunnelPicker(false);
-                                                        showToast('Funil desvinculado.');
-                                                    }}
-                                                    className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                                                >
-                                                    Desvincular
-                                                </button>
-                                            )}
-                                            {userFunnels.map(f => (
-                                                <button
-                                                    key={f.id}
-                                                    onClick={async () => {
-                                                        await supabase.from('creative_tracks').update({ funnel_id: f.id }).eq('id', selectedTrack!.id);
-                                                        setLinkedFunnel(f);
-                                                        setSelectedTrack({ ...selectedTrack!, funnel_id: f.id });
-                                                        setShowFunnelPicker(false);
-                                                        showToast(`Funil "${f.name}" vinculado!`);
-                                                    }}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${linkedFunnel?.id === f.id
-                                                        ? 'border-primary bg-primary/10 text-primary font-bold'
-                                                        : 'border-border-dark text-text-secondary hover:border-primary/50 hover:text-white'
-                                                        }`}
-                                                >
-                                                    {f.name} ({(f.days || []).length}d)
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Edit Fields */}
-                            {editingTrack && (
-                                <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-xs text-text-secondary">Link de Afiliado</label>
-                                        <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editLink} onChange={e => setEditLink(e.target.value)} placeholder="https://..." />
-                                    </div>
-                                    <div className="flex flex-col gap-1">
-                                        <label className="text-xs text-text-secondary">Sub_ID</label>
-                                        <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editSubId} onChange={e => setEditSubId(e.target.value)} placeholder="Ex: MOP" />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Product Details Section */}
-                            <div className="bg-surface-dark border border-border-dark rounded-2xl p-4">
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
-                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                        <PackageSearch className="w-4 h-4 text-orange-400" />
-                                        Dados do Produto {!selectedTrack.product_name && <span className="text-xs font-normal text-text-secondary">(Opcional)</span>}
-                                    </h3>
-                                    {!editingProduct && (
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => { setFetchProductError(null); handleFetchProductData(); }}
-                                                disabled={fetchingProductData || !selectedTrack.affiliate_link}
-                                                className="px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 transition-colors text-xs flex items-center gap-1.5 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {fetchingProductData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                                {fetchingProductData ? 'Buscando...' : 'Buscar Dados Shopee'}
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingProduct(true)}
-                                                className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
-                                            >
-                                                <Pencil className="w-3.5 h-3.5" /> Editar Dados
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {fetchProductError && (
-                                    <div className="mb-3 bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-lg flex gap-2 text-xs">
-                                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                        <span>{fetchProductError}</span>
-                                    </div>
-                                )}
-
-                                {editingProduct ? (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Preço do Produto (R$)</label>
-                                            <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} placeholder="Ex: 99.90" />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Valor do Frete (R$)</label>
-                                            <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.shipping} onChange={e => setProductForm({ ...productForm, shipping: e.target.value })} placeholder="Ex: 15.00" disabled={productForm.free_shipping} />
-                                        </div>
-                                        <div className="flex flex-col gap-1 justify-center pt-5">
-                                            <label className="flex items-center gap-2 text-sm text-white cursor-pointer select-none">
-                                                <input type="checkbox" className="w-4 h-4 rounded border-border-dark bg-background-dark checked:bg-primary accent-primary" checked={productForm.free_shipping} onChange={e => setProductForm({ ...productForm, free_shipping: e.target.checked, shipping: e.target.checked ? '0' : productForm.shipping })} />
-                                                Frete Grátis
-                                            </label>
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Quantidade Vendida</label>
-                                            <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.sold} onChange={e => setProductForm({ ...productForm, sold: e.target.value })} placeholder="Ex: 1500" />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Quantidade de Avaliações</label>
-                                            <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.reviews} onChange={e => setProductForm({ ...productForm, reviews: e.target.value })} placeholder="Ex: 350" />
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Nota de Avaliação (1.0 - 5.0)</label>
-                                            <input type="number" step="0.1" min="1" max="5" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.rating} onChange={e => setProductForm({ ...productForm, rating: e.target.value })} placeholder="Ex: 4.8" />
-                                        </div>
-
-                                        <div className="col-span-full flex items-center justify-end gap-2 mt-2">
-                                            <button onClick={() => {
-                                                setEditingProduct(false);
-                                                setProductForm({
-                                                    price: selectedTrack.product_price?.toString() || '',
-                                                    shipping: selectedTrack.product_shipping?.toString() || '',
-                                                    free_shipping: !!selectedTrack.product_free_shipping,
-                                                    reviews: selectedTrack.product_reviews?.toString() || '',
-                                                    sold: selectedTrack.product_sold?.toString() || '',
-                                                    rating: selectedTrack.product_rating?.toString() || ''
-                                                });
-                                            }} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs">Cancelar</button>
-                                            <button onClick={handleUpdateProduct} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-xs">
-                                                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Salvar
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : selectedTrack.product_name ? (
-                                    /* ── Rich API Data View ── */
-                                    <div className="flex flex-col gap-4">
-                                        {/* Product header: image + name + shop */}
-                                        <div className="flex gap-4">
-                                            {selectedTrack.product_image_url ? (
-                                                <img
-                                                    src={selectedTrack.product_image_url}
-                                                    alt={selectedTrack.product_name}
-                                                    className="w-24 h-24 rounded-xl object-cover border border-border-dark flex-shrink-0"
-                                                />
-                                            ) : (
-                                                <div className="w-24 h-24 rounded-xl bg-background-dark border border-border-dark flex items-center justify-center flex-shrink-0">
-                                                    <ImageIcon className="w-8 h-8 text-neutral-600" />
-                                                </div>
-                                            )}
-                                            <div className="flex flex-col gap-1.5 min-w-0">
-                                                <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
-                                                    {selectedTrack.product_name}
-                                                </h4>
-                                                {selectedTrack.product_shop_name && (
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Store className="w-3.5 h-3.5 text-neutral-500" />
-                                                        <span className="text-xs text-neutral-400">{selectedTrack.product_shop_name}</span>
-                                                        {selectedTrack.product_shop_rating != null && (
-                                                            <span className="text-xs text-yellow-400 flex items-center gap-0.5 ml-1">
-                                                                <Star className="w-3 h-3 fill-yellow-400" /> {selectedTrack.product_shop_rating}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {selectedTrack.product_link && (
-                                                    <a
-                                                        href={selectedTrack.product_link}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
-                                                    >
-                                                        <ExternalLink className="w-3 h-3" /> Ver na Shopee
-                                                    </a>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Data grid */}
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                                            {/* Price */}
-                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Preço</span>
-                                                <span className="text-sm font-bold text-primary">
-                                                    R$ {selectedTrack.product_price != null ? formatBRL(selectedTrack.product_price) : '--'}
-                                                </span>
-                                                {selectedTrack.product_price_min != null && selectedTrack.product_price_max != null && selectedTrack.product_price_min !== selectedTrack.product_price_max && (
-                                                    <span className="text-[10px] text-neutral-500 block">
-                                                        R$ {formatBRL(selectedTrack.product_price_min)} ~ R$ {formatBRL(selectedTrack.product_price_max)}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Discount */}
-                                            {selectedTrack.product_discount_rate != null && selectedTrack.product_discount_rate > 0 && (
-                                                <div className="bg-background-dark/50 border border-red-500/20 rounded-xl px-3 py-2.5">
-                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Desconto</span>
-                                                    <span className="text-sm font-bold text-red-400">-{selectedTrack.product_discount_rate}%</span>
-                                                </div>
-                                            )}
-
-                                            {/* Commission Total */}
-                                            <div className="bg-background-dark/50 border border-green-500/20 rounded-xl px-3 py-2.5">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Comissão</span>
-                                                <span className="text-sm font-bold text-green-400">
-                                                    {selectedTrack.product_commission != null ? `R$ ${formatBRL(selectedTrack.product_commission)}` : '--'}
-                                                </span>
-                                                {selectedTrack.product_commission_rate != null && (
-                                                    <span className="text-[10px] text-green-400/60 block">
-                                                        {(selectedTrack.product_commission_rate * 100).toFixed(1)}% total
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Seller Commission Rate */}
-                                            {selectedTrack.product_seller_commission_rate != null && (
-                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
-                                                    <span className="text-sm font-bold text-white">
-                                                        {(selectedTrack.product_seller_commission_rate * 100).toFixed(1)}%
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Shopee Commission Rate */}
-                                            {selectedTrack.product_shopee_commission_rate != null && (
-                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
-                                                    <span className="text-sm font-bold text-white">
-                                                        {(selectedTrack.product_shopee_commission_rate * 100).toFixed(1)}%
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {/* Rating */}
-                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Avaliação</span>
-                                                <span className="text-sm font-bold text-white flex items-center gap-1">
-                                                    {selectedTrack.product_rating != null ? (
-                                                        <>
-                                                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                                                            {selectedTrack.product_rating}
-                                                            {selectedTrack.product_reviews != null && (
-                                                                <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews})</span>
-                                                            )}
-                                                        </>
-                                                    ) : '--'}
-                                                </span>
-                                            </div>
-
-                                            {/* Sales */}
-                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Vendidos</span>
-                                                <span className="text-sm font-bold text-white">
-                                                    {selectedTrack.product_sold != null ? selectedTrack.product_sold.toLocaleString('pt-BR') : '--'}
-                                                </span>
-                                            </div>
-
-                                            {/* Shipping */}
-                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Frete</span>
-                                                <span className="text-sm font-bold text-white">
-                                                    {selectedTrack.product_free_shipping ? (
-                                                        <span className="text-green-400">Grátis</span>
-                                                    ) : selectedTrack.product_shipping != null ? (
-                                                        `R$ ${formatBRL(selectedTrack.product_shipping)}`
-                                                    ) : (
-                                                        <span className="text-neutral-500 font-normal text-xs">Manual</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Fetched at timestamp */}
-                                        {selectedTrack.product_fetched_at && (
-                                            <p className="text-[10px] text-neutral-600 text-right">
-                                                Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
-                                            </p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    /* ── Basic Manual View (old tracks without API data) ── */
-                                    <div className="flex flex-wrap gap-4">
-                                        <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                            <Tag className="w-4 h-4 text-text-secondary" />
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</span>
-                                                <span className="text-sm font-bold text-white transition-all">
-                                                    {selectedTrack.product_price != null ? `R$ ${formatBRL(selectedTrack.product_price)}` : <span className="text-neutral-500 font-normal">Não def.</span>}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                            <Truck className="w-4 h-4 text-text-secondary" />
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Frete</span>
-                                                <span className="text-sm font-bold text-white transition-all">
-                                                    {selectedTrack.product_free_shipping ? (
-                                                        <span className="text-green-400">Grátis</span>
-                                                    ) : selectedTrack.product_shipping != null ? (
-                                                        `R$ ${formatBRL(selectedTrack.product_shipping)}`
-                                                    ) : (
-                                                        <span className="text-neutral-500 font-normal">Não def.</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                            <PackageSearch className="w-4 h-4 text-text-secondary" />
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Vendidos</span>
-                                                <span className="text-sm font-bold text-white transition-all">
-                                                    {selectedTrack.product_sold != null ? `${selectedTrack.product_sold} un.` : <span className="text-neutral-500 font-normal">Não def.</span>}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                            <Star className="w-4 h-4 text-text-secondary" />
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Avaliação</span>
-                                                <span className="text-sm font-bold text-white transition-all">
-                                                    {selectedTrack.product_rating != null ? (
-                                                        <span className="flex items-center gap-1">
-                                                            {selectedTrack.product_rating} <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews || 0})</span>
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-neutral-500 font-normal">Não def.</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                            {/* Tabs Navigation */}
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border-dark scrollbar-track-transparent mt-2">
+                                <button
+                                    onClick={() => setActiveTab('metrics')}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'metrics' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                >
+                                    <BarChart3 className="w-4 h-4" /> Métricas
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('product')}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'product' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                >
+                                    <PackageSearch className="w-4 h-4" /> Dados do Produto
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('conversions')}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'conversions' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                >
+                                    <ShoppingCart className="w-4 h-4" /> Conversões
+                                </button>
                             </div>
 
-                            {/* FB Sync Buttons */}
-                            {fbLinkedAds.length > 0 && (
-                                <div className="bg-surface-dark border border-blue-500/20 rounded-2xl p-4">
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                        <div>
-                                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                                <Link2 className="w-4 h-4 text-blue-400" />
-                                                Facebook Ads ({fbLinkedAds.length} anúncio{fbLinkedAds.length > 1 ? 's' : ''} vinculado{fbLinkedAds.length > 1 ? 's' : ''})
-                                            </h3>
-                                            <div className={`mt-2 flex flex-wrap gap-2 transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
-                                                {fbLinkedAds.map(a => (
-                                                    <div key={a.ad_id} className="flex flex-col bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1.5 min-w-[150px]">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-xs text-white font-medium truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
-                                                                {a.ad_name || a.ad_id}
-                                                            </span>
-                                                            <button
-                                                                onClick={() => setPreviewAdId(a.ad_id)}
-                                                                className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors ml-2"
-                                                                title="Ver Criativo"
-                                                            >
-                                                                <Eye className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                        {a.ad_link && (
-                                                            <a
-                                                                href={a.ad_link}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="flex items-center gap-1.5 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors w-full group"
-                                                                title={a.ad_link}
-                                                            >
-                                                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                                                <span className="truncate flex-1">{a.ad_link}</span>
-                                                            </a>
-                                                        )}
-                                                    </div>
+                            <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                {/* Funnel Picker */}
+                                {showFunnelPicker && (
+                                    <div className="bg-surface-dark border border-primary/30 rounded-2xl p-4">
+                                        <h4 className="text-xs font-bold text-text-secondary mb-3">Vincular Funil</h4>
+                                        {userFunnels.length === 0 ? (
+                                            <p className="text-xs text-text-secondary">Nenhum funil criado. Acesse a aba Funil para criar.</p>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-2">
+                                                {linkedFunnel && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            await supabase.from('creative_tracks').update({ funnel_id: null }).eq('id', selectedTrack!.id);
+                                                            setLinkedFunnel(null);
+                                                            setSelectedTrack({ ...selectedTrack!, funnel_id: null });
+                                                            setShowFunnelPicker(false);
+                                                            showToast('Funil desvinculado.');
+                                                        }}
+                                                        className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                                                    >
+                                                        Desvincular
+                                                    </button>
+                                                )}
+                                                {userFunnels.map(f => (
+                                                    <button
+                                                        key={f.id}
+                                                        onClick={async () => {
+                                                            await supabase.from('creative_tracks').update({ funnel_id: f.id }).eq('id', selectedTrack!.id);
+                                                            setLinkedFunnel(f);
+                                                            setSelectedTrack({ ...selectedTrack!, funnel_id: f.id });
+                                                            setShowFunnelPicker(false);
+                                                            showToast(`Funil "${f.name}" vinculado!`);
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${linkedFunnel?.id === f.id
+                                                            ? 'border-primary bg-primary/10 text-primary font-bold'
+                                                            : 'border-border-dark text-text-secondary hover:border-primary/50 hover:text-white'
+                                                            }`}
+                                                    >
+                                                        {f.name} ({(f.days || []).length}d)
+                                                    </button>
                                                 ))}
                                             </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Edit Fields */}
+                                {editingTrack && (
+                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-text-secondary">Link de Afiliado</label>
+                                            <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editLink} onChange={e => setEditLink(e.target.value)} placeholder="https://..." />
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => handleSyncFb('today')}
-                                                disabled={syncingFb}
-                                                className="flex items-center gap-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3 py-2 rounded-lg font-bold hover:bg-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                                            >
-                                                {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
-                                                Sync Hoje
-                                            </button>
-                                            <button
-                                                onClick={() => handleSyncFb('all')}
-                                                disabled={syncingFb}
-                                                className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-2 rounded-lg font-bold hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                                            >
-                                                {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                                Sync Geral
-                                            </button>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-text-secondary">Sub_ID</label>
+                                            <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editSubId} onChange={e => setEditSubId(e.target.value)} placeholder="Ex: MOP" />
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* KPIs Dashboard */}
-                            {loadingEntries ? (
-                                <div className="flex justify-center py-8">
-                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                </div>
-                            ) : kpis ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {[
-                                        { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
-                                        { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
-                                        { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
-                                        { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
-                                        { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
-                                        { label: '% Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                        { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
-                                        { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toString(), icon: Target, color: 'text-pink-400' },
-                                    ].map((kpi, i) => (
-                                        <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
+                            </div>
+
+                            <div className={activeTab === 'product' ? 'flex flex-col gap-4' : 'hidden'}>
+                                {/* Product Details Section */}
+                                <div className="bg-surface-dark border border-border-dark rounded-2xl p-4">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                            <PackageSearch className="w-4 h-4 text-orange-400" />
+                                            Dados do Produto {!selectedTrack.product_name && <span className="text-xs font-normal text-text-secondary">(Opcional)</span>}
+                                        </h3>
+                                        {!editingProduct && (
                                             <div className="flex items-center gap-2">
-                                                <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-                                                <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                                <button
+                                                    onClick={() => { setFetchProductError(null); handleFetchProductData(); }}
+                                                    disabled={fetchingProductData || !selectedTrack.affiliate_link}
+                                                    className="px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 transition-colors text-xs flex items-center gap-1.5 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {fetchingProductData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                    {fetchingProductData ? 'Buscando...' : 'Buscar Dados Shopee'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingProduct(true)}
+                                                    className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
+                                                >
+                                                    <Pencil className="w-3.5 h-3.5" /> Editar Dados
+                                                </button>
                                             </div>
-                                            <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
-                                    Nenhum registro ainda. Adicione o primeiro abaixo.
-                                </div>
-                            )}
-
-                            {/* Video KPIs */}
-                            {videoKpis && (
-                                <div className="mt-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Video className="w-4 h-4 text-violet-400" />
-                                        <span className="text-sm font-semibold text-white">Métricas de Vídeo</span>
-                                        <span className="text-[10px] text-text-secondary bg-violet-500/10 px-2 py-0.5 rounded-full">Termômetro do Criativo</span>
+                                        )}
                                     </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+
+                                    {fetchProductError && (
+                                        <div className="mb-3 bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-lg flex gap-2 text-xs">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                            <span>{fetchProductError}</span>
+                                        </div>
+                                    )}
+
+                                    {editingProduct ? (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs text-text-secondary">Preço do Produto (R$)</label>
+                                                <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} placeholder="Ex: 99.90" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs text-text-secondary">Valor do Frete (R$)</label>
+                                                <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.shipping} onChange={e => setProductForm({ ...productForm, shipping: e.target.value })} placeholder="Ex: 15.00" disabled={productForm.free_shipping} />
+                                            </div>
+                                            <div className="flex flex-col gap-1 justify-center pt-5">
+                                                <label className="flex items-center gap-2 text-sm text-white cursor-pointer select-none">
+                                                    <input type="checkbox" className="w-4 h-4 rounded border-border-dark bg-background-dark checked:bg-primary accent-primary" checked={productForm.free_shipping} onChange={e => setProductForm({ ...productForm, free_shipping: e.target.checked, shipping: e.target.checked ? '0' : productForm.shipping })} />
+                                                    Frete Grátis
+                                                </label>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs text-text-secondary">Quantidade Vendida</label>
+                                                <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.sold} onChange={e => setProductForm({ ...productForm, sold: e.target.value })} placeholder="Ex: 1500" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs text-text-secondary">Quantidade de Avaliações</label>
+                                                <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.reviews} onChange={e => setProductForm({ ...productForm, reviews: e.target.value })} placeholder="Ex: 350" />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <label className="text-xs text-text-secondary">Nota de Avaliação (1.0 - 5.0)</label>
+                                                <input type="number" step="0.1" min="1" max="5" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.rating} onChange={e => setProductForm({ ...productForm, rating: e.target.value })} placeholder="Ex: 4.8" />
+                                            </div>
+
+                                            <div className="col-span-full flex items-center justify-end gap-2 mt-2">
+                                                <button onClick={() => {
+                                                    setEditingProduct(false);
+                                                    setProductForm({
+                                                        price: selectedTrack.product_price?.toString() || '',
+                                                        shipping: selectedTrack.product_shipping?.toString() || '',
+                                                        free_shipping: !!selectedTrack.product_free_shipping,
+                                                        reviews: selectedTrack.product_reviews?.toString() || '',
+                                                        sold: selectedTrack.product_sold?.toString() || '',
+                                                        rating: selectedTrack.product_rating?.toString() || ''
+                                                    });
+                                                }} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs">Cancelar</button>
+                                                <button onClick={handleUpdateProduct} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-xs">
+                                                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Salvar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : selectedTrack.product_name ? (
+                                        /* ── Rich API Data View ── */
+                                        <div className="flex flex-col gap-4">
+                                            {/* Product header: image + name + shop */}
+                                            <div className="flex gap-4">
+                                                {selectedTrack.product_image_url ? (
+                                                    <img
+                                                        src={selectedTrack.product_image_url}
+                                                        alt={selectedTrack.product_name}
+                                                        className="w-24 h-24 rounded-xl object-cover border border-border-dark flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <div className="w-24 h-24 rounded-xl bg-background-dark border border-border-dark flex items-center justify-center flex-shrink-0">
+                                                        <ImageIcon className="w-8 h-8 text-neutral-600" />
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col gap-1.5 min-w-0">
+                                                    <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                                                        {selectedTrack.product_name}
+                                                    </h4>
+                                                    {selectedTrack.product_shop_name && (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Store className="w-3.5 h-3.5 text-neutral-500" />
+                                                            <span className="text-xs text-neutral-400">{selectedTrack.product_shop_name}</span>
+                                                            {selectedTrack.product_shop_rating != null && (
+                                                                <span className="text-xs text-yellow-400 flex items-center gap-0.5 ml-1">
+                                                                    <Star className="w-3 h-3 fill-yellow-400" /> {selectedTrack.product_shop_rating}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {selectedTrack.product_link && (
+                                                        <a
+                                                            href={selectedTrack.product_link}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
+                                                        >
+                                                            <ExternalLink className="w-3 h-3" /> Ver na Shopee
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Data grid */}
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                                                {/* Price */}
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Preço</span>
+                                                    <span className="text-sm font-bold text-primary">
+                                                        R$ {selectedTrack.product_price != null ? formatBRL(selectedTrack.product_price) : '--'}
+                                                    </span>
+                                                    {selectedTrack.product_price_min != null && selectedTrack.product_price_max != null && selectedTrack.product_price_min !== selectedTrack.product_price_max && (
+                                                        <span className="text-[10px] text-neutral-500 block">
+                                                            R$ {formatBRL(selectedTrack.product_price_min)} ~ R$ {formatBRL(selectedTrack.product_price_max)}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Discount */}
+                                                {selectedTrack.product_discount_rate != null && selectedTrack.product_discount_rate > 0 && (
+                                                    <div className="bg-background-dark/50 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Desconto</span>
+                                                        <span className="text-sm font-bold text-red-400">-{selectedTrack.product_discount_rate}%</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Commission Total */}
+                                                <div className="bg-background-dark/50 border border-green-500/20 rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Comissão</span>
+                                                    <span className="text-sm font-bold text-green-400">
+                                                        {selectedTrack.product_commission != null ? `R$ ${formatBRL(selectedTrack.product_commission)}` : '--'}
+                                                    </span>
+                                                    {selectedTrack.product_commission_rate != null && (
+                                                        <span className="text-[10px] text-green-400/60 block">
+                                                            {(selectedTrack.product_commission_rate * 100).toFixed(1)}% total
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Seller Commission Rate */}
+                                                {selectedTrack.product_seller_commission_rate != null && (
+                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
+                                                        <span className="text-sm font-bold text-white">
+                                                            {(selectedTrack.product_seller_commission_rate * 100).toFixed(1)}%
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Shopee Commission Rate */}
+                                                {selectedTrack.product_shopee_commission_rate != null && (
+                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
+                                                        <span className="text-sm font-bold text-white">
+                                                            {(selectedTrack.product_shopee_commission_rate * 100).toFixed(1)}%
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Rating */}
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Avaliação</span>
+                                                    <span className="text-sm font-bold text-white flex items-center gap-1">
+                                                        {selectedTrack.product_rating != null ? (
+                                                            <>
+                                                                <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                                                                {selectedTrack.product_rating}
+                                                                {selectedTrack.product_reviews != null && (
+                                                                    <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews})</span>
+                                                                )}
+                                                            </>
+                                                        ) : '--'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Sales */}
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Vendidos</span>
+                                                    <span className="text-sm font-bold text-white">
+                                                        {selectedTrack.product_sold != null ? selectedTrack.product_sold.toLocaleString('pt-BR') : '--'}
+                                                    </span>
+                                                </div>
+
+                                                {/* Shipping */}
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Frete</span>
+                                                    <span className="text-sm font-bold text-white">
+                                                        {selectedTrack.product_free_shipping ? (
+                                                            <span className="text-green-400">Grátis</span>
+                                                        ) : selectedTrack.product_shipping != null ? (
+                                                            `R$ ${formatBRL(selectedTrack.product_shipping)}`
+                                                        ) : (
+                                                            <span className="text-neutral-500 font-normal text-xs">Manual</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Fetched at timestamp */}
+                                            {selectedTrack.product_fetched_at && (
+                                                <p className="text-[10px] text-neutral-600 text-right">
+                                                    Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        /* ── Basic Manual View (old tracks without API data) ── */
+                                        <div className="flex flex-wrap gap-4">
+                                            <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                <Tag className="w-4 h-4 text-text-secondary" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</span>
+                                                    <span className="text-sm font-bold text-white transition-all">
+                                                        {selectedTrack.product_price != null ? `R$ ${formatBRL(selectedTrack.product_price)}` : <span className="text-neutral-500 font-normal">Não def.</span>}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                <Truck className="w-4 h-4 text-text-secondary" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Frete</span>
+                                                    <span className="text-sm font-bold text-white transition-all">
+                                                        {selectedTrack.product_free_shipping ? (
+                                                            <span className="text-green-400">Grátis</span>
+                                                        ) : selectedTrack.product_shipping != null ? (
+                                                            `R$ ${formatBRL(selectedTrack.product_shipping)}`
+                                                        ) : (
+                                                            <span className="text-neutral-500 font-normal">Não def.</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                <PackageSearch className="w-4 h-4 text-text-secondary" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Vendidos</span>
+                                                    <span className="text-sm font-bold text-white transition-all">
+                                                        {selectedTrack.product_sold != null ? `${selectedTrack.product_sold} un.` : <span className="text-neutral-500 font-normal">Não def.</span>}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                <Star className="w-4 h-4 text-text-secondary" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Avaliação</span>
+                                                    <span className="text-sm font-bold text-white transition-all">
+                                                        {selectedTrack.product_rating != null ? (
+                                                            <span className="flex items-center gap-1">
+                                                                {selectedTrack.product_rating} <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews || 0})</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-neutral-500 font-normal">Não def.</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+
+                            <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                {/* FB Sync Buttons */}
+                                {fbLinkedAds.length > 0 && (
+                                    <div className="bg-surface-dark border border-blue-500/20 rounded-2xl p-4">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <div>
+                                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                                    <Link2 className="w-4 h-4 text-blue-400" />
+                                                    Facebook Ads ({fbLinkedAds.length} anúncio{fbLinkedAds.length > 1 ? 's' : ''} vinculado{fbLinkedAds.length > 1 ? 's' : ''})
+                                                </h3>
+                                                <div className={`mt-2 flex flex-wrap gap-2 transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                    {fbLinkedAds.map(a => (
+                                                        <div key={a.ad_id} className="flex flex-col bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1.5 min-w-[150px]">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-xs text-white font-medium truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
+                                                                    {a.ad_name || a.ad_id}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => setPreviewAdId(a.ad_id)}
+                                                                    className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors ml-2"
+                                                                    title="Ver Criativo"
+                                                                >
+                                                                    <Eye className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                            {a.ad_link && (
+                                                                <a
+                                                                    href={a.ad_link}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-1.5 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors w-full group"
+                                                                    title={a.ad_link}
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                                                    <span className="truncate flex-1">{a.ad_link}</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleSyncFb('today')}
+                                                    disabled={syncingFb}
+                                                    className="flex items-center gap-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3 py-2 rounded-lg font-bold hover:bg-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                                                >
+                                                    {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
+                                                    Sync Hoje
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSyncFb('all')}
+                                                    disabled={syncingFb}
+                                                    className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-2 rounded-lg font-bold hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                                                >
+                                                    {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                    Sync Geral
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* KPIs Dashboard */}
+                                {loadingEntries ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                    </div>
+                                ) : kpis ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                         {[
-                                            { label: 'ThruPlay', value: videoKpis.totalThruplay.toLocaleString('pt-BR'), color: 'text-violet-400', hint: 'Assistiu 15s ou mais (ou o vídeo inteiro se for menor que 15s)' },
-                                            { label: '25% Assistido', value: videoKpis.totalP25.toLocaleString('pt-BR'), color: 'text-blue-400', hint: 'Assistiu pelo menos 25% do vídeo' },
-                                            { label: '50% Assistido', value: videoKpis.totalP50.toLocaleString('pt-BR'), color: 'text-cyan-400', hint: 'Assistiu pelo menos metade do vídeo' },
-                                            { label: '95% Assistido', value: videoKpis.totalP95.toLocaleString('pt-BR'), color: 'text-emerald-400', hint: 'Assistiu quase o vídeo inteiro (95%)' },
-                                            { label: 'Retenção (95/25)', value: `${videoKpis.retentionRate.toFixed(1)}%`, color: videoKpis.retentionRate >= 30 ? 'text-green-400' : 'text-amber-400', hint: 'De quem assistiu 25%, quantos foram até 95%' },
+                                            { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+                                            { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+                                            { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+                                            { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
+                                            { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+                                            { label: '% Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                            { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
+                                            { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toString(), icon: Target, color: 'text-pink-400' },
                                         ].map((kpi, i) => (
-                                            <div key={i} className="bg-surface-dark border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-1.5">
-                                                <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                            <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                                                    <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                                </div>
                                                 <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
-                                                <span className="text-[10px] leading-tight text-neutral-500">{kpi.hint}</span>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
-
-                            {/* ══════ Shopee Conversions Section ══════ */}
-                            <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
-                                <div className="p-4 border-b border-border-dark flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <ShoppingCart size={16} className="text-orange-400" />
-                                        <h3 className="text-sm font-bold text-white">
-                                            Conversões Shopee ({shopeeConversions.length})
-                                        </h3>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <button
-                                            onClick={handleSyncConversions}
-                                            disabled={syncingConversions}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all disabled:opacity-50"
-                                        >
-                                            {syncingConversions ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                            Sync Conversões
-                                        </button>
-                                        <button
-                                            onClick={handleSyncValidated}
-                                            disabled={syncingValidated}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-all disabled:opacity-50"
-                                        >
-                                            {syncingValidated ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                                            Sync Validadas
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Conversion KPIs */}
-                                {shopeeConversions.length > 0 && (() => {
-                                    const totalNetComm = shopeeConversions.reduce((s, c) => s + (c.item_total_commission || 0), 0);
-                                    const validatedComm = shopeeConversions.filter(c => c.is_validated).reduce((s, c) => s + (c.item_total_commission || 0), 0);
-                                    const totalOrders = new Set(shopeeConversions.map(c => c.order_id).filter(Boolean)).size;
-                                    const validatedOrders = new Set(shopeeConversions.filter(c => c.is_validated).map(c => c.order_id).filter(Boolean)).size;
-                                    const fraudCount = shopeeConversions.filter(c => c.fraud_status && c.fraud_status !== 'NONE' && c.fraud_status !== '').length;
-                                    const fraudPct = shopeeConversions.length > 0 ? ((fraudCount / shopeeConversions.length) * 100) : 0;
-                                    const directCount = shopeeConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct').length;
-                                    const indirectCount = shopeeConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type).length;
-
-                                    return (
-                                        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                            <div className="bg-background-dark border border-orange-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Comissão Total</span>
-                                                <span className="text-base sm:text-lg font-bold text-orange-400">{formatBRL(totalNetComm)}</span>
-                                                {validatedComm > 0 && (
-                                                    <span className="text-[10px] text-emerald-400">✅ {formatBRL(validatedComm)} validada</span>
-                                                )}
-                                            </div>
-                                            <div className="bg-background-dark border border-blue-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Pedidos</span>
-                                                <span className="text-base sm:text-lg font-bold text-blue-400">{totalOrders}</span>
-                                                {validatedOrders > 0 && (
-                                                    <span className="text-[10px] text-emerald-400">✅ {validatedOrders} validados</span>
-                                                )}
-                                            </div>
-                                            <div className="bg-background-dark border border-red-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Taxa Fraude</span>
-                                                <span className={`text-base sm:text-lg font-bold ${fraudPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                    {fraudPct.toFixed(1)}%
-                                                </span>
-                                                <span className="text-[10px] text-text-secondary">{fraudCount} suspeito(s)</span>
-                                            </div>
-                                            <div className="bg-background-dark border border-violet-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Atribuição</span>
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="text-sm font-bold text-green-400">{directCount}D</span>
-                                                    <span className="text-[10px] text-text-secondary">vs</span>
-                                                    <span className="text-sm font-bold text-amber-400">{indirectCount}I</span>
-                                                </div>
-                                                <span className="text-[10px] text-text-secondary">Diretas vs Indiretas</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                {/* Conversion List */}
-                                {shopeeConversions.length > 0 ? (
-                                    <div className="overflow-x-auto">
-                                        <table className="min-w-full w-full text-xs">
-                                            <thead>
-                                                <tr className="border-t border-border-dark bg-background-dark">
-                                                    <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Data</th>
-                                                    <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Produto</th>
-                                                    <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Qtd</th>
-                                                    <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Comissão</th>
-                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Status</th>
-                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Tipo</th>
-                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Validado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {shopeeConversions.slice(0, 50).map((conv) => (
-                                                    <tr key={conv.id} className="border-t border-border-dark/50 hover:bg-surface-dark/50 transition-colors">
-                                                        <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
-                                                            {conv.purchase_time ? format(new Date(conv.purchase_time), 'dd/MM HH:mm') : '—'}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-white min-w-0">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                {conv.image_url && (
-                                                                    <img src={conv.image_url} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
-                                                                )}
-                                                                <span className="truncate max-w-[180px]">{conv.item_name || `Item #${conv.item_id}`}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-right text-white whitespace-nowrap">{conv.qty}</td>
-                                                        <td className="px-3 py-2 text-right font-medium text-orange-400 whitespace-nowrap">
-                                                            {formatBRL(conv.item_total_commission)}
-                                                        </td>
-                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
-                                                            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${['PAID', 'VALIDATED', 'COMPLETED'].includes(conv.conversion_status || '')
-                                                                ? 'bg-emerald-500/20 text-emerald-400'
-                                                                : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID'].includes(conv.conversion_status || '')
-                                                                    ? 'bg-red-500/20 text-red-400'
-                                                                    : 'bg-amber-500/20 text-amber-400'
-                                                                }`}>
-                                                                {conv.conversion_status || 'PENDING'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
-                                                            <span className={`text-[10px] ${conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct'
-                                                                ? 'text-green-400' : 'text-amber-400'
-                                                                }`}>
-                                                                {conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct' ? 'Direta' : conv.attribution_type || '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-center">
-                                                            {conv.is_validated ? (
-                                                                <ShieldCheck size={14} className="text-emerald-400 mx-auto" />
-                                                            ) : conv.fraud_status && conv.fraud_status !== 'NONE' && conv.fraud_status !== '' ? (
-                                                                <AlertTriangle size={14} className="text-red-400 mx-auto" />
-                                                            ) : (
-                                                                <span className="text-text-secondary">—</span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                        {shopeeConversions.length > 50 && (
-                                            <div className="p-3 text-center text-xs text-text-secondary border-t border-border-dark/50">
-                                                Mostrando 50 de {shopeeConversions.length} conversões
-                                            </div>
-                                        )}
-                                    </div>
                                 ) : (
-                                    <div className="p-6 text-center text-sm text-text-secondary">
-                                        Nenhuma conversão sincronizada. Use os botões acima para buscar dados da API Shopee.
+                                    <div className="text-center py-6 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
+                                        Nenhum registro ainda. Adicione o primeiro abaixo.
                                     </div>
                                 )}
+
+                                {/* Video KPIs */}
+                                {videoKpis && (
+                                    <div className="mt-3">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Video className="w-4 h-4 text-violet-400" />
+                                            <span className="text-sm font-semibold text-white">Métricas de Vídeo</span>
+                                            <span className="text-[10px] text-text-secondary bg-violet-500/10 px-2 py-0.5 rounded-full">Termômetro do Criativo</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                            {[
+                                                { label: 'ThruPlay', value: videoKpis.totalThruplay.toLocaleString('pt-BR'), color: 'text-violet-400', hint: 'Assistiu 15s ou mais (ou o vídeo inteiro se for menor que 15s)' },
+                                                { label: '25% Assistido', value: videoKpis.totalP25.toLocaleString('pt-BR'), color: 'text-blue-400', hint: 'Assistiu pelo menos 25% do vídeo' },
+                                                { label: '50% Assistido', value: videoKpis.totalP50.toLocaleString('pt-BR'), color: 'text-cyan-400', hint: 'Assistiu pelo menos metade do vídeo' },
+                                                { label: '95% Assistido', value: videoKpis.totalP95.toLocaleString('pt-BR'), color: 'text-emerald-400', hint: 'Assistiu quase o vídeo inteiro (95%)' },
+                                                { label: 'Retenção (95/25)', value: `${videoKpis.retentionRate.toFixed(1)}%`, color: videoKpis.retentionRate >= 30 ? 'text-green-400' : 'text-amber-400', hint: 'De quem assistiu 25%, quantos foram até 95%' },
+                                            ].map((kpi, i) => (
+                                                <div key={i} className="bg-surface-dark border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-1.5">
+                                                    <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                                    <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                                    <span className="text-[10px] leading-tight text-neutral-500">{kpi.hint}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
 
-                            {/* Entries Table */}
-                            {
+                            <div className={activeTab === 'conversions' ? 'flex flex-col gap-4' : 'hidden'}>
+                                {/* ══════ Shopee Conversions Section ══════ */}
                                 <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
-                                    <div className="p-4 border-b border-border-dark flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <h3 className="text-sm font-bold text-white">Histórico ({entries.length} registros)</h3>
-                                            <span className="hidden sm:inline-block text-xs font-normal text-text-secondary bg-background-dark px-2.5 py-1 rounded-md border border-border-dark">
-                                                Dê 2 cliques na linha para editar
-                                            </span>
+                                    <div className="p-4 border-b border-border-dark flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <ShoppingCart size={16} className="text-orange-400" />
+                                            <h3 className="text-sm font-bold text-white">
+                                                Conversões Shopee ({filteredConversions.length})
+                                            </h3>
                                         </div>
-                                        <button
-                                            onClick={() => setShowManualEntry(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-all"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" /> Registro Manual
-                                        </button>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                onClick={handleSyncConversions}
+                                                disabled={syncingConversions}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all disabled:opacity-50"
+                                            >
+                                                {syncingConversions ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                                Sync Conversões
+                                            </button>
+                                            <button
+                                                onClick={handleSyncValidated}
+                                                disabled={syncingValidated}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-all disabled:opacity-50"
+                                            >
+                                                {syncingValidated ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                                                Sync Validadas
+                                            </button>
+                                        </div>
                                     </div>
-                                    {entries.length > 0 ? (
+
+                                    {/* Conversion KPIs */}
+                                    {filteredConversions.length > 0 && (() => {
+                                        const totalNetComm = filteredConversions.reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                        const validatedComm = filteredConversions.filter(c => c.is_validated).reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                        const totalOrders = new Set(filteredConversions.map(c => c.order_id).filter(Boolean)).size;
+                                        const validatedOrders = new Set(filteredConversions.filter(c => c.is_validated).map(c => c.order_id).filter(Boolean)).size;
+                                        const fraudCount = filteredConversions.filter(c => c.fraud_status && c.fraud_status !== 'NONE' && c.fraud_status !== '').length;
+                                        const fraudPct = filteredConversions.length > 0 ? ((fraudCount / filteredConversions.length) * 100) : 0;
+                                        const directCount = filteredConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct').length;
+                                        const indirectCount = filteredConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type).length;
+
+                                        return (
+                                            <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                <div className="bg-background-dark border border-orange-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Comissão Total</span>
+                                                    <span className="text-base sm:text-lg font-bold text-orange-400">{formatBRL(totalNetComm)}</span>
+                                                    {validatedComm > 0 && (
+                                                        <span className="text-[10px] text-emerald-400">✅ {formatBRL(validatedComm)} validada</span>
+                                                    )}
+                                                </div>
+                                                <div className="bg-background-dark border border-blue-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Pedidos</span>
+                                                    <span className="text-base sm:text-lg font-bold text-blue-400">{totalOrders}</span>
+                                                    {validatedOrders > 0 && (
+                                                        <span className="text-[10px] text-emerald-400">✅ {validatedOrders} validados</span>
+                                                    )}
+                                                </div>
+                                                <div className="bg-background-dark border border-red-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Taxa Fraude</span>
+                                                    <span className={`text-base sm:text-lg font-bold ${fraudPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                        {fraudPct.toFixed(1)}%
+                                                    </span>
+                                                    <span className="text-[10px] text-text-secondary">{fraudCount} suspeito(s)</span>
+                                                </div>
+                                                <div className="bg-background-dark border border-violet-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">Atribuição</span>
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-sm font-bold text-green-400">{directCount}D</span>
+                                                        <span className="text-[10px] text-text-secondary">vs</span>
+                                                        <span className="text-sm font-bold text-amber-400">{indirectCount}I</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-text-secondary">Diretas vs Indiretas</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Conversion List */}
+                                    {filteredConversions.length > 0 ? (
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
+                                            <table className="min-w-full w-full text-xs">
                                                 <thead>
-                                                    <tr className="border-b border-border-dark text-text-secondary text-xs">
-                                                        {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
-                                                        <th className="text-left p-3">Data</th>
-                                                        <th className="text-right p-3">Cliq. Anúncio</th>
-                                                        <th className="text-right p-3">Cliq. Shopee</th>
-                                                        <th className="text-right p-3">CPC</th>
-                                                        <th className="text-right p-3">Pedidos</th>
-                                                        <th className="text-right p-3">Comissão</th>
-                                                        <th className="text-right p-3">Investimento</th>
-                                                        <th className="text-right p-3">Lucro</th>
-                                                        <th className="text-right p-3">%</th>
-                                                        <th className="text-center p-3"></th>
+                                                    <tr className="border-t border-border-dark bg-background-dark">
+                                                        <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Data</th>
+                                                        <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Produto</th>
+                                                        <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Qtd</th>
+                                                        <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Comissão</th>
+                                                        <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Status</th>
+                                                        <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Tipo</th>
+                                                        <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Validado</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {entries.map(entry => {
-                                                        const isEditing = editingEntryId === entry.id;
+                                                    {filteredConversions.slice(0, 50).map((conv) => (
+                                                        <tr key={conv.id} className="border-t border-border-dark/50 hover:bg-surface-dark/50 transition-colors">
+                                                            <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+                                                                {conv.purchase_time ? format(new Date(conv.purchase_time), 'dd/MM HH:mm') : '—'}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-white min-w-0">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    {conv.image_url && (
+                                                                        <img src={conv.image_url} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
+                                                                    )}
+                                                                    <span className="truncate max-w-[180px]">{conv.item_name || `Item #${conv.item_id}`}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right text-white whitespace-nowrap">{conv.qty}</td>
+                                                            <td className="px-3 py-2 text-right font-medium text-orange-400 whitespace-nowrap">
+                                                                {formatBRL(conv.item_total_commission)}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${['PAID', 'VALIDATED', 'COMPLETED'].includes(conv.conversion_status || '')
+                                                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                                                    : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID'].includes(conv.conversion_status || '')
+                                                                        ? 'bg-red-500/20 text-red-400'
+                                                                        : 'bg-amber-500/20 text-amber-400'
+                                                                    }`}>
+                                                                    {conv.conversion_status || 'PENDING'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                                <span className={`text-[10px] ${conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct'
+                                                                    ? 'text-green-400' : 'text-amber-400'
+                                                                    }`}>
+                                                                    {conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct' ? 'Direta' : conv.attribution_type || '—'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 text-center">
+                                                                {conv.is_validated ? (
+                                                                    <ShieldCheck size={14} className="text-emerald-400 mx-auto" />
+                                                                ) : conv.fraud_status && conv.fraud_status !== 'NONE' && conv.fraud_status !== '' ? (
+                                                                    <AlertTriangle size={14} className="text-red-400 mx-auto" />
+                                                                ) : (
+                                                                    <span className="text-text-secondary">—</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            {filteredConversions.length > 50 && (
+                                                <div className="p-3 text-center text-xs text-text-secondary border-t border-border-dark/50">
+                                                    Mostrando 50 de {filteredConversions.length} conversões
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-6 text-center text-sm text-text-secondary">
+                                            Nenhuma conversão sincronizada. Use os botões acima para buscar dados da API Shopee.
+                                        </div>
+                                    )}
+                                </div>
 
-                                                        // Funnel evaluation
-                                                        const entryIndex = entries.indexOf(entry);
-                                                        const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
-                                                        let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
-                                                        if (linkedFunnel) {
-                                                            const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
-                                                            const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
-                                                            // Use maintenance conditions for days beyond configured ones
-                                                            const conditionsToEval = funnelDay
-                                                                ? funnelDay.conditions
-                                                                : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_conditions || []).length > 0)
-                                                                    ? linkedFunnel.maintenance_conditions
-                                                                    : null;
+                            </div>
 
-                                                            if (conditionsToEval && conditionsToEval.length > 0) {
-                                                                const eProfit = Number(entry.commission_value) - Number(entry.investment);
-                                                                const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
-                                                                const metricMap: Record<string, number> = {
-                                                                    ad_clicks: Number(entry.ad_clicks),
-                                                                    shopee_clicks: Number(entry.shopee_clicks),
-                                                                    cpc: Number(entry.cpc),
-                                                                    orders: Number(entry.orders),
-                                                                    commission_value: Number(entry.commission_value),
-                                                                    investment: Number(entry.investment),
-                                                                    profit: eProfit,
-                                                                    roi_percentage: eRoi,
-                                                                };
-                                                                const allPass = conditionsToEval.every(cond => {
-                                                                    const actual = metricMap[cond.metric] ?? 0;
-                                                                    switch (cond.operator) {
-                                                                        case '<=': return actual <= cond.value;
-                                                                        case '>=': return actual >= cond.value;
-                                                                        case '==': return actual === cond.value;
-                                                                        case '>': return actual > cond.value;
-                                                                        case '<': return actual < cond.value;
-                                                                        default: return false;
-                                                                    }
-                                                                });
-                                                                funnelStatus = allPass ? 'pass' : 'fail';
+                            <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                {/* Entries Table */}
+                                {
+                                    <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                                        <div className="p-4 border-b border-border-dark flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <h3 className="text-sm font-bold text-white">Histórico ({filteredEntries.length} registros)</h3>
+                                                <span className="hidden sm:inline-block text-xs font-normal text-text-secondary bg-background-dark px-2.5 py-1 rounded-md border border-border-dark">
+                                                    Dê 2 cliques na linha para editar
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => setShowManualEntry(true)}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-all"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" /> Registro Manual
+                                            </button>
+                                        </div>
+                                        {filteredEntries.length > 0 ? (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="border-b border-border-dark text-text-secondary text-xs">
+                                                            {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
+                                                            <th className="text-left p-3">Data</th>
+                                                            <th className="text-right p-3">Cliq. Anúncio</th>
+                                                            <th className="text-right p-3">Cliq. Shopee</th>
+                                                            <th className="text-right p-3">CPC</th>
+                                                            <th className="text-right p-3">Pedidos</th>
+                                                            <th className="text-right p-3">Comissão</th>
+                                                            <th className="text-right p-3">Investimento</th>
+                                                            <th className="text-right p-3">Lucro</th>
+                                                            <th className="text-right p-3">%</th>
+                                                            <th className="text-center p-3"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-border-dark/30">
+                                                        {filteredEntries.map(entry => {
+                                                            const isEditing = editingEntryId === entry.id;
+
+                                                            // Funnel evaluation
+                                                            const entryIndex = entries.indexOf(entry);
+                                                            const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
+                                                            let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
+                                                            if (linkedFunnel) {
+                                                                const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
+                                                                const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
+                                                                // Use maintenance conditions for days beyond configured ones
+                                                                const conditionsToEval = funnelDay
+                                                                    ? funnelDay.conditions
+                                                                    : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_conditions || []).length > 0)
+                                                                        ? linkedFunnel.maintenance_conditions
+                                                                        : null;
+
+                                                                if (conditionsToEval && conditionsToEval.length > 0) {
+                                                                    const eProfit = Number(entry.commission_value) - Number(entry.investment);
+                                                                    const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
+                                                                    const metricMap: Record<string, number> = {
+                                                                        ad_clicks: Number(entry.ad_clicks),
+                                                                        shopee_clicks: Number(entry.shopee_clicks),
+                                                                        cpc: Number(entry.cpc),
+                                                                        orders: Number(entry.orders),
+                                                                        commission_value: Number(entry.commission_value),
+                                                                        investment: Number(entry.investment),
+                                                                        profit: eProfit,
+                                                                        roi_percentage: eRoi,
+                                                                    };
+                                                                    const allPass = conditionsToEval.every(cond => {
+                                                                        const actual = metricMap[cond.metric] ?? 0;
+                                                                        switch (cond.operator) {
+                                                                            case '<=': return actual <= cond.value;
+                                                                            case '>=': return actual >= cond.value;
+                                                                            case '==': return actual === cond.value;
+                                                                            case '>': return actual > cond.value;
+                                                                            case '<': return actual < cond.value;
+                                                                            default: return false;
+                                                                        }
+                                                                    });
+                                                                    funnelStatus = allPass ? 'pass' : 'fail';
+                                                                }
                                                             }
-                                                        }
 
-                                                        if (isEditing) {
-                                                            const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
-                                                            const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
+                                                            if (isEditing) {
+                                                                const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
+                                                                const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
 
+                                                                return (
+                                                                    <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
+                                                                        {linkedFunnel && (
+                                                                            <td className="p-3 text-center">
+                                                                                {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
+                                                                                {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
+                                                                                {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
+                                                                            </td>
+                                                                        )}
+                                                                        <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
+                                                                        </td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
+                                                                        </td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
+                                                                        </td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
+                                                                        </td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
+                                                                        </td>
+                                                                        <td className="p-2">
+                                                                            <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
+                                                                        </td>
+                                                                        <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
+                                                                        <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
+                                                                        <td className="p-3 text-center">
+                                                                            <div className="flex items-center justify-center gap-2">
+                                                                                <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
+                                                                                    {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                                                </button>
+                                                                                <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
+                                                                                    <X className="w-4 h-4" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            }
+
+                                                            const profit = Number(entry.commission_value) - Number(entry.investment);
+                                                            const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
                                                             return (
-                                                                <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
+                                                                <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
                                                                     {linkedFunnel && (
                                                                         <td className="p-3 text-center">
                                                                             {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
@@ -2703,108 +3277,63 @@ export function CreativeTrack() {
                                                                         </td>
                                                                     )}
                                                                     <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
-                                                                    </td>
-                                                                    <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
-                                                                    <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
+                                                                    <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
+                                                                    <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
+                                                                    <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
+                                                                    <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
+                                                                    <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
+                                                                    <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
+                                                                    <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
+                                                                    <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
                                                                     <td className="p-3 text-center">
-                                                                        <div className="flex items-center justify-center gap-2">
-                                                                            <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
-                                                                                {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                                            </button>
-                                                                            <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
-                                                                                <X className="w-4 h-4" />
-                                                                            </button>
-                                                                        </div>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                                     </td>
                                                                 </tr>
                                                             );
-                                                        }
+                                                        })}
+                                                    </tbody>
+                                                    {entries.length > 0 && (() => {
+                                                        const totals = entries.reduce((acc, entry) => {
+                                                            acc.ad_clicks += Number(entry.ad_clicks || 0);
+                                                            acc.shopee_clicks += Number(entry.shopee_clicks || 0);
+                                                            acc.orders += Number(entry.orders || 0);
+                                                            acc.commission += Number(entry.commission_value || 0);
+                                                            acc.investment += Number(entry.investment || 0);
+                                                            return acc;
+                                                        }, { ad_clicks: 0, shopee_clicks: 0, orders: 0, commission: 0, investment: 0 });
 
-                                                        const profit = Number(entry.commission_value) - Number(entry.investment);
-                                                        const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
+                                                        const totalProfit = totals.commission - totals.investment;
+                                                        const totalRoi = totals.investment > 0 ? (totalProfit / totals.investment) * 100 : 0;
+                                                        const avgCpc = totals.ad_clicks > 0 ? (totals.investment / totals.ad_clicks) : 0;
+
                                                         return (
-                                                            <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
-                                                                {linkedFunnel && (
-                                                                    <td className="p-3 text-center">
-                                                                        {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
-                                                                        {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
-                                                                        {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
-                                                                    </td>
-                                                                )}
-                                                                <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                                <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
-                                                                <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
-                                                                <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
-                                                                <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
-                                                                <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
-                                                                <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
-                                                                <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
-                                                                <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
-                                                                <td className="p-3 text-center">
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                                                </td>
-                                                            </tr>
+                                                            <tfoot className="border-t-2 border-border-dark bg-background-dark font-bold text-sm">
+                                                                <tr>
+                                                                    {linkedFunnel && <td className="p-3"></td>}
+                                                                    <td className="p-3 text-left text-white">TOTAL</td>
+                                                                    <td className="p-3 text-right text-neutral-300">{totals.ad_clicks}</td>
+                                                                    <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
+                                                                    <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
+                                                                    <td className="p-3 text-right text-blue-400">{totals.orders}</td>
+                                                                    <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
+                                                                    <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
+                                                                    <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
+                                                                    <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
+                                                                    <td className="p-3"></td>
+                                                                </tr>
+                                                            </tfoot>
                                                         );
-                                                    })}
-                                                </tbody>
-                                                {entries.length > 0 && (() => {
-                                                    const totals = entries.reduce((acc, entry) => {
-                                                        acc.ad_clicks += Number(entry.ad_clicks || 0);
-                                                        acc.shopee_clicks += Number(entry.shopee_clicks || 0);
-                                                        acc.orders += Number(entry.orders || 0);
-                                                        acc.commission += Number(entry.commission_value || 0);
-                                                        acc.investment += Number(entry.investment || 0);
-                                                        return acc;
-                                                    }, { ad_clicks: 0, shopee_clicks: 0, orders: 0, commission: 0, investment: 0 });
-
-                                                    const totalProfit = totals.commission - totals.investment;
-                                                    const totalRoi = totals.investment > 0 ? (totalProfit / totals.investment) * 100 : 0;
-                                                    const avgCpc = totals.ad_clicks > 0 ? (totals.investment / totals.ad_clicks) : 0;
-
-                                                    return (
-                                                        <tfoot className="border-t-2 border-border-dark bg-background-dark font-bold text-sm">
-                                                            <tr>
-                                                                {linkedFunnel && <td className="p-3"></td>}
-                                                                <td className="p-3 text-left text-white">TOTAL</td>
-                                                                <td className="p-3 text-right text-neutral-300">{totals.ad_clicks}</td>
-                                                                <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
-                                                                <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
-                                                                <td className="p-3 text-right text-blue-400">{totals.orders}</td>
-                                                                <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
-                                                                <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
-                                                                <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
-                                                                <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
-                                                                <td className="p-3"></td>
-                                                            </tr>
-                                                        </tfoot>
-                                                    );
-                                                })()}
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <div className="p-8 text-center text-neutral-400 text-sm">
-                                            Nenhum registro ainda. Adicione o primeiro abaixo.
-                                        </div>
-                                    )}
-                                </div>
-                            }
+                                                    })()}
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="p-8 text-center text-neutral-400 text-sm">
+                                                Nenhum registro ainda. Adicione o primeiro abaixo.
+                                            </div>
+                                        )}
+                                    </div>
+                                }
+                            </div>
                         </>
                     )}
 

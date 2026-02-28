@@ -171,15 +171,31 @@ interface FetchReportParams {
     purchaseTimeStart: number;
     purchaseTimeEnd?: number;
     limit?: number;
+    scrollId?: string;
+}
+
+interface FetchValidatedParams {
+    shopeeAppId: string;
+    shopeeSecret: string;
+    limit?: number;
+    scrollId?: string;
+}
+
+interface ReportResult {
+    nodes: ConversionNode[];
+    hasNextPage: boolean;
+    scrollId?: string;
 }
 
 /**
- * Busca relatório de conversões em tempo real (pedidos recentes) via Edge Function.
+ * Busca relatório de conversões em tempo real (pedidos recentes) via endpoint local.
+ * Usa /api/fetch-conversions que constrói a query GraphQL completa com TODOS os campos.
  */
-export async function fetchConversionReport(params: FetchReportParams): Promise<ConversionNode[]> {
-    const response = await callShopeeProxy({
-        action: 'fetch-conversions',
-        ...params,
+export async function fetchConversionReport(params: FetchReportParams): Promise<ReportResult> {
+    const response = await fetch('/api/fetch-conversions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
     });
 
     const data = await response.json();
@@ -188,16 +204,22 @@ export async function fetchConversionReport(params: FetchReportParams): Promise<
         throw new Error(data.error || `Erro do servidor (${response.status})`);
     }
 
-    return data.nodes || [];
+    return {
+        nodes: data.nodes || [],
+        hasNextPage: data.pageInfo?.hasNextPage ?? false,
+        scrollId: data.pageInfo?.scrollId
+    };
 }
 
 /**
- * Busca relatório validado (pedidos confirmados para conciliação financeira) via Edge Function.
+ * Busca relatório validado (pedidos confirmados para conciliação financeira) via endpoint local.
+ * Usa /api/fetch-validated que constrói a query GraphQL completa com TODOS os campos.
  */
-export async function fetchValidatedReport(params: FetchReportParams): Promise<ConversionNode[]> {
-    const response = await callShopeeProxy({
-        action: 'fetch-validated',
-        ...params,
+export async function fetchValidatedReport(params: FetchValidatedParams): Promise<ReportResult> {
+    const response = await fetch('/api/fetch-validated', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
     });
 
     const data = await response.json();
@@ -206,5 +228,9 @@ export async function fetchValidatedReport(params: FetchReportParams): Promise<C
         throw new Error(data.error || `Erro do servidor (${response.status})`);
     }
 
-    return data.nodes || [];
+    return {
+        nodes: data.nodes || [],
+        hasNextPage: data.pageInfo?.hasNextPage ?? false,
+        scrollId: data.pageInfo?.scrollId
+    };
 }
