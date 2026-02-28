@@ -240,13 +240,6 @@ export default defineConfig(({ mode }) => {
 
             const { shopeeAppId, shopeeSecret, purchaseTimeStart, purchaseTimeEnd, limit: queryLimit, scrollId } = parsed
 
-            if (!purchaseTimeStart) {
-              res.statusCode = 400
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: 'purchaseTimeStart is required' }))
-              return
-            }
-
             const appId = shopeeAppId || env.SHOPEE_APP_ID || env.VITE_SHOPEE_APP_ID
             const secret = shopeeSecret || env.SHOPEE_SECRET || env.VITE_SHOPEE_SECRET
 
@@ -260,12 +253,13 @@ export default defineConfig(({ mode }) => {
             try {
               const timestamp = Math.floor(Date.now() / 1000)
 
-              const args = [`purchaseTimeStart: ${purchaseTimeStart}`]
+              const args: string[] = []
+              if (purchaseTimeStart) args.push(`purchaseTimeStart: ${purchaseTimeStart}`)
               if (purchaseTimeEnd) args.push(`purchaseTimeEnd: ${purchaseTimeEnd}`)
-              args.push(`limit: ${queryLimit || 100}`)
-              if (scrollId) args.push(`scrollId: "${scrollId}"`)
+              args.push(`limit: ${queryLimit || 999}`)
+              args.push(`scrollId: "${scrollId || ''}"`)
 
-              const query = `{ conversionReport(${args.join(', ')}) { nodes { clickTime purchaseTime checkoutId conversionId conversionStatus grossCommission cappedCommission totalBrandCommission estimatedTotalCommission shopeeCommissionCapped sellerCommission totalCommission netCommission mcnManagementFeeRate mcnManagementFee buyerType utmContent device productType referrer orders { orderId shopType orderStatus items { shopId shopName completeTime promotionId modelId itemId itemName itemPrice displayItemStatus actualAmount refundAmount qty imageUrl itemTotalCommission itemSellerCommission itemSellerCommissionRate itemShopeeCommissionCapped itemShopeeCommissionRate itemNotes globalCategoryLv1Name globalCategoryLv2Name globalCategoryLv3Name fraudStatus fraudReason attributionType channelType campaignPartnerName campaignType } } } pageInfo { hasNextPage scrollId } } }`
+              const query = `{ conversionReport(${args.join(', ')}) { nodes { clickTime purchaseTime checkoutId conversionId conversionStatus grossCommission cappedCommission totalBrandCommission estimatedTotalCommission shopeeCommissionCapped sellerCommission totalCommission netCommission mcnManagementFeeRate mcnManagementFee mcnContractId linkedMcnName buyerType utmContent device productType referrer orders { orderId shopType orderStatus items { shopId shopName completeTime promotionId modelId itemId itemName itemPrice displayItemStatus actualAmount refundAmount qty imageUrl itemCommission grossBrandCommission itemTotalCommission itemSellerCommission itemSellerCommissionRate itemShopeeCommissionCapped itemShopeeCommissionRate itemNotes categoryLv1Name categoryLv2Name categoryLv3Name globalCategoryLv1Name globalCategoryLv2Name globalCategoryLv3Name fraudStatus fraudReason attributionType channelType campaignPartnerName campaignType } } } pageInfo { page limit hasNextPage scrollId } } }`
 
               const payload = JSON.stringify({ query })
               const stringToSign = appId + timestamp + payload + secret

@@ -117,12 +117,17 @@ export interface ConversionOrderItem {
     refundAmount: number | null;
     qty: number | null;
     imageUrl: string | null;
+    itemCommission: number | null;
+    grossBrandCommission: number | null;
     itemTotalCommission: number | null;
     itemSellerCommission: number | null;
     itemSellerCommissionRate: number | null;
     itemShopeeCommissionCapped: number | null;
     itemShopeeCommissionRate: number | null;
     itemNotes: string | null;
+    categoryLv1Name: string | null;
+    categoryLv2Name: string | null;
+    categoryLv3Name: string | null;
     globalCategoryLv1Name: string | null;
     globalCategoryLv2Name: string | null;
     globalCategoryLv3Name: string | null;
@@ -144,19 +149,21 @@ export interface ConversionOrder {
 export interface ConversionNode {
     clickTime: number | null;
     purchaseTime: number | null;
-    checkoutId?: string | null;
+    checkoutId: string | null;
     conversionId: string | null;
-    conversionStatus?: string | null;
-    grossCommission?: number | null;
-    cappedCommission?: number | null;
-    totalBrandCommission?: number | null;
-    estimatedTotalCommission?: number | null;
+    conversionStatus: string | null;
+    grossCommission: number | null;
+    cappedCommission: number | null;
+    totalBrandCommission: number | null;
+    estimatedTotalCommission: number | null;
     shopeeCommissionCapped: number | null;
     sellerCommission: number | null;
     totalCommission: number | null;
     netCommission: number | null;
     mcnManagementFeeRate: number | null;
     mcnManagementFee: number | null;
+    mcnContractId: number | null;
+    linkedMcnName: string | null;
     buyerType: string | null;
     utmContent: string | null;
     device: string | null;
@@ -168,15 +175,8 @@ export interface ConversionNode {
 interface FetchReportParams {
     shopeeAppId: string;
     shopeeSecret: string;
-    purchaseTimeStart: number;
+    purchaseTimeStart?: number;
     purchaseTimeEnd?: number;
-    limit?: number;
-    scrollId?: string;
-}
-
-interface FetchValidatedParams {
-    shopeeAppId: string;
-    shopeeSecret: string;
     limit?: number;
     scrollId?: string;
 }
@@ -211,26 +211,3 @@ export async function fetchConversionReport(params: FetchReportParams): Promise<
     };
 }
 
-/**
- * Busca relatório validado (pedidos confirmados para conciliação financeira) via endpoint local.
- * Usa /api/fetch-validated que constrói a query GraphQL completa com TODOS os campos.
- */
-export async function fetchValidatedReport(params: FetchValidatedParams): Promise<ReportResult> {
-    const response = await fetch('/api/fetch-validated', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error || `Erro do servidor (${response.status})`);
-    }
-
-    return {
-        nodes: data.nodes || [],
-        hasNextPage: data.pageInfo?.hasNextPage ?? false,
-        scrollId: data.pageInfo?.scrollId
-    };
-}

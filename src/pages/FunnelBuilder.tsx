@@ -416,9 +416,9 @@ export function FunnelBuilder() {
                                         return (
                                             <div key={funnelDay.day} className="border border-border-dark rounded-xl bg-background-dark overflow-hidden">
                                                 {/* Day Header */}
-                                                <button
+                                                <div
                                                     onClick={() => setExpandedDay(isExpanded ? null : funnelDay.day)}
-                                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-highlight/30 transition-colors"
+                                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-highlight/30 transition-colors cursor-pointer"
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm flex items-center justify-center border border-primary/30">
@@ -448,7 +448,7 @@ export function FunnelBuilder() {
                                                         </button>
                                                         {isExpanded ? <ChevronUp className="w-4 h-4 text-text-secondary" /> : <ChevronDown className="w-4 h-4 text-text-secondary" />}
                                                     </div>
-                                                </button>
+                                                </div>
 
                                                 {/* Conditions Preview (collapsed) */}
                                                 {!isExpanded && funnelDay.conditions.length > 0 && (

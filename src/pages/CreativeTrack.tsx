@@ -1003,7 +1003,7 @@ export function CreativeTrack() {
         const dateMap = new Map<string, { orders: Set<string>, commission: number }>();
         for (const row of allConversions) {
             if (!row.purchase_time || row.conversion_status === 'CANCELLED') continue;
-            const date = row.purchase_time.split('T')[0];
+            const date = format(new Date(row.purchase_time), 'yyyy-MM-dd');
             if (!dateMap.has(date)) {
                 dateMap.set(date, { orders: new Set(), commission: 0 });
             }
@@ -1092,10 +1092,19 @@ export function CreativeTrack() {
                             click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                             purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
                             conversion_status: node.conversionStatus || null,
+                            checkout_id: node.checkoutId || null,
+                            gross_commission: node.grossCommission || 0,
+                            capped_commission: node.cappedCommission || 0,
+                            total_brand_commission: node.totalBrandCommission || 0,
+                            estimated_total_commission: node.estimatedTotalCommission || 0,
                             net_commission: node.netCommission || 0,
                             total_commission: node.totalCommission || 0,
                             seller_commission: node.sellerCommission || 0,
                             shopee_commission: node.shopeeCommissionCapped || 0,
+                            mcn_management_fee_rate: node.mcnManagementFeeRate != null ? String(node.mcnManagementFeeRate) : null,
+                            mcn_management_fee: node.mcnManagementFee || 0,
+                            mcn_contract_id: node.mcnContractId || null,
+                            linked_mcn_name: node.linkedMcnName || null,
                             buyer_type: node.buyerType || null,
                             device: node.device || null,
                             utm_content: node.utmContent || null,
@@ -1104,6 +1113,10 @@ export function CreativeTrack() {
                             order_id: order.orderId || null,
                             order_status: order.orderStatus || null,
                             shop_type: order.shopType || null,
+                            shop_id: item.shopId || null,
+                            complete_time: item.completeTime ? new Date(item.completeTime * 1000).toISOString() : null,
+                            promotion_id: item.promotionId ? String(item.promotionId) : null,
+                            model_id: item.modelId || null,
                             item_id: item.itemId || null,
                             item_name: item.itemName || null,
                             item_price: item.itemPrice || null,
@@ -1111,16 +1124,22 @@ export function CreativeTrack() {
                             actual_amount: item.actualAmount || null,
                             refund_amount: item.refundAmount || null,
                             image_url: item.imageUrl || null,
+                            item_commission: item.itemCommission || 0,
+                            gross_brand_commission: item.grossBrandCommission || 0,
                             item_total_commission: item.itemTotalCommission || 0,
                             item_seller_commission: item.itemSellerCommission || 0,
                             item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
                             item_shopee_commission: item.itemShopeeCommissionCapped || 0,
                             item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
                             display_item_status: item.displayItemStatus || null,
+                            item_notes: item.itemNotes || null,
                             attribution_type: item.attributionType || null,
                             channel_type: item.channelType || null,
                             campaign_type: item.campaignType || null,
                             campaign_partner_name: item.campaignPartnerName || null,
+                            category_lv1_name: item.categoryLv1Name || null,
+                            category_lv2_name: item.categoryLv2Name || null,
+                            category_lv3_name: item.categoryLv3Name || null,
                             global_category_lv1: item.globalCategoryLv1Name || null,
                             global_category_lv2: item.globalCategoryLv2Name || null,
                             global_category_lv3: item.globalCategoryLv3Name || null,
@@ -1200,10 +1219,19 @@ export function CreativeTrack() {
                             click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                             purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
                             conversion_status: node.conversionStatus || 'COMPLETED',
+                            checkout_id: node.checkoutId || null,
+                            gross_commission: node.grossCommission || 0,
+                            capped_commission: node.cappedCommission || 0,
+                            total_brand_commission: node.totalBrandCommission || 0,
+                            estimated_total_commission: node.estimatedTotalCommission || 0,
                             net_commission: node.netCommission || 0,
                             total_commission: node.totalCommission || 0,
                             seller_commission: node.sellerCommission || 0,
                             shopee_commission: node.shopeeCommissionCapped || 0,
+                            mcn_management_fee_rate: node.mcnManagementFeeRate != null ? String(node.mcnManagementFeeRate) : null,
+                            mcn_management_fee: node.mcnManagementFee || 0,
+                            mcn_contract_id: node.mcnContractId || null,
+                            linked_mcn_name: node.linkedMcnName || null,
                             buyer_type: node.buyerType || null,
                             device: node.device || null,
                             utm_content: node.utmContent || null,
@@ -1212,6 +1240,10 @@ export function CreativeTrack() {
                             order_id: order.orderId || null,
                             order_status: order.orderStatus || null,
                             shop_type: order.shopType || null,
+                            shop_id: item.shopId || null,
+                            complete_time: item.completeTime ? new Date(item.completeTime * 1000).toISOString() : null,
+                            promotion_id: item.promotionId ? String(item.promotionId) : null,
+                            model_id: item.modelId || null,
                             item_id: item.itemId || null,
                             item_name: item.itemName || null,
                             item_price: item.itemPrice || null,
@@ -1219,16 +1251,22 @@ export function CreativeTrack() {
                             actual_amount: item.actualAmount || null,
                             refund_amount: item.refundAmount || null,
                             image_url: item.imageUrl || null,
+                            item_commission: item.itemCommission || 0,
+                            gross_brand_commission: item.grossBrandCommission || 0,
                             item_total_commission: item.itemTotalCommission || 0,
                             item_seller_commission: item.itemSellerCommission || 0,
                             item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
                             item_shopee_commission: item.itemShopeeCommissionCapped || 0,
                             item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
                             display_item_status: item.displayItemStatus || null,
+                            item_notes: item.itemNotes || null,
                             attribution_type: item.attributionType || null,
                             channel_type: item.channelType || null,
                             campaign_type: item.campaignType || null,
                             campaign_partner_name: item.campaignPartnerName || null,
+                            category_lv1_name: item.categoryLv1Name || null,
+                            category_lv2_name: item.categoryLv2Name || null,
+                            category_lv3_name: item.categoryLv3Name || null,
                             global_category_lv1: item.globalCategoryLv1Name || null,
                             global_category_lv2: item.globalCategoryLv2Name || null,
                             global_category_lv3: item.globalCategoryLv3Name || null,
@@ -1329,10 +1367,19 @@ export function CreativeTrack() {
                                     click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                                     purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
                                     conversion_status: node.conversionStatus || null,
+                                    checkout_id: node.checkoutId || null,
+                                    gross_commission: node.grossCommission || 0,
+                                    capped_commission: node.cappedCommission || 0,
+                                    total_brand_commission: node.totalBrandCommission || 0,
+                                    estimated_total_commission: node.estimatedTotalCommission || 0,
                                     net_commission: node.netCommission || 0,
                                     total_commission: node.totalCommission || 0,
                                     seller_commission: node.sellerCommission || 0,
                                     shopee_commission: node.shopeeCommissionCapped || 0,
+                                    mcn_management_fee_rate: node.mcnManagementFeeRate != null ? String(node.mcnManagementFeeRate) : null,
+                                    mcn_management_fee: node.mcnManagementFee || 0,
+                                    mcn_contract_id: node.mcnContractId || null,
+                                    linked_mcn_name: node.linkedMcnName || null,
                                     buyer_type: node.buyerType || null,
                                     device: node.device || null,
                                     utm_content: node.utmContent || null,
@@ -1341,6 +1388,10 @@ export function CreativeTrack() {
                                     order_id: order.orderId || null,
                                     order_status: order.orderStatus || null,
                                     shop_type: order.shopType || null,
+                                    shop_id: item.shopId || null,
+                                    complete_time: item.completeTime ? new Date(item.completeTime * 1000).toISOString() : null,
+                                    promotion_id: item.promotionId ? String(item.promotionId) : null,
+                                    model_id: item.modelId || null,
                                     item_id: item.itemId || null,
                                     item_name: item.itemName || null,
                                     item_price: item.itemPrice || null,
@@ -1348,16 +1399,22 @@ export function CreativeTrack() {
                                     actual_amount: item.actualAmount || null,
                                     refund_amount: item.refundAmount || null,
                                     image_url: item.imageUrl || null,
+                                    item_commission: item.itemCommission || 0,
+                                    gross_brand_commission: item.grossBrandCommission || 0,
                                     item_total_commission: item.itemTotalCommission || 0,
                                     item_seller_commission: item.itemSellerCommission || 0,
                                     item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
                                     item_shopee_commission: item.itemShopeeCommissionCapped || 0,
                                     item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
                                     display_item_status: item.displayItemStatus || null,
+                                    item_notes: item.itemNotes || null,
                                     attribution_type: item.attributionType || null,
                                     channel_type: item.channelType || null,
                                     campaign_type: item.campaignType || null,
                                     campaign_partner_name: item.campaignPartnerName || null,
+                                    category_lv1_name: item.categoryLv1Name || null,
+                                    category_lv2_name: item.categoryLv2Name || null,
+                                    category_lv3_name: item.categoryLv3Name || null,
                                     global_category_lv1: item.globalCategoryLv1Name || null,
                                     global_category_lv2: item.globalCategoryLv2Name || null,
                                     global_category_lv3: item.globalCategoryLv3Name || null,
@@ -1367,10 +1424,10 @@ export function CreativeTrack() {
                                     synced_at: new Date().toISOString(),
                                 });
 
-                                // Aggregate for entries
+                                // Aggregate for entries (use local date, not UTC)
                                 const orderStatus = order.orderStatus || node.conversionStatus || '';
                                 if (node.purchaseTime && orderStatus !== 'CANCELLED') {
-                                    const dateStr = new Date(node.purchaseTime * 1000).toISOString().split('T')[0];
+                                    const dateStr = format(new Date(node.purchaseTime * 1000), 'yyyy-MM-dd');
                                     const aggKey = `${matchedTrack.id}_${dateStr}`;
                                     const curr = globalEntriesMap.get(aggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
                                     if (order.orderId) curr.orderIds!.add(order.orderId);
@@ -1380,7 +1437,7 @@ export function CreativeTrack() {
 
                                 // Count shopee clicks (unique clicks per day per track)
                                 if (node.clickTime) {
-                                    const clickDateStr = new Date(node.clickTime * 1000).toISOString().split('T')[0];
+                                    const clickDateStr = format(new Date(node.clickTime * 1000), 'yyyy-MM-dd');
                                     const clickAggKey = `${matchedTrack.id}_${clickDateStr}`;
                                     const clickCurr = globalEntriesMap.get(clickAggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
                                     const clickUniqueId = `${node.conversionId || node.checkoutId}_${node.clickTime}`;
@@ -1647,7 +1704,7 @@ export function CreativeTrack() {
         }
 
         return entries.filter(item => {
-            const dateObj = new Date(item.date);
+            const dateObj = new Date(item.date + 'T00:00:00');
             if (isNaN(dateObj.getTime())) return true;
             return isWithinInterval(dateObj, { start, end });
         });
@@ -1688,7 +1745,7 @@ export function CreativeTrack() {
         }
 
         return allEntries.filter(item => {
-            const dateObj = new Date(item.date);
+            const dateObj = new Date(item.date + 'T00:00:00');
             if (isNaN(dateObj.getTime())) return true;
             return isWithinInterval(dateObj, { start, end });
         });
@@ -1775,7 +1832,7 @@ export function CreativeTrack() {
                 default: return true;
             }
 
-            const dateObj = new Date(item.date);
+            const dateObj = new Date(item.date + 'T00:00:00');
             if (isNaN(dateObj.getTime())) return true;
             return isWithinInterval(dateObj, { start, end });
         });
@@ -3292,8 +3349,8 @@ export function CreativeTrack() {
                                                             );
                                                         })}
                                                     </tbody>
-                                                    {entries.length > 0 && (() => {
-                                                        const totals = entries.reduce((acc, entry) => {
+                                                    {filteredEntries.length > 0 && (() => {
+                                                        const totals = filteredEntries.reduce((acc, entry) => {
                                                             acc.ad_clicks += Number(entry.ad_clicks || 0);
                                                             acc.shopee_clicks += Number(entry.shopee_clicks || 0);
                                                             acc.orders += Number(entry.orders || 0);

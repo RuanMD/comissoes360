@@ -7,10 +7,6 @@ export default async function handler(req, res) {
 
     const { shopeeAppId, shopeeSecret, purchaseTimeStart, purchaseTimeEnd, limit, scrollId } = req.body;
 
-    if (!purchaseTimeStart) {
-        return res.status(400).json({ error: 'purchaseTimeStart is required' });
-    }
-
     const appId = shopeeAppId || process.env.SHOPEE_APP_ID || process.env.VITE_SHOPEE_APP_ID;
     const secret = shopeeSecret || process.env.SHOPEE_SECRET || process.env.VITE_SHOPEE_SECRET;
 
@@ -21,10 +17,11 @@ export default async function handler(req, res) {
     try {
         const timestamp = Math.floor(Date.now() / 1000);
 
-        const args = [`purchaseTimeStart: ${purchaseTimeStart}`];
+        const args = [];
+        if (purchaseTimeStart) args.push(`purchaseTimeStart: ${purchaseTimeStart}`);
         if (purchaseTimeEnd) args.push(`purchaseTimeEnd: ${purchaseTimeEnd}`);
-        args.push(`limit: ${limit || 100}`);
-        if (scrollId) args.push(`scrollId: "${scrollId}"`);
+        args.push(`limit: ${limit || 999}`);
+        args.push(`scrollId: "${scrollId || ''}"`);
 
         const query = `{
   conversionReport(${args.join(', ')}) {
@@ -34,6 +31,7 @@ export default async function handler(req, res) {
       checkoutId
       conversionId
       conversionStatus
+
       grossCommission
       cappedCommission
       totalBrandCommission
@@ -42,13 +40,18 @@ export default async function handler(req, res) {
       sellerCommission
       totalCommission
       netCommission
+
       mcnManagementFeeRate
       mcnManagementFee
+      mcnContractId
+      linkedMcnName
+
       buyerType
       utmContent
       device
       productType
       referrer
+
       orders {
         orderId
         shopType
@@ -67,15 +70,23 @@ export default async function handler(req, res) {
           refundAmount
           qty
           imageUrl
+
+          itemCommission
+          grossBrandCommission
           itemTotalCommission
           itemSellerCommission
           itemSellerCommissionRate
           itemShopeeCommissionCapped
           itemShopeeCommissionRate
           itemNotes
+
+          categoryLv1Name
+          categoryLv2Name
+          categoryLv3Name
           globalCategoryLv1Name
           globalCategoryLv2Name
           globalCategoryLv3Name
+
           fraudStatus
           fraudReason
           attributionType
@@ -85,7 +96,10 @@ export default async function handler(req, res) {
         }
       }
     }
+
     pageInfo {
+      page
+      limit
       hasNextPage
       scrollId
     }

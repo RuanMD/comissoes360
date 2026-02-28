@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment, useMemo } from 'react';
 import { useMetrics, parseShopeeDate } from '../hooks/useMetrics';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { supabase } from '../lib/supabase';
 import { DateFilter } from '../components/ui/DateFilter';
+import { useOrderFilters } from '../hooks/useOrderFilters';
+import { OrderFiltersPanel } from '../components/ui/OrderFiltersPanel';
 import {
     Hash, DollarSign, MousePointerClick, Activity, Package, Eye, EyeOff,
-    ChevronDown, ChevronUp, ShoppingBag, Radio, FileText, Clapperboard,
-    Loader2, CheckCircle2, RefreshCw, Plus, Save, X, Link as LinkIcon
+    ChevronDown, ChevronUp, ShoppingBag, Radio, Clapperboard,
+    Loader2, CheckCircle2, Plus, Save, X, Link as LinkIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -26,7 +28,7 @@ interface MatchedTrack {
 
 export function SubIdAnalysis() {
     const metrics = useMetrics();
-    const { commissionData, clickData, reportType } = useData();
+    const { commissionData, clickData, reportType, isAutoSyncing } = useData();
     const { user } = useAuth();
     const { showToast } = useToast();
     const [hideNames, setHideNames] = useState(false);
@@ -36,16 +38,23 @@ export function SubIdAnalysis() {
     // Tracks state
     const [allTracks, setAllTracks] = useState<TrackInfo[]>([]);
     const [matchedTracks, setMatchedTracks] = useState<MatchedTrack[]>([]);
-    const [syncing, setSyncing] = useState(false);
-    const [syncDone, setSyncDone] = useState(false);
-    const [syncingSubId, setSyncingSubId] = useState<string | null>(null);
-    const [syncedSubIds, setSyncedSubIds] = useState<Set<string>>(new Set());
 
     // Inline create track form
     const [creatingForSubId, setCreatingForSubId] = useState<string | null>(null);
     const [createName, setCreateName] = useState('');
     const [createLink, setCreateLink] = useState('');
     const [savingCreate, setSavingCreate] = useState(false);
+
+    // Filter Logic for Expanded SubID
+    const expandedSubIdOrders = useMemo(() => {
+        if (!expandedSubId) return [];
+        return metrics.allOrders.filter(o =>
+            (expandedSubId === 'Sem Sub_id' && (!o.channel || o.channel === 'Desconhecido')) ||
+            (expandedSubId !== 'Sem Sub_id' && o.channel.includes(expandedSubId))
+        );
+    }, [metrics.allOrders, expandedSubId]);
+
+    const filterState = useOrderFilters(expandedSubIdOrders);
 
     // Build date aggregation for a specific CSV sub_id
     const buildDateAgg = useCallback((csvSubId: string) => {
@@ -143,8 +152,6 @@ export function SubIdAnalysis() {
             }
 
             setMatchedTracks(matched);
-            setSyncDone(false);
-            setSyncedSubIds(new Set());
         } catch (err) {
             console.error('Erro ao buscar tracks:', err);
         }
@@ -153,81 +160,6 @@ export function SubIdAnalysis() {
     useEffect(() => {
         detectMatchingTracks();
     }, [detectMatchingTracks]);
-
-    // Sync ALL matched tracks
-    const handleSyncAll = async () => {
-        if (matchedTracks.length === 0) return;
-        setSyncing(true);
-        try {
-            for (const mt of matchedTracks) {
-                await syncSingleTrack(mt.track.id, mt.dateAggregation);
-            }
-            const totalDates = matchedTracks.reduce((s, mt) => s + Object.keys(mt.dateAggregation).length, 0);
-            showToast(`Sincronizado! ${matchedTracks.length} track(s), ${totalDates} registro(s) atualizados.`);
-            setSyncDone(true);
-            setSyncedSubIds(new Set(matchedTracks.map(mt => mt.csvSubId)));
-        } catch (err) {
-            console.error('Erro na sincronização:', err);
-            showToast('Erro ao sincronizar dados.', 'error');
-        } finally {
-            setSyncing(false);
-        }
-    };
-
-    // Sync a SINGLE track by its ID and date aggregation
-    const syncSingleTrack = async (trackId: string, dateAgg: Record<string, { shopee_clicks: number; orders: number; commission_value: number }>) => {
-        const dates = Object.keys(dateAgg);
-
-        const { data: existing, error: fetchErr } = await supabase
-            .from('creative_track_entries')
-            .select('*')
-            .eq('track_id', trackId)
-            .in('date', dates);
-
-        if (fetchErr) throw fetchErr;
-
-        const existingMap = new Map<string, any>();
-        (existing || []).forEach(e => existingMap.set(e.date, e));
-
-        const payloads = dates.map(date => {
-            const csvData = dateAgg[date];
-            const existingEntry = existingMap.get(date);
-            return {
-                track_id: trackId,
-                date,
-                shopee_clicks: csvData.shopee_clicks,
-                orders: csvData.orders,
-                commission_value: Math.round(csvData.commission_value * 100) / 100,
-                ad_clicks: existingEntry?.ad_clicks ?? 0,
-                cpc: existingEntry?.cpc ?? 0,
-                investment: existingEntry?.investment ?? 0,
-            };
-        });
-
-        const { error: upsertErr } = await supabase
-            .from('creative_track_entries')
-            .upsert(payloads, { onConflict: 'track_id,date' });
-
-        if (upsertErr) throw upsertErr;
-    };
-
-    // Sync individual sub_id
-    const handleSyncIndividual = async (csvSubId: string) => {
-        const mt = matchedTracks.find(m => m.csvSubId === csvSubId);
-        if (!mt) return;
-        setSyncingSubId(csvSubId);
-        try {
-            await syncSingleTrack(mt.track.id, mt.dateAggregation);
-            const days = Object.keys(mt.dateAggregation).length;
-            showToast(`${mt.track.name}: ${days} registro(s) sincronizados!`);
-            setSyncedSubIds(prev => new Set([...prev, csvSubId]));
-        } catch (err) {
-            console.error(err);
-            showToast('Erro ao sincronizar.', 'error');
-        } finally {
-            setSyncingSubId(null);
-        }
-    };
 
     // Open inline create form
     const openCreateForm = (subId: string) => {
@@ -239,8 +171,8 @@ export function SubIdAnalysis() {
         setCreateLink('');
     };
 
-    // Create track and optionally sync
-    const handleCreateTrack = async (syncAfter: boolean) => {
+    // Create track
+    const handleCreateTrack = async () => {
         if (!creatingForSubId || !user || !createName.trim()) {
             showToast('Nome é obrigatório.', 'error');
             return;
@@ -264,21 +196,7 @@ export function SubIdAnalysis() {
             const newTrack: TrackInfo = { id: data.id, name: data.name, sub_id: data.sub_id };
             setAllTracks(prev => [...prev, newTrack]);
 
-            if (syncAfter) {
-                const dateAgg = buildDateAgg(creatingForSubId);
-                if (Object.keys(dateAgg).length > 0) {
-                    await syncSingleTrack(data.id, dateAgg);
-                    const newMatch: MatchedTrack = { track: newTrack, csvSubId: creatingForSubId, dateAggregation: dateAgg };
-                    setMatchedTracks(prev => [...prev, newMatch]);
-                    setSyncedSubIds(prev => new Set([...prev, creatingForSubId!]));
-                    const days = Object.keys(dateAgg).length;
-                    showToast(`Track "${createName.trim()}" criado e ${days} registro(s) sincronizados!`);
-                } else {
-                    showToast(`Track "${createName.trim()}" criado! (sem dados de data no CSV)`);
-                }
-            } else {
-                showToast(`Track "${createName.trim()}" criado!`);
-            }
+            showToast(`Track "${createName.trim()}" criado! O banco será sincronizado na próxima importação.`);
 
             setCreatingForSubId(null);
             setCreateName('');
@@ -298,9 +216,7 @@ export function SubIdAnalysis() {
         );
     };
 
-    const getMatchForSubId = (csvSubId: string): MatchedTrack | undefined => {
-        return matchedTracks.find(m => m.csvSubId === csvSubId);
-    };
+
 
     const toggleExpand = (subId: string) => {
         if (expandedSubId === subId) {
@@ -308,6 +224,7 @@ export function SubIdAnalysis() {
         } else {
             setExpandedSubId(subId);
             setDetailTab('products');
+            filterState.clearFilters(); // Reset filters when opening a new SubID
         }
     };
 
@@ -337,38 +254,29 @@ export function SubIdAnalysis() {
 
             {/* Sync Banner (all tracks) */}
             {showTrackColumn && matchedTracks.length > 0 && (
-                <div className={`rounded-2xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${syncDone ? 'bg-green-500/5 border-green-500/30' : 'bg-primary/5 border-primary/30'}`}>
+                <div className={`rounded - 2xl border p - 4 flex flex - col sm: flex - row items - start sm: items - center justify - between gap - 3 ${isAutoSyncing ? 'bg-primary/5 border-primary/30' : 'bg-green-500/5 border-green-500/30'} `}>
                     <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${syncDone ? 'bg-green-500/10' : 'bg-primary/10'}`}>
-                            {syncDone ? <CheckCircle2 className="w-5 h-5 text-green-400" /> : <Clapperboard className="w-5 h-5 text-primary" />}
+                        <div className={`w - 10 h - 10 rounded - xl flex items - center justify - center ${isAutoSyncing ? 'bg-primary/10' : 'bg-green-500/10'} `}>
+                            {isAutoSyncing ? <Clapperboard className="w-5 h-5 text-primary" /> : <CheckCircle2 className="w-5 h-5 text-green-400" />}
                         </div>
                         <div>
                             <p className="text-sm font-bold text-white">
-                                {syncDone ? 'Criativo Track sincronizado!' : `${matchedTracks.length} track(s) compatível(is) encontrado(s)`}
+                                {isAutoSyncing ? `${matchedTracks.length} track(s) detectado(s)` : 'Criativo Track sincronizado!'}
                             </p>
                             <p className="text-xs text-text-secondary">
-                                {syncDone
-                                    ? `Dados dos CSVs foram enviados para ${matchedTracks.map(m => m.track.name).join(', ')}`
-                                    : `${matchedTracks.map(m => `${m.track.name} (${m.track.sub_id})`).join(', ')} — ${matchedTracks.reduce((s, m) => s + Object.keys(m.dateAggregation).length, 0)} dia(s) detectados`
+                                {isAutoSyncing
+                                    ? `Mesclando banco de dados com CSV para ${matchedTracks.map(m => m.track.name).join(', ')} `
+                                    : `${matchedTracks.map(m => `${m.track.name} (${m.track.sub_id})`).join(', ')} — ${matchedTracks.reduce((s, m) => s + Object.keys(m.dateAggregation).length, 0)} dia(s) sincronizados`
                                 }
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={syncDone ? () => { setSyncDone(false); handleSyncAll(); } : handleSyncAll}
-                        disabled={syncing}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition-colors disabled:opacity-50 ${syncDone
-                            ? 'bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20'
-                            : 'bg-primary text-background-dark shadow-[0_0_15px_rgba(242,162,13,0.3)] hover:bg-opacity-90'
-                            }`}
-                    >
-                        {syncing
-                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Sincronizando...</>
-                            : syncDone
-                                ? <><RefreshCw className="w-4 h-4" /> Sincronizar Todos</>
-                                : <><Clapperboard className="w-4 h-4" /> Sincronizar Todos</>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm bg-green-500/10 text-green-400 border border-green-500/30">
+                        {isAutoSyncing
+                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Sincronizando BD...</>
+                            : <><CheckCircle2 className="w-4 h-4" /> Banco Atualizado Automático</>
                         }
-                    </button>
+                    </div>
                 </div>
             )}
 
@@ -415,19 +323,19 @@ export function SubIdAnalysis() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 justify-end">
                         <button
-                            onClick={() => handleCreateTrack(false)}
-                            disabled={savingCreate || !createName.trim()}
+                            onClick={() => { setCreatingForSubId(null); setCreateName(''); setCreateLink(''); }}
+                            disabled={savingCreate}
                             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-white bg-surface-dark border border-border-dark hover:border-white/20 transition-colors disabled:opacity-50"
                         >
-                            <Save className="w-4 h-4" /> Criar (preencher depois)
+                            <X className="w-4 h-4" /> Cancelar
                         </button>
                         <button
-                            onClick={() => handleCreateTrack(true)}
+                            onClick={handleCreateTrack}
                             disabled={savingCreate || !createName.trim()}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold bg-primary text-background-dark shadow-[0_0_15px_rgba(242,162,13,0.3)] hover:bg-opacity-90 disabled:opacity-50 transition-colors"
                         >
-                            {savingCreate ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                            Criar e Sincronizar
+                            {savingCreate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Criar Track
                         </button>
                     </div>
                 </div>
@@ -493,10 +401,10 @@ export function SubIdAnalysis() {
                     <button
                         onClick={() => setHideNames(prev => !prev)}
                         title={hideNames ? 'Mostrar Sub IDs' : 'Ocultar Sub IDs'}
-                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${hideNames
+                        className={`flex items - center gap - 2 text - xs font - medium px - 3 py - 1.5 rounded - lg border transition - colors ${hideNames
                             ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
                             : 'bg-surface-highlight text-text-secondary border-border-dark hover:text-white'
-                            }`}
+                            } `}
                     >
                         {hideNames ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         {hideNames ? 'Sub IDs ocultos' : 'Ocultar Sub IDs'}
@@ -525,19 +433,15 @@ export function SubIdAnalysis() {
 
                                 // Track matching
                                 const existingTrack = showTrackColumn ? getTrackForSubId(item.subId) : undefined;
-                                const matchInfo = showTrackColumn ? getMatchForSubId(item.subId) : undefined;
-                                const isSynced = syncedSubIds.has(item.subId);
-                                const isSyncingThis = syncingSubId === item.subId;
                                 const isNoSubId = item.subId === 'Sem Sub_id';
 
                                 return (
-                                    <>
+                                    <Fragment key={item.subId || idx}>
                                         <tr
-                                            key={idx}
                                             onClick={() => toggleExpand(item.subId)}
-                                            className={`hover:bg-background-dark/30 transition-colors cursor-pointer ${isExpanded ? 'bg-background-dark/20' : ''}`}
+                                            className={`hover: bg - background - dark / 30 transition - colors cursor - pointer ${isExpanded ? 'bg-background-dark/20' : ''} `}
                                         >
-                                            <td className="p-4 text-sm font-medium text-white max-w-[200px] truncate" title={hideNames ? `Sub ID #${idx + 1}` : item.subId}>
+                                            <td className="p-4 text-sm font-medium text-white max-w-[200px] truncate" title={hideNames ? `Sub ID #${idx + 1} ` : item.subId}>
                                                 <div className="flex items-center gap-2">
                                                     {isExpanded
                                                         ? <ChevronUp className="w-4 h-4 text-primary flex-shrink-0" />
@@ -565,8 +469,8 @@ export function SubIdAnalysis() {
                                                 <div className="flex items-center justify-end gap-2">
                                                     <div className="w-16 h-1.5 bg-background-dark rounded-full overflow-hidden hidden sm:block">
                                                         <div
-                                                            className={`h-full ${parseFloat(item.conversion) > 5 ? 'bg-green-500' : 'bg-primary'}`}
-                                                            style={{ width: `${Math.min(parseFloat(item.conversion) * 5, 100)}%` }}>
+                                                            className={`h - full ${parseFloat(item.conversion) > 5 ? 'bg-green-500' : 'bg-primary'} `}
+                                                            style={{ width: `${Math.min(parseFloat(item.conversion) * 5, 100)}% ` }}>
                                                         </div>
                                                     </div>
                                                     <span className="font-mono">{item.conversion}%</span>
@@ -579,31 +483,7 @@ export function SubIdAnalysis() {
                                                 <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
                                                     {isNoSubId ? (
                                                         <span className="text-xs text-neutral-600">—</span>
-                                                    ) : existingTrack && matchInfo ? (
-                                                        // Has track + has CSV data -> Sync button
-                                                        isSynced ? (
-                                                            <button
-                                                                onClick={() => { setSyncedSubIds(prev => { const n = new Set(prev); n.delete(item.subId); return n; }); handleSyncIndividual(item.subId); }}
-                                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors mx-auto"
-                                                            >
-                                                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                Sincronizado
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => handleSyncIndividual(item.subId)}
-                                                                disabled={isSyncingThis}
-                                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors disabled:opacity-50 mx-auto"
-                                                            >
-                                                                {isSyncingThis
-                                                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                                    : <RefreshCw className="w-3.5 h-3.5" />
-                                                                }
-                                                                Sync
-                                                            </button>
-                                                        )
                                                     ) : existingTrack ? (
-                                                        // Has track but no CSV data for it
                                                         <span className="text-xs text-neutral-500 italic" title={`Track "${existingTrack.name}" vinculado`}>
                                                             {existingTrack.name}
                                                         </span>
@@ -623,63 +503,122 @@ export function SubIdAnalysis() {
 
                                         {/* Expanded Detail Row */}
                                         {isExpanded && details && (
-                                            <tr key={`${idx}-detail`}>
+                                            <tr key={`${idx} -detail`}>
                                                 <td colSpan={colCount} className="p-0">
                                                     <div className="bg-background-dark/60 border-t border-b border-primary/20 px-6 py-5">
                                                         {/* Detail Tabs */}
                                                         <div className="flex gap-2 mb-4">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('products'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'products' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                    }`}
+                                                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - lg text - xs font - medium transition - colors ${detailTab === 'products' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
+                                                                    } `}
                                                             >
                                                                 <ShoppingBag className="w-3.5 h-3.5" />
-                                                                Produtos ({details.products.length})
+                                                                Pedidos Detalhados
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('channels'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'channels' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                    }`}
+                                                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - lg text - xs font - medium transition - colors ${detailTab === 'channels' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
+                                                                    } `}
                                                             >
                                                                 <Radio className="w-3.5 h-3.5" />
                                                                 Canais ({details.channelBreakdown.length})
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setDetailTab('orders'); }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${detailTab === 'orders' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                    }`}
-                                                            >
-                                                                <FileText className="w-3.5 h-3.5" />
-                                                                Pedidos ({details.orders.length})
                                                             </button>
                                                         </div>
 
                                                         {/* Products Tab */}
                                                         {detailTab === 'products' && (
-                                                            <div className="rounded-xl overflow-hidden border border-border-dark">
-                                                                <table className="w-full text-left">
-                                                                    <thead>
-                                                                        <tr className="bg-surface-dark/50">
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">Produto</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right">Pedidos</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right">Comissão</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-border-dark">
-                                                                        {details.products.map((p, i) => (
-                                                                            <tr key={i} className="hover:bg-surface-dark/30">
-                                                                                <td className="px-4 py-2.5 text-sm text-white max-w-[300px] truncate" title={p.name}>{p.name}</td>
-                                                                                <td className="px-4 py-2.5 text-sm text-white text-right font-mono">{p.count}</td>
-                                                                                <td className="px-4 py-2.5 text-sm text-primary font-bold text-right font-mono">
-                                                                                    R$ {p.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                                </td>
+                                                            <div className="flex flex-col gap-4">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-2">
+                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Vendas (Filtrado)</p>
+                                                                        <p className="text-lg font-bold text-white font-mono">{filterState.filteredMetrics.totalUnits}</p>
+                                                                    </div>
+                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Comissão (Filtrada)</p>
+                                                                        <p className="text-lg font-bold text-primary font-mono">
+                                                                            R$ {filterState.filteredMetrics.totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Produtos Únicos</p>
+                                                                        <p className="text-lg font-bold text-white font-mono">{filterState.filteredMetrics.uniqueProductsCount}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <OrderFiltersPanel {...filterState} />
+                                                                <div className="rounded-xl overflow-hidden border border-border-dark">
+                                                                    <table className="w-full text-left text-sm">
+                                                                        <thead>
+                                                                            <tr className="bg-surface-dark/50">
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary whitespace-nowrap">Data</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary">Produto</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Qtd</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Canal</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Sub ID</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Status</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Tipo</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Comissão</th>
+                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Pedido ID</th>
                                                                             </tr>
-                                                                        ))}
-                                                                        {details.products.length === 0 && (
-                                                                            <tr><td colSpan={3} className="px-4 py-6 text-center text-text-secondary text-sm">Nenhum produto encontrado.</td></tr>
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-border-dark">
+                                                                            {filterState.filteredOrders.slice(0, 50).map((order, i) => (
+                                                                                <tr key={i} className="hover:bg-surface-dark/30">
+                                                                                    <td className="px-4 py-2.5 text-text-secondary whitespace-nowrap">
+                                                                                        {order.date !== '—' ? format(new Date(order.date), 'dd/MM HH:mm') : '—'}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-white min-w-0">
+                                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                                            {order.imageUrl && (
+                                                                                                <img src={order.imageUrl} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
+                                                                                            )}
+                                                                                            <span className="truncate max-w-[200px]" title={order.productName}>{order.productName}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-white text-right font-mono">{order.qty}</td>
+                                                                                    <td className="px-4 py-2.5 text-center">
+                                                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-text-secondary">
+                                                                                            {order.channel}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-center font-mono text-xs text-text-secondary">
+                                                                                        {order.subId || '—'}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                                                                                        <span className={`inline - flex px - 1.5 py - 0.5 rounded text - [10px] font - medium ${['PAID', 'VALIDATED', 'COMPLETED', 'Concluído'].includes(order.status)
+                                                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                                                            : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'Cancelado'].includes(order.status)
+                                                                                                ? 'bg-red-500/20 text-red-400'
+                                                                                                : 'bg-amber-500/20 text-amber-400'
+                                                                                            } `}>
+                                                                                            {order.status || 'PENDING'}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
+                                                                                        <span className={`text - [10px] ${['DIRECT', 'direct', 'Direta'].includes(order.type)
+                                                                                            ? 'text-green-400' : 'text-amber-400'
+                                                                                            } `}>
+                                                                                            {['DIRECT', 'direct', 'Direta'].includes(order.type) ? 'Direta' : order.type || '—'}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-primary font-bold text-right font-mono">
+                                                                                        {order.commission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                    </td>
+                                                                                    <td className="px-4 py-2.5 text-text-secondary text-right font-mono text-xs">
+                                                                                        {order.id.length > 8 ? order.id.slice(-8) : order.id}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                            {filterState.filteredOrders.length === 0 && (
+                                                                                <tr>
+                                                                                    <td colSpan={9} className="px-4 py-8 text-center text-text-secondary">
+                                                                                        Nenhum pedido encontrado com estes filtros.
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
                                                             </div>
                                                         )}
 
@@ -728,54 +667,11 @@ export function SubIdAnalysis() {
                                                                 </table>
                                                             </div>
                                                         )}
-
-                                                        {/* Orders Tab */}
-                                                        {detailTab === 'orders' && (
-                                                            <div className="rounded-xl overflow-hidden border border-border-dark">
-                                                                <table className="w-full text-left">
-                                                                    <thead>
-                                                                        <tr className="bg-surface-dark/50">
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">ID Pedido</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">Produto</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">Status</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary">Data</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right">Comissão</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-border-dark">
-                                                                        {details.orders.slice(0, 20).map((order, i) => (
-                                                                            <tr key={i} className="hover:bg-surface-dark/30">
-                                                                                <td className="px-4 py-2.5 text-xs text-text-secondary font-mono">{order.orderId}</td>
-                                                                                <td className="px-4 py-2.5 text-sm text-white max-w-[200px] truncate" title={order.product}>{order.product}</td>
-                                                                                <td className="px-4 py-2.5">
-                                                                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${order.status.toLowerCase() === 'concluído' ? 'bg-green-500/10 text-green-400' :
-                                                                                        order.status.toLowerCase() === 'cancelado' ? 'bg-red-500/10 text-red-400' :
-                                                                                            'bg-yellow-500/10 text-yellow-400'
-                                                                                        }`}>
-                                                                                        {order.status}
-                                                                                    </span>
-                                                                                </td>
-                                                                                <td className="px-4 py-2.5 text-xs text-text-secondary">{order.date}</td>
-                                                                                <td className="px-4 py-2.5 text-sm text-primary font-bold text-right font-mono">
-                                                                                    R$ {order.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                        {details.orders.length > 20 && (
-                                                                            <tr><td colSpan={5} className="px-4 py-3 text-center text-text-secondary text-xs">Mostrando 20 de {details.orders.length} pedidos</td></tr>
-                                                                        )}
-                                                                        {details.orders.length === 0 && (
-                                                                            <tr><td colSpan={5} className="px-4 py-6 text-center text-text-secondary text-sm">Nenhum pedido encontrado.</td></tr>
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
                                         )}
-                                    </>
+                                    </Fragment>
                                 );
                             })}
 
