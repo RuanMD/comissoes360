@@ -100,3 +100,111 @@ export async function fetchShopeeProduct(params: FetchProductParams): Promise<Fe
 
     return { product: data.product ?? null, shop: data.shop ?? null };
 }
+
+// ── Conversion Report Types ──
+
+export interface ConversionOrderItem {
+    shopId: number | null;
+    shopName: string | null;
+    completeTime: number | null;
+    promotionId: number | null;
+    modelId: number | null;
+    itemId: number | null;
+    itemName: string | null;
+    itemPrice: number | null;
+    displayItemStatus: string | null;
+    actualAmount: number | null;
+    refundAmount: number | null;
+    qty: number | null;
+    imageUrl: string | null;
+    itemTotalCommission: number | null;
+    itemSellerCommission: number | null;
+    itemSellerCommissionRate: number | null;
+    itemShopeeCommissionCapped: number | null;
+    itemShopeeCommissionRate: number | null;
+    itemNotes: string | null;
+    globalCategoryLv1Name: string | null;
+    globalCategoryLv2Name: string | null;
+    globalCategoryLv3Name: string | null;
+    fraudStatus: string | null;
+    fraudReason: string | null;
+    attributionType: string | null;
+    channelType: string | null;
+    campaignPartnerName: string | null;
+    campaignType: string | null;
+}
+
+export interface ConversionOrder {
+    orderId: string | null;
+    shopType: string | null;
+    orderStatus: string | null;
+    items: ConversionOrderItem[];
+}
+
+export interface ConversionNode {
+    clickTime: number | null;
+    purchaseTime: number | null;
+    checkoutId?: string | null;
+    conversionId: string | null;
+    conversionStatus?: string | null;
+    grossCommission?: number | null;
+    cappedCommission?: number | null;
+    totalBrandCommission?: number | null;
+    estimatedTotalCommission?: number | null;
+    shopeeCommissionCapped: number | null;
+    sellerCommission: number | null;
+    totalCommission: number | null;
+    netCommission: number | null;
+    mcnManagementFeeRate: number | null;
+    mcnManagementFee: number | null;
+    buyerType: string | null;
+    utmContent: string | null;
+    device: string | null;
+    productType: string | null;
+    referrer: string | null;
+    orders: ConversionOrder[];
+}
+
+interface FetchReportParams {
+    shopeeAppId: string;
+    shopeeSecret: string;
+    purchaseTimeStart: number;
+    purchaseTimeEnd?: number;
+    limit?: number;
+}
+
+/**
+ * Busca relatório de conversões em tempo real (pedidos recentes) via Edge Function.
+ */
+export async function fetchConversionReport(params: FetchReportParams): Promise<ConversionNode[]> {
+    const response = await callShopeeProxy({
+        action: 'fetch-conversions',
+        ...params,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || `Erro do servidor (${response.status})`);
+    }
+
+    return data.nodes || [];
+}
+
+/**
+ * Busca relatório validado (pedidos confirmados para conciliação financeira) via Edge Function.
+ */
+export async function fetchValidatedReport(params: FetchReportParams): Promise<ConversionNode[]> {
+    const response = await callShopeeProxy({
+        action: 'fetch-validated',
+        ...params,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || `Erro do servidor (${response.status})`);
+    }
+
+    return data.nodes || [];
+}

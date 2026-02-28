@@ -3,6 +3,21 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { X, Search, Loader2, ChevronRight, Check, Link2, Trash2 } from 'lucide-react';
 
+const extractFbAdLink = (creative: any): string | null => {
+    if (!creative) return null;
+    let link = creative.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.link_data?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.video_data?.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.template_data?.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.asset_feed_spec?.link_urls?.[0]?.website_url;
+    if (link) return link;
+    return null;
+};
+
 interface FbAdsSyncModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -13,7 +28,7 @@ interface FbAdsSyncModalProps {
 
 interface FbCampaign { id: string; name: string; status: string; }
 interface FbAdSet { id: string; name: string; status: string; campaign_id: string; }
-interface FbAd { id: string; name: string; status: string; adset_id: string; }
+interface FbAd { id: string; name: string; status: string; adset_id: string; creative?: { object_story_spec?: { link_data?: { link?: string } } } }
 interface LinkedAd {
     id: string;
     track_id: string;
@@ -23,6 +38,7 @@ interface LinkedAd {
     adset_name: string;
     ad_id: string;
     ad_name: string;
+    ad_link: string;
 }
 
 export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSyncComplete }: FbAdsSyncModalProps) {
@@ -167,10 +183,10 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
         try {
             const allAds: FbAd[] = [];
             for (const asId of adsetIds) {
-                const res = await fetch(`https://graph.facebook.com/v21.0/${asId}/ads?access_token=${encodeURIComponent(fbToken)}&fields=name,status&limit=100`);
+                const res = await fetch(`https://graph.facebook.com/v21.0/${asId}/ads?access_token=${encodeURIComponent(fbToken)}&fields=name,status,creative{object_story_spec,asset_feed_spec,call_to_action}&limit=100`);
                 const json = await res.json();
                 if (json.data) {
-                    allAds.push(...json.data.map((a: any) => ({ id: a.id, name: a.name, status: a.status, adset_id: asId })));
+                    allAds.push(...json.data.map((a: any) => ({ id: a.id, name: a.name, status: a.status, adset_id: asId, creative: a.creative })));
                 }
             }
             setAds(allAds);
@@ -220,6 +236,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                     adset_name: adset?.name || '',
                     ad_id: adId,
                     ad_name: ad?.name || '',
+                    ad_link: extractFbAdLink(ad?.creative) || '',
                 };
             });
 

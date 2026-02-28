@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
-import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl } from '../lib/shopeeApi';
+import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl, fetchConversionReport, fetchValidatedReport } from '../lib/shopeeApi';
 import {
     Loader2, Plus, Trash2, Pencil, Save, X,
     DollarSign, ShoppingCart, TrendingUp, MousePointerClick,
@@ -10,13 +10,44 @@ import {
     Link2, RefreshCw, Calendar, Filter, Eye, EyeOff,
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
-    Video, Store, Image as ImageIcon
+    Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
 import { formatBRL, formatPct } from '../utils/format';
 import { extractShopeeIds } from '../utils/shopee';
 import { AdPreviewModal } from '../components/AdPreviewModal';
+
+const extractFbAdLink = (creative: any): string | null => {
+    if (!creative) return null;
+    let link = creative.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.link_data?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.video_data?.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.object_story_spec?.template_data?.call_to_action?.value?.link;
+    if (link) return link;
+    link = creative.asset_feed_spec?.link_urls?.[0]?.website_url;
+    if (link) return link;
+    return null;
+};
+
+const getLinkIntegrity = (affiliateLink: string, linkedAds: { ad_link?: string | null }[]) => {
+    if (!affiliateLink || linkedAds.length === 0) return 'none';
+
+    // Normalize links: remove protocol, www, and trailing slashes for comparison
+    const normalize = (url: string) => url.toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/$/, '')
+        .split('?')[0]; // Ignore UTMs for match
+
+    const normAff = normalize(affiliateLink);
+    const matches = linkedAds.some(ad => ad.ad_link && normalize(ad.ad_link) === normAff);
+
+    return matches ? 'valid' : 'error';
+};
 
 interface Track {
     id: string;
@@ -77,6 +108,7 @@ interface FbLinkedAd {
     adset_name: string;
     ad_id: string;
     ad_name: string;
+    ad_link: string;
 }
 
 
@@ -118,6 +150,39 @@ const emptyEntryForm: EntryForm = {
     commission_value: '',
     investment: '',
 };
+
+// ── Shopee Conversion type (from DB) ──
+interface ShopeeConversion {
+    id: string;
+    track_id: string;
+    conversion_id: string;
+    click_time: string | null;
+    purchase_time: string | null;
+    conversion_status: string | null;
+    net_commission: number;
+    total_commission: number;
+    seller_commission: number;
+    shopee_commission: number;
+    buyer_type: string | null;
+    device: string | null;
+    utm_content: string | null;
+    referrer: string | null;
+    order_id: string | null;
+    order_status: string | null;
+    item_id: number | null;
+    item_name: string | null;
+    item_price: number | null;
+    qty: number;
+    actual_amount: number | null;
+    refund_amount: number | null;
+    image_url: string | null;
+    item_total_commission: number;
+    attribution_type: string | null;
+    fraud_status: string | null;
+    global_category_lv1: string | null;
+    is_validated: boolean;
+    synced_at: string;
+}
 
 export function CreativeTrack() {
     const { user } = useAuth();
@@ -197,6 +262,11 @@ export function CreativeTrack() {
     const [showFunnelPicker, setShowFunnelPicker] = useState(false);
     const [hideSensitive, setHideSensitive] = useState(false);
     const [allEntries, setAllEntries] = useState<TrackEntry[]>([]);
+
+    // Shopee Conversions state
+    const [shopeeConversions, setShopeeConversions] = useState<ShopeeConversion[]>([]);
+    const [syncingConversions, setSyncingConversions] = useState(false);
+    const [syncingValidated, setSyncingValidated] = useState(false);
 
     // ========== FETCH TRACKS ==========
     useEffect(() => {
@@ -751,6 +821,8 @@ export function CreativeTrack() {
         // Fetch FB data
         fetchFbLinkedAds(track.id);
         fetchFbMetrics(track.id);
+        // Fetch Shopee conversions
+        fetchShopeeConversions(track.id);
     };
 
     // ========== FB SYNC ==========
@@ -767,6 +839,21 @@ export function CreativeTrack() {
             const dailyAggregate = new Map<string, { clicks: number; spend: number }>();
 
             for (const linkedAd of fbLinkedAds) {
+                // Fetch missing link if applicable
+                if (!linkedAd.ad_link) {
+                    try {
+                        const adRes = await fetch(`https://graph.facebook.com/v21.0/${linkedAd.ad_id}?access_token=${encodeURIComponent(fbToken)}&fields=creative{object_story_spec,asset_feed_spec,call_to_action}`);
+                        const adData = await adRes.json();
+                        const extracted_link = extractFbAdLink(adData.creative);
+                        if (extracted_link) {
+                            await supabase.from('creative_track_fb_ads').update({ ad_link: extracted_link }).eq('id', linkedAd.id);
+                            linkedAd.ad_link = extracted_link; // optimistically update local state
+                        }
+                    } catch (e) {
+                        console.error('Error fetching missing ad_link:', e);
+                    }
+                }
+
                 let since = today;
                 let until = today;
 
@@ -863,6 +950,268 @@ export function CreativeTrack() {
     };
 
 
+
+    // ========== SHOPEE CONVERSION HELPERS ==========
+    const getShopeeCredentials = async () => {
+        try {
+            const { data: creds, error } = await supabase.rpc('get_shopee_credentials');
+            if (error) throw error;
+            if (creds && creds.length > 0) {
+                return { shopeeAppId: creds[0].shopee_app_id as string, shopeeSecret: creds[0].shopee_secret as string };
+            }
+        } catch (err) {
+            console.error('Error fetching Shopee credentials:', err);
+        }
+        return null;
+    };
+
+    const fetchShopeeConversions = async (trackId: string) => {
+        const { data } = await supabase
+            .from('shopee_conversions')
+            .select('*')
+            .eq('track_id', trackId)
+            .order('purchase_time', { ascending: false });
+        setShopeeConversions(data || []);
+        return data || [];
+    };
+
+    const syncEntriesFromConversions = async (trackId: string, allConversions: ShopeeConversion[]) => {
+        if (!allConversions || allConversions.length === 0) return;
+
+        const dateMap = new Map<string, { orders: Set<string>, commission: number }>();
+        for (const row of allConversions) {
+            if (!row.purchase_time || row.conversion_status === 'CANCELLED') continue;
+            const date = row.purchase_time.split('T')[0];
+            if (!dateMap.has(date)) {
+                dateMap.set(date, { orders: new Set(), commission: 0 });
+            }
+            const data = dateMap.get(date)!;
+            if (row.order_id) data.orders.add(row.order_id);
+            data.commission += (row.item_total_commission || 0);
+        }
+
+        const datesToUpdate = Array.from(dateMap.keys());
+        if (datesToUpdate.length === 0) return;
+
+        const { data: existingEntries } = await supabase
+            .from('creative_track_entries')
+            .select('*')
+            .eq('track_id', trackId)
+            .in('date', datesToUpdate);
+
+        const entriesUpsert = datesToUpdate.map(date => {
+            const agg = dateMap.get(date)!;
+            const existing = existingEntries?.find((e: any) => e.date === date);
+            const entry: any = {
+                track_id: trackId,
+                date: date,
+                orders: agg.orders.size,
+                commission_value: agg.commission,
+                ad_clicks: existing?.ad_clicks ?? 0,
+                shopee_clicks: existing?.shopee_clicks ?? 0,
+                cpc: existing?.cpc ?? 0,
+                investment: existing?.investment ?? 0,
+            };
+            if (existing?.id) {
+                entry.id = existing.id;
+            }
+            return entry;
+        });
+
+        await supabase
+            .from('creative_track_entries')
+            .upsert(entriesUpsert, { onConflict: 'track_id,date' });
+
+        await fetchAllEntries();
+    };
+
+    // ========== SYNC CONVERSIONS ==========
+    const handleSyncConversions = async () => {
+        if (!selectedTrack) return;
+        const creds = await getShopeeCredentials();
+        if (!creds) {
+            showToast('Credenciais da Shopee não configuradas.', 'error');
+            return;
+        }
+
+        setSyncingConversions(true);
+        try {
+            const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const nodes = await fetchConversionReport({
+                ...creds,
+                purchaseTimeStart: thirtyDaysAgo,
+                limit: 100,
+            });
+
+            // Denormalize nodes → flat rows per item
+            const rows: any[] = [];
+            for (const node of nodes) {
+                for (const order of (node.orders || [])) {
+                    for (const item of (order.items || [])) {
+                        // Match by itemId OR utmContent
+                        const matchByItem = selectedTrack.product_item_id && item.itemId && Number(item.itemId) === Number(selectedTrack.product_item_id);
+                        const matchByUtm = selectedTrack.sub_id && node.utmContent && node.utmContent.includes(selectedTrack.sub_id);
+                        if (!matchByItem && !matchByUtm) continue;
+
+                        rows.push({
+                            track_id: selectedTrack.id,
+                            conversion_id: node.conversionId || `${node.checkoutId}-${item.itemId}`,
+                            click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
+                            purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
+                            conversion_status: node.conversionStatus || null,
+                            net_commission: node.netCommission || 0,
+                            total_commission: node.totalCommission || 0,
+                            seller_commission: node.sellerCommission || 0,
+                            shopee_commission: node.shopeeCommissionCapped || 0,
+                            buyer_type: node.buyerType || null,
+                            device: node.device || null,
+                            utm_content: node.utmContent || null,
+                            referrer: node.referrer || null,
+                            product_type: node.productType || null,
+                            order_id: order.orderId || null,
+                            order_status: order.orderStatus || null,
+                            shop_type: order.shopType || null,
+                            item_id: item.itemId || null,
+                            item_name: item.itemName || null,
+                            item_price: item.itemPrice || null,
+                            qty: item.qty || 1,
+                            actual_amount: item.actualAmount || null,
+                            refund_amount: item.refundAmount || null,
+                            image_url: item.imageUrl || null,
+                            item_total_commission: item.itemTotalCommission || 0,
+                            item_seller_commission: item.itemSellerCommission || 0,
+                            item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
+                            item_shopee_commission: item.itemShopeeCommissionCapped || 0,
+                            item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
+                            display_item_status: item.displayItemStatus || null,
+                            attribution_type: item.attributionType || null,
+                            channel_type: item.channelType || null,
+                            campaign_type: item.campaignType || null,
+                            campaign_partner_name: item.campaignPartnerName || null,
+                            global_category_lv1: item.globalCategoryLv1Name || null,
+                            global_category_lv2: item.globalCategoryLv2Name || null,
+                            global_category_lv3: item.globalCategoryLv3Name || null,
+                            fraud_status: item.fraudStatus || null,
+                            fraud_reason: item.fraudReason || null,
+                            is_validated: false,
+                            synced_at: new Date().toISOString(),
+                        });
+                    }
+                }
+            }
+
+            if (rows.length === 0) {
+                showToast(`Nenhuma conversão encontrada para este track nos últimos 30 dias. (${nodes.length} conversões totais na conta)`, 'info');
+            } else {
+                const { error } = await supabase
+                    .from('shopee_conversions')
+                    .upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
+                if (error) throw error;
+                showToast(`${rows.length} conversão(ões) sincronizada(s)!`);
+            }
+
+            const freshConversions = await fetchShopeeConversions(selectedTrack.id);
+            await syncEntriesFromConversions(selectedTrack.id, freshConversions);
+        } catch (err: any) {
+            console.error('Sync conversions error:', err);
+            showToast(err.message || 'Erro ao sincronizar conversões.', 'error');
+        } finally {
+            setSyncingConversions(false);
+        }
+    };
+
+    // ========== SYNC VALIDATED ==========
+    const handleSyncValidated = async () => {
+        if (!selectedTrack) return;
+        const creds = await getShopeeCredentials();
+        if (!creds) {
+            showToast('Credenciais da Shopee não configuradas.', 'error');
+            return;
+        }
+
+        setSyncingValidated(true);
+        try {
+            const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
+            const nodes = await fetchValidatedReport({
+                ...creds,
+                purchaseTimeStart: thirtyDaysAgo,
+                limit: 100,
+            });
+
+            const rows: any[] = [];
+            for (const node of nodes) {
+                for (const order of (node.orders || [])) {
+                    for (const item of (order.items || [])) {
+                        const matchByItem = selectedTrack.product_item_id && item.itemId && Number(item.itemId) === Number(selectedTrack.product_item_id);
+                        const matchByUtm = selectedTrack.sub_id && node.utmContent && node.utmContent.includes(selectedTrack.sub_id);
+                        if (!matchByItem && !matchByUtm) continue;
+
+                        rows.push({
+                            track_id: selectedTrack.id,
+                            conversion_id: node.conversionId || `validated-${order.orderId}-${item.itemId}`,
+                            click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
+                            purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
+                            conversion_status: node.conversionStatus || order.orderStatus || 'COMPLETED',
+                            net_commission: node.netCommission || 0,
+                            total_commission: node.totalCommission || 0,
+                            seller_commission: node.sellerCommission || 0,
+                            shopee_commission: node.shopeeCommissionCapped || 0,
+                            buyer_type: node.buyerType || null,
+                            device: node.device || null,
+                            utm_content: node.utmContent || null,
+                            referrer: node.referrer || null,
+                            product_type: node.productType || null,
+                            order_id: order.orderId || null,
+                            order_status: order.orderStatus || null,
+                            shop_type: order.shopType || null,
+                            item_id: item.itemId || null,
+                            item_name: item.itemName || null,
+                            item_price: item.itemPrice || null,
+                            qty: item.qty || 1,
+                            actual_amount: item.actualAmount || null,
+                            refund_amount: item.refundAmount || null,
+                            image_url: item.imageUrl || null,
+                            item_total_commission: item.itemTotalCommission || 0,
+                            item_seller_commission: item.itemSellerCommission || 0,
+                            item_seller_commission_rate: item.itemSellerCommissionRate ? parseFloat(String(item.itemSellerCommissionRate).replace('%', '')) : null,
+                            item_shopee_commission: item.itemShopeeCommissionCapped || 0,
+                            item_shopee_commission_rate: item.itemShopeeCommissionRate ? parseFloat(String(item.itemShopeeCommissionRate).replace('%', '')) : null,
+                            display_item_status: item.displayItemStatus || null,
+                            attribution_type: item.attributionType || null,
+                            channel_type: item.channelType || null,
+                            campaign_type: item.campaignType || null,
+                            campaign_partner_name: item.campaignPartnerName || null,
+                            global_category_lv1: item.globalCategoryLv1Name || null,
+                            global_category_lv2: item.globalCategoryLv2Name || null,
+                            global_category_lv3: item.globalCategoryLv3Name || null,
+                            fraud_status: item.fraudStatus || null,
+                            fraud_reason: item.fraudReason || null,
+                            is_validated: true,
+                            synced_at: new Date().toISOString(),
+                        });
+                    }
+                }
+            }
+
+            if (rows.length === 0) {
+                showToast(`Nenhuma conversão validada encontrada para este track. (${nodes.length} validações totais na conta)`, 'info');
+            } else {
+                const { error } = await supabase
+                    .from('shopee_conversions')
+                    .upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
+                if (error) throw error;
+                showToast(`${rows.length} conversão(ões) validada(s) sincronizada(s)!`);
+            }
+
+            const freshConversions = await fetchShopeeConversions(selectedTrack.id);
+            await syncEntriesFromConversions(selectedTrack.id, freshConversions);
+        } catch (err: any) {
+            console.error('Sync validated error:', err);
+            showToast(err.message || 'Erro ao sincronizar validadas.', 'error');
+        } finally {
+            setSyncingValidated(false);
+        }
+    };
 
     // ========== ADD/UPSERT ENTRY ==========
     const handleAddEntry = async () => {
@@ -1525,6 +1874,36 @@ export function CreativeTrack() {
                                                     >
                                                         <ExternalLink className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                     </a>
+
+                                                    {/* Link Verification Shield */}
+                                                    {(() => {
+                                                        const status = getLinkIntegrity(selectedTrack.affiliate_link, fbLinkedAds);
+                                                        if (status === 'valid') return (
+                                                            <div className="group relative flex items-center ml-1">
+                                                                <div className="flex items-center text-green-500 cursor-help">
+                                                                    <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-green-500/10" />
+                                                                </div>
+                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-neutral-900 border border-green-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
+                                                                    <span className="font-bold text-green-400 block mb-0.5">Link Verificado ✅</span>
+                                                                    O mesmo link configurado aqui está presente nos seus anúncios do Facebook.
+                                                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                        if (status === 'error') return (
+                                                            <div className="group relative flex items-center ml-1">
+                                                                <div className="flex items-center text-red-500 cursor-help">
+                                                                    <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-red-500/10" />
+                                                                </div>
+                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-neutral-900 border border-red-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
+                                                                    <span className="font-bold text-red-400 block mb-0.5">Links Divergentes! ⚠️</span>
+                                                                    O link desta track no MOP NÃO é o mesmo usado nos anúncios do Facebook. Verifique para não perder o rastreio.
+                                                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                        return null;
+                                                    })()}
                                                 </div>
                                             )}
                                         </div>
@@ -1968,17 +2347,31 @@ export function CreativeTrack() {
                                             </h3>
                                             <div className={`mt-2 flex flex-wrap gap-2 transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
                                                 {fbLinkedAds.map(a => (
-                                                    <div key={a.ad_id} className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1">
-                                                        <span className="text-xs text-text-secondary truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
-                                                            {a.ad_name || a.ad_id}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => setPreviewAdId(a.ad_id)}
-                                                            className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors"
-                                                            title="Ver Criativo"
-                                                        >
-                                                            <Eye className="w-3.5 h-3.5" />
-                                                        </button>
+                                                    <div key={a.ad_id} className="flex flex-col bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1.5 min-w-[150px]">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-xs text-white font-medium truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
+                                                                {a.ad_name || a.ad_id}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => setPreviewAdId(a.ad_id)}
+                                                                className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors ml-2"
+                                                                title="Ver Criativo"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                        {a.ad_link && (
+                                                            <a
+                                                                href={a.ad_link}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-1.5 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors w-full group"
+                                                                title={a.ad_link}
+                                                            >
+                                                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                                                <span className="truncate flex-1">{a.ad_link}</span>
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
@@ -2063,7 +2456,157 @@ export function CreativeTrack() {
                                 </div>
                             )}
 
+                            {/* ══════ Shopee Conversions Section ══════ */}
+                            <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                                <div className="p-4 border-b border-border-dark flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <ShoppingCart size={16} className="text-orange-400" />
+                                        <h3 className="text-sm font-bold text-white">
+                                            Conversões Shopee ({shopeeConversions.length})
+                                        </h3>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                            onClick={handleSyncConversions}
+                                            disabled={syncingConversions}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all disabled:opacity-50"
+                                        >
+                                            {syncingConversions ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                            Sync Conversões
+                                        </button>
+                                        <button
+                                            onClick={handleSyncValidated}
+                                            disabled={syncingValidated}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-all disabled:opacity-50"
+                                        >
+                                            {syncingValidated ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                                            Sync Validadas
+                                        </button>
+                                    </div>
+                                </div>
 
+                                {/* Conversion KPIs */}
+                                {shopeeConversions.length > 0 && (() => {
+                                    const totalNetComm = shopeeConversions.reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                    const validatedComm = shopeeConversions.filter(c => c.is_validated).reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                    const totalOrders = new Set(shopeeConversions.map(c => c.order_id).filter(Boolean)).size;
+                                    const validatedOrders = new Set(shopeeConversions.filter(c => c.is_validated).map(c => c.order_id).filter(Boolean)).size;
+                                    const fraudCount = shopeeConversions.filter(c => c.fraud_status && c.fraud_status !== 'NONE' && c.fraud_status !== '').length;
+                                    const fraudPct = shopeeConversions.length > 0 ? ((fraudCount / shopeeConversions.length) * 100) : 0;
+                                    const directCount = shopeeConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct').length;
+                                    const indirectCount = shopeeConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type).length;
+
+                                    return (
+                                        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            <div className="bg-background-dark border border-orange-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Comissão Total</span>
+                                                <span className="text-base sm:text-lg font-bold text-orange-400">{formatBRL(totalNetComm)}</span>
+                                                {validatedComm > 0 && (
+                                                    <span className="text-[10px] text-emerald-400">✅ {formatBRL(validatedComm)} validada</span>
+                                                )}
+                                            </div>
+                                            <div className="bg-background-dark border border-blue-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Pedidos</span>
+                                                <span className="text-base sm:text-lg font-bold text-blue-400">{totalOrders}</span>
+                                                {validatedOrders > 0 && (
+                                                    <span className="text-[10px] text-emerald-400">✅ {validatedOrders} validados</span>
+                                                )}
+                                            </div>
+                                            <div className="bg-background-dark border border-red-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Taxa Fraude</span>
+                                                <span className={`text-base sm:text-lg font-bold ${fraudPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                    {fraudPct.toFixed(1)}%
+                                                </span>
+                                                <span className="text-[10px] text-text-secondary">{fraudCount} suspeito(s)</span>
+                                            </div>
+                                            <div className="bg-background-dark border border-violet-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider">Atribuição</span>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="text-sm font-bold text-green-400">{directCount}D</span>
+                                                    <span className="text-[10px] text-text-secondary">vs</span>
+                                                    <span className="text-sm font-bold text-amber-400">{indirectCount}I</span>
+                                                </div>
+                                                <span className="text-[10px] text-text-secondary">Diretas vs Indiretas</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Conversion List */}
+                                {shopeeConversions.length > 0 ? (
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full w-full text-xs">
+                                            <thead>
+                                                <tr className="border-t border-border-dark bg-background-dark">
+                                                    <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Data</th>
+                                                    <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Produto</th>
+                                                    <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Qtd</th>
+                                                    <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Comissão</th>
+                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Status</th>
+                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Tipo</th>
+                                                    <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Validado</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {shopeeConversions.slice(0, 50).map((conv) => (
+                                                    <tr key={conv.id} className="border-t border-border-dark/50 hover:bg-surface-dark/50 transition-colors">
+                                                        <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+                                                            {conv.purchase_time ? format(new Date(conv.purchase_time), 'dd/MM HH:mm') : '—'}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-white min-w-0">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                {conv.image_url && (
+                                                                    <img src={conv.image_url} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
+                                                                )}
+                                                                <span className="truncate max-w-[180px]">{conv.item_name || `Item #${conv.item_id}`}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right text-white whitespace-nowrap">{conv.qty}</td>
+                                                        <td className="px-3 py-2 text-right font-medium text-orange-400 whitespace-nowrap">
+                                                            {formatBRL(conv.item_total_commission)}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${['PAID', 'VALIDATED', 'COMPLETED'].includes(conv.conversion_status || '')
+                                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                                : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID'].includes(conv.conversion_status || '')
+                                                                    ? 'bg-red-500/20 text-red-400'
+                                                                    : 'bg-amber-500/20 text-amber-400'
+                                                                }`}>
+                                                                {conv.conversion_status || 'PENDING'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                            <span className={`text-[10px] ${conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct'
+                                                                ? 'text-green-400' : 'text-amber-400'
+                                                                }`}>
+                                                                {conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct' ? 'Direta' : conv.attribution_type || '—'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center">
+                                                            {conv.is_validated ? (
+                                                                <ShieldCheck size={14} className="text-emerald-400 mx-auto" />
+                                                            ) : conv.fraud_status && conv.fraud_status !== 'NONE' && conv.fraud_status !== '' ? (
+                                                                <AlertTriangle size={14} className="text-red-400 mx-auto" />
+                                                            ) : (
+                                                                <span className="text-text-secondary">—</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        {shopeeConversions.length > 50 && (
+                                            <div className="p-3 text-center text-xs text-text-secondary border-t border-border-dark/50">
+                                                Mostrando 50 de {shopeeConversions.length} conversões
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="p-6 text-center text-sm text-text-secondary">
+                                        Nenhuma conversão sincronizada. Use os botões acima para buscar dados da API Shopee.
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Entries Table */}
                             {
@@ -2221,6 +2764,38 @@ export function CreativeTrack() {
                                                         );
                                                     })}
                                                 </tbody>
+                                                {entries.length > 0 && (() => {
+                                                    const totals = entries.reduce((acc, entry) => {
+                                                        acc.ad_clicks += Number(entry.ad_clicks || 0);
+                                                        acc.shopee_clicks += Number(entry.shopee_clicks || 0);
+                                                        acc.orders += Number(entry.orders || 0);
+                                                        acc.commission += Number(entry.commission_value || 0);
+                                                        acc.investment += Number(entry.investment || 0);
+                                                        return acc;
+                                                    }, { ad_clicks: 0, shopee_clicks: 0, orders: 0, commission: 0, investment: 0 });
+
+                                                    const totalProfit = totals.commission - totals.investment;
+                                                    const totalRoi = totals.investment > 0 ? (totalProfit / totals.investment) * 100 : 0;
+                                                    const avgCpc = totals.ad_clicks > 0 ? (totals.investment / totals.ad_clicks) : 0;
+
+                                                    return (
+                                                        <tfoot className="border-t-2 border-border-dark bg-background-dark font-bold text-sm">
+                                                            <tr>
+                                                                {linkedFunnel && <td className="p-3"></td>}
+                                                                <td className="p-3 text-left text-white">TOTAL</td>
+                                                                <td className="p-3 text-right text-neutral-300">{totals.ad_clicks}</td>
+                                                                <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
+                                                                <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
+                                                                <td className="p-3 text-right text-blue-400">{totals.orders}</td>
+                                                                <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
+                                                                <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
+                                                                <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
+                                                                <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
+                                                                <td className="p-3"></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    );
+                                                })()}
                                             </table>
                                         </div>
                                     ) : (
