@@ -2,17 +2,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
+import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl } from '../lib/shopeeApi';
 import {
     Loader2, Plus, Trash2, Pencil, Save, X,
     DollarSign, ShoppingCart, TrendingUp, MousePointerClick,
     BarChart3, Target, PiggyBank, Percent, ExternalLink,
     Link2, RefreshCw, Calendar, Filter, Eye, EyeOff,
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
-    PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag
+    PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
+    Video, Store, Image as ImageIcon
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
 import { formatBRL, formatPct } from '../utils/format';
+import { extractShopeeIds } from '../utils/shopee';
 import { AdPreviewModal } from '../components/AdPreviewModal';
 
 interface Track {
@@ -24,12 +27,33 @@ interface Track {
     created_at: string;
     funnel_id: string | null;
     status: 'ativo' | 'desativado' | 'validado';
+    // Manual product fields (schema_14)
     product_price?: number | null;
     product_shipping?: number | null;
     product_free_shipping?: boolean | null;
     product_reviews?: number | null;
     product_sold?: number | null;
     product_rating?: number | null;
+    // Auto-fetched fields (schema_16)
+    product_item_id?: number | null;
+    product_name?: string | null;
+    product_image_url?: string | null;
+    product_link?: string | null;
+    product_offer_link?: string | null;
+    product_price_min?: number | null;
+    product_price_max?: number | null;
+    product_discount_rate?: number | null;
+    product_commission?: number | null;
+    product_commission_rate?: number | null;
+    product_seller_commission_rate?: number | null;
+    product_shopee_commission_rate?: number | null;
+    product_category_ids?: string | null;
+    product_shop_id?: number | null;
+    product_shop_name?: string | null;
+    product_shop_type?: string | null;
+    product_shop_rating?: number | null;
+    product_shop_image_url?: string | null;
+    product_fetched_at?: string | null;
 }
 
 interface TrackEntry {
@@ -119,11 +143,23 @@ export function CreativeTrack() {
     const [modalGenerating, setModalGenerating] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
     const [modalCopied, setModalCopied] = useState(false);
+    // Product data fetched from API during modal flow
+    const [modalProductData, setModalProductData] = useState<any | null>(null);
+    const [modalShopData, setModalShopData] = useState<any | null>(null);
+    const [modalFetchingProduct, setModalFetchingProduct] = useState(false);
+    const [modalProductError, setModalProductError] = useState<string | null>(null);
 
     const [editingTrack, setEditingTrack] = useState(false);
     const [editName, setEditName] = useState('');
     const [editLink, setEditLink] = useState('');
     const [editSubId, setEditSubId] = useState('');
+    const [trackLinkCopied, setTrackLinkCopied] = useState(false);
+
+    const handleCopyTrackLink = (link: string) => {
+        navigator.clipboard.writeText(link);
+        setTrackLinkCopied(true);
+        setTimeout(() => setTrackLinkCopied(false), 2000);
+    };
 
     const [entryForm, setEntryForm] = useState<EntryForm>({ ...emptyEntryForm });
 
@@ -142,6 +178,10 @@ export function CreativeTrack() {
         rating: ''
     });
 
+    // Fetch product data for existing track
+    const [fetchingProductData, setFetchingProductData] = useState(false);
+    const [fetchProductError, setFetchProductError] = useState<string | null>(null);
+
     // Facebook Ads sync state
     const [showSyncModal, setShowSyncModal] = useState(false);
     const [fbLinkedAds, setFbLinkedAds] = useState<FbLinkedAd[]>([]);
@@ -149,12 +189,14 @@ export function CreativeTrack() {
     const [fbToken, setFbToken] = useState('');
     const [showManualEntry, setShowManualEntry] = useState(false);
     const [previewAdId, setPreviewAdId] = useState<string | null>(null);
+    const [fbMetrics, setFbMetrics] = useState<any[]>([]);
 
     // Funnel linking state
     const [userFunnels, setUserFunnels] = useState<LinkedFunnel[]>([]);
     const [linkedFunnel, setLinkedFunnel] = useState<LinkedFunnel | null>(null);
     const [showFunnelPicker, setShowFunnelPicker] = useState(false);
     const [hideSensitive, setHideSensitive] = useState(false);
+    const [allEntries, setAllEntries] = useState<TrackEntry[]>([]);
 
     // ========== FETCH TRACKS ==========
     useEffect(() => {
@@ -162,6 +204,7 @@ export function CreativeTrack() {
             fetchTracks();
             fetchFbToken();
             fetchUserFunnels();
+            fetchAllEntries();
         }
     }, [user]);
 
@@ -183,6 +226,22 @@ export function CreativeTrack() {
         }
     };
 
+    const fetchAllEntries = async () => {
+        if (!user) return;
+        const { data: userTracks } = await supabase
+            .from('creative_tracks')
+            .select('id')
+            .eq('user_id', user.id);
+        if (userTracks && userTracks.length > 0) {
+            const trackIds = userTracks.map(t => t.id);
+            const { data } = await supabase
+                .from('creative_track_entries')
+                .select('*')
+                .in('track_id', trackIds);
+            setAllEntries(data || []);
+        }
+    };
+
     const fetchFbToken = async () => {
         if (!user) return;
         const { data } = await supabase
@@ -199,6 +258,14 @@ export function CreativeTrack() {
             .select('*')
             .eq('track_id', trackId);
         setFbLinkedAds(data || []);
+    };
+
+    const fetchFbMetrics = async (trackId: string) => {
+        const { data } = await supabase
+            .from('creative_track_fb_metrics')
+            .select('*')
+            .eq('track_id', trackId);
+        setFbMetrics(data || []);
     };
 
     const fetchUserFunnels = async () => {
@@ -219,14 +286,54 @@ export function CreativeTrack() {
         }
         setSaving(true);
         try {
+            const insertPayload: Record<string, any> = {
+                user_id: user!.id,
+                name: newTrackName.trim(),
+                affiliate_link: newTrackLink.trim(),
+                sub_id: newTrackSubId.trim(),
+            };
+
+            // Merge auto-fetched product data
+            if (modalProductData) {
+                const p = modalProductData;
+                Object.assign(insertPayload, {
+                    product_item_id: p.itemId ?? null,
+                    product_name: p.productName || null,
+                    product_image_url: p.imageUrl || null,
+                    product_link: p.productLink || null,
+                    product_offer_link: p.offerLink || null,
+                    product_price: p.price ? parseFloat(p.price) : null,
+                    product_price_min: p.priceMin ? parseFloat(p.priceMin) : null,
+                    product_price_max: p.priceMax ? parseFloat(p.priceMax) : null,
+                    product_discount_rate: p.priceDiscountRate ?? null,
+                    product_commission: p.commission ? parseFloat(p.commission) : null,
+                    product_commission_rate: p.commissionRate ? parseFloat(p.commissionRate) : null,
+                    product_seller_commission_rate: p.sellerCommissionRate ? parseFloat(p.sellerCommissionRate) : null,
+                    product_shopee_commission_rate: p.shopeeCommissionRate ? parseFloat(p.shopeeCommissionRate) : null,
+                    product_sold: p.sales ?? null,
+                    product_rating: p.ratingStar ? parseFloat(p.ratingStar) : null,
+                    product_category_ids: p.productCatIds ? JSON.stringify(p.productCatIds) : null,
+                    product_shop_id: p.shopId ?? null,
+                    product_shop_name: p.shopName || null,
+                    product_shop_type: p.shopType ? JSON.stringify(p.shopType) : null,
+                    product_fetched_at: new Date().toISOString(),
+                });
+            }
+
+            // Merge shop data if available
+            if (modalShopData) {
+                const s = modalShopData;
+                Object.assign(insertPayload, {
+                    product_shop_rating: s.ratingStar ? parseFloat(s.ratingStar) : null,
+                    product_shop_image_url: s.imageUrl || null,
+                });
+                if (s.shopName) insertPayload.product_shop_name = s.shopName;
+                if (s.shopType) insertPayload.product_shop_type = JSON.stringify(s.shopType);
+            }
+
             const { data, error } = await supabase
                 .from('creative_tracks')
-                .insert({
-                    user_id: user!.id,
-                    name: newTrackName.trim(),
-                    affiliate_link: newTrackLink.trim(),
-                    sub_id: newTrackSubId.trim(),
-                })
+                .insert(insertPayload)
                 .select()
                 .single();
             if (error) throw error;
@@ -253,6 +360,10 @@ export function CreativeTrack() {
         setModalGeneratedLink('');
         setModalError(null);
         setModalCopied(false);
+        setModalProductData(null);
+        setModalShopData(null);
+        setModalFetchingProduct(false);
+        setModalProductError(null);
     };
 
     const handleModalAddSubId = () => {
@@ -312,33 +423,53 @@ export function CreativeTrack() {
 
         setModalGenerating(true);
         try {
-            const response = await fetch('/api/generate-link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    originUrl: modalOriginUrl,
-                    subIds: activeSubIds,
-                    shopeeAppId,
-                    shopeeSecret
-                })
+            const { shortLink } = await generateShopeeLink({
+                originUrl: modalOriginUrl,
+                subIds: activeSubIds,
+                shopeeAppId,
+                shopeeSecret,
             });
 
-            if (!response.ok) {
-                let errorMsg = `Erro do servidor (${response.status})`;
-                try {
-                    const data = await response.json();
-                    if (data.error) errorMsg = data.error;
-                } catch { /* ignore */ }
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
-            setModalGeneratedLink(data.shortLink);
+            setModalGeneratedLink(shortLink);
             // Auto-fill the track form fields
-            setNewTrackLink(data.shortLink);
+            setNewTrackLink(shortLink);
             // Use the first sub-ID as the track Sub_ID identifier
             if (activeSubIds.length > 0) {
                 setNewTrackSubId(activeSubIds.join(', '));
+            }
+
+            // Auto-fetch product data from Shopee API
+            const ids = extractShopeeIds(modalOriginUrl);
+            if (ids) {
+                setModalFetchingProduct(true);
+                setModalProductError(null);
+                try {
+                    const { product, shop } = await fetchShopeeProduct({
+                        shopId: ids.shopId,
+                        itemId: ids.itemId,
+                        shopeeAppId,
+                        shopeeSecret,
+                    });
+                    setModalProductData(product);
+                    setModalShopData(shop);
+
+                    // Auto-fill existing manual product fields
+                    if (product) {
+                        setProductForm({
+                            price: product.price?.toString() || '',
+                            shipping: '',
+                            free_shipping: false,
+                            reviews: '',
+                            sold: product.sales?.toString() || '',
+                            rating: product.ratingStar?.toString() || ''
+                        });
+                    }
+                } catch (fetchErr: any) {
+                    console.error('Product fetch error:', fetchErr);
+                    setModalProductError(fetchErr.message || 'Falha ao buscar dados do produto.');
+                } finally {
+                    setModalFetchingProduct(false);
+                }
             }
         } catch (err: any) {
             setModalError(err.message || 'Erro ao gerar link.');
@@ -465,6 +596,120 @@ export function CreativeTrack() {
         }
     };
 
+    // ========== FETCH PRODUCT DATA FOR EXISTING TRACK ==========
+    const handleFetchProductData = async () => {
+        if (!selectedTrack || !selectedTrack.affiliate_link) {
+            setFetchProductError('Este track não possui link de afiliado.');
+            return;
+        }
+
+        // Get credentials
+        let shopeeAppId: string | null = null;
+        let shopeeSecret: string | null = null;
+        try {
+            const { data: creds, error: credsError } = await supabase.rpc('get_shopee_credentials');
+            if (credsError) throw credsError;
+            if (creds && creds.length > 0) {
+                shopeeAppId = creds[0].shopee_app_id;
+                shopeeSecret = creds[0].shopee_secret;
+            }
+        } catch (err) {
+            console.error('Error fetching Shopee credentials:', err);
+        }
+
+        if (!shopeeAppId || !shopeeSecret) {
+            setFetchProductError('Credenciais da Shopee não configuradas. Vá em Configurações → Shopee API.');
+            return;
+        }
+
+        setFetchingProductData(true);
+        setFetchProductError(null);
+        try {
+            // 1. Try extracting IDs directly from the affiliate link
+            let ids = extractShopeeIds(selectedTrack.affiliate_link);
+
+            // 2. If not a direct product URL, resolve the shortened link
+            if (!ids) {
+                const resolvedUrl = await resolveShopeeUrl(selectedTrack.affiliate_link);
+                ids = extractShopeeIds(resolvedUrl);
+            }
+
+            if (!ids) {
+                setFetchProductError('Não foi possível extrair dados do produto a partir do link.');
+                return;
+            }
+
+            // 3. Fetch product data from Shopee API
+            const { product, shop } = await fetchShopeeProduct({
+                shopId: ids.shopId,
+                itemId: ids.itemId,
+                shopeeAppId,
+                shopeeSecret,
+            });
+
+            if (!product) {
+                setFetchProductError('Produto não encontrado na Shopee.');
+                return;
+            }
+
+            const p = product;
+            const updatePayload: Record<string, any> = {
+                product_item_id: p.itemId ?? null,
+                product_name: p.productName || null,
+                product_image_url: p.imageUrl || null,
+                product_link: p.productLink || null,
+                product_offer_link: p.offerLink || null,
+                product_price: p.price ? parseFloat(p.price) : null,
+                product_price_min: p.priceMin ? parseFloat(p.priceMin) : null,
+                product_price_max: p.priceMax ? parseFloat(p.priceMax) : null,
+                product_discount_rate: p.priceDiscountRate ?? null,
+                product_commission: p.commission ? parseFloat(p.commission) : null,
+                product_commission_rate: p.commissionRate ? parseFloat(p.commissionRate) : null,
+                product_seller_commission_rate: p.sellerCommissionRate ? parseFloat(p.sellerCommissionRate) : null,
+                product_shopee_commission_rate: p.shopeeCommissionRate ? parseFloat(p.shopeeCommissionRate) : null,
+                product_sold: p.sales ?? null,
+                product_rating: p.ratingStar ? parseFloat(p.ratingStar) : null,
+                product_category_ids: p.productCatIds ? JSON.stringify(p.productCatIds) : null,
+                product_shop_id: p.shopId ?? null,
+                product_shop_name: p.shopName || null,
+                product_shop_type: p.shopType ? JSON.stringify(p.shopType) : null,
+                product_fetched_at: new Date().toISOString(),
+            };
+
+            if (shop) {
+                if (shop.ratingStar) updatePayload.product_shop_rating = parseFloat(shop.ratingStar);
+                if (shop.imageUrl) updatePayload.product_shop_image_url = shop.imageUrl;
+                if (shop.shopName) updatePayload.product_shop_name = shop.shopName;
+                if (shop.shopType) updatePayload.product_shop_type = JSON.stringify(shop.shopType);
+            }
+
+            const { error } = await supabase
+                .from('creative_tracks')
+                .update(updatePayload)
+                .eq('id', selectedTrack.id);
+
+            if (error) throw error;
+
+            const updated = { ...selectedTrack, ...updatePayload } as Track;
+            setSelectedTrack(updated);
+            setTracks(prev => prev.map(t => t.id === updated.id ? updated : t));
+            setProductForm({
+                price: updated.product_price?.toString() || '',
+                shipping: updated.product_shipping?.toString() || '',
+                free_shipping: !!updated.product_free_shipping,
+                reviews: updated.product_reviews?.toString() || '',
+                sold: updated.product_sold?.toString() || '',
+                rating: updated.product_rating?.toString() || ''
+            });
+            showToast('Dados do produto atualizados com sucesso!');
+        } catch (err: any) {
+            console.error('Fetch product error:', err);
+            setFetchProductError(err.message || 'Erro ao buscar dados do produto.');
+        } finally {
+            setFetchingProductData(false);
+        }
+    };
+
     // ========== SELECT TRACK ==========
     const handleSelectTrack = async (track: Track) => {
         setSelectedTrack(track);
@@ -472,6 +717,7 @@ export function CreativeTrack() {
         setEntryForm({ ...emptyEntryForm });
         setShowFunnelPicker(false);
         setEditingProduct(false);
+        setFetchProductError(null);
         setProductForm({
             price: track.product_price?.toString() || '',
             shipping: track.product_shipping?.toString() || '',
@@ -504,6 +750,7 @@ export function CreativeTrack() {
         }
         // Fetch FB data
         fetchFbLinkedAds(track.id);
+        fetchFbMetrics(track.id);
     };
 
     // ========== FB SYNC ==========
@@ -538,7 +785,7 @@ export function CreativeTrack() {
                 const insightsRes = await fetch(
                     `https://graph.facebook.com/v21.0/${linkedAd.ad_id}/insights?` +
                     `access_token=${encodeURIComponent(fbToken)}` +
-                    `&fields=clicks,cpc,spend,impressions` +
+                    `&fields=clicks,cpc,spend,impressions,video_thruplay_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p95_watched_actions` +
                     `&time_range={"since":"${since}","until":"${until}"}` +
                     `&time_increment=1` +
                     `&limit=500`
@@ -558,6 +805,10 @@ export function CreativeTrack() {
                     cpc: parseFloat(day.cpc) || 0,
                     spend: parseFloat(day.spend) || 0,
                     impressions: parseInt(day.impressions) || 0,
+                    video_thruplay: parseInt(day.video_thruplay_watched_actions?.[0]?.value) || 0,
+                    video_p25: parseInt(day.video_p25_watched_actions?.[0]?.value) || 0,
+                    video_p50: parseInt(day.video_p50_watched_actions?.[0]?.value) || 0,
+                    video_p95: parseInt(day.video_p95_watched_actions?.[0]?.value) || 0,
                 }));
 
                 if (rows.length > 0) {
@@ -600,6 +851,9 @@ export function CreativeTrack() {
             setEntries(refreshedEntries || []);
 
             showToast(`Métricas ${mode === 'all' ? 'gerais' : 'do dia'} sincronizadas!`);
+
+            // Refresh fb_metrics for video KPIs
+            if (selectedTrack) fetchFbMetrics(selectedTrack.id);
         } catch (error: any) {
             console.error(error);
             showToast(`Erro na sincronização: ${error.message}`, 'error');
@@ -725,6 +979,47 @@ export function CreativeTrack() {
 
         return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
     }, [entries]);
+
+    // ========== VIDEO KPIs ==========
+    const videoKpis = useMemo(() => {
+        if (fbMetrics.length === 0) return null;
+        const totalThruplay = fbMetrics.reduce((s, m) => s + Number(m.video_thruplay || 0), 0);
+        const totalP25 = fbMetrics.reduce((s, m) => s + Number(m.video_p25 || 0), 0);
+        const totalP50 = fbMetrics.reduce((s, m) => s + Number(m.video_p50 || 0), 0);
+        const totalP95 = fbMetrics.reduce((s, m) => s + Number(m.video_p95 || 0), 0);
+        if (totalThruplay === 0 && totalP25 === 0) return null; // Not a video ad
+        const retentionRate = totalP25 > 0 ? (totalP95 / totalP25) * 100 : 0;
+        return { totalThruplay, totalP25, totalP50, totalP95, retentionRate };
+    }, [fbMetrics]);
+
+    // ========== GLOBAL KPIs (all tracks) ==========
+    const globalKpis = useMemo(() => {
+        if (allEntries.length === 0) return null;
+        const totalCommission = allEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+        const totalInvestment = allEntries.reduce((s, e) => s + Number(e.investment), 0);
+        const totalOrders = allEntries.reduce((s, e) => s + Number(e.orders), 0);
+        const totalShopeeClicks = allEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
+        const totalAdClicks = allEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+        const totalProfit = totalCommission - totalInvestment;
+        const uniqueDates = new Set(allEntries.map(e => e.date));
+        const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
+        const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
+        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
+    }, [allEntries]);
+
+    // ========== TRACK RANKING ==========
+    const trackRanking = useMemo(() => {
+        if (tracks.length === 0 || allEntries.length === 0) return [];
+        return tracks.map(track => {
+            const trackEntries = allEntries.filter(e => e.track_id === track.id);
+            const commission = trackEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+            const investment = trackEntries.reduce((s, e) => s + Number(e.investment), 0);
+            const orders = trackEntries.reduce((s, e) => s + Number(e.orders), 0);
+            const profit = commission - investment;
+            const pct = investment > 0 ? (profit / investment) * 100 : 0;
+            return { track, orders, commission, investment, profit, pct };
+        }).sort((a, b) => b.profit - a.profit);
+    }, [tracks, allEntries]);
 
     const entryProfit = (parseFloat(entryForm.commission_value) || 0) - (parseFloat(entryForm.investment) || 0);
     const entryProfitPct = (parseFloat(entryForm.investment) || 0) > 0
@@ -854,6 +1149,77 @@ export function CreativeTrack() {
                                 <button onClick={handleModalCopy} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${modalCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
                                     {modalCopied ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Product Preview (auto-fetched) */}
+                    {modalFetchingProduct && (
+                        <div className="flex items-center gap-3 p-4 bg-surface-highlight/20 rounded-xl border border-border-dark">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            <span className="text-sm text-neutral-400">Buscando dados do produto...</span>
+                        </div>
+                    )}
+
+                    {modalProductError && !modalFetchingProduct && (
+                        <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 p-3 rounded-xl flex gap-2 text-sm">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>{modalProductError}</span>
+                        </div>
+                    )}
+
+                    {modalProductData && !modalFetchingProduct && (
+                        <div className="bg-surface-highlight/20 border border-primary/20 rounded-xl p-4">
+                            <div className="flex gap-4">
+                                {modalProductData.imageUrl && (
+                                    <img
+                                        src={modalProductData.imageUrl}
+                                        alt={modalProductData.productName}
+                                        className="w-20 h-20 rounded-lg object-cover border border-border-dark flex-shrink-0"
+                                    />
+                                )}
+                                <div className="flex flex-col gap-1.5 min-w-0">
+                                    <h4 className="text-sm font-bold text-white line-clamp-2">
+                                        {modalProductData.productName}
+                                    </h4>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                                        <span className="text-primary font-bold">
+                                            R$ {parseFloat(modalProductData.price || 0).toFixed(2)}
+                                        </span>
+                                        {modalProductData.priceDiscountRate > 0 && (
+                                            <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">
+                                                -{modalProductData.priceDiscountRate}%
+                                            </span>
+                                        )}
+                                        {modalProductData.ratingStar && (
+                                            <span className="text-yellow-400 flex items-center gap-1">
+                                                <Star className="w-3 h-3 fill-yellow-400" /> {modalProductData.ratingStar}
+                                            </span>
+                                        )}
+                                        {modalProductData.sales != null && (
+                                            <span className="text-neutral-400">
+                                                {modalProductData.sales.toLocaleString('pt-BR')} vendidos
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-0.5">
+                                        {modalProductData.commissionRate && (
+                                            <span className="text-green-400 font-semibold">
+                                                Comissao: {(parseFloat(modalProductData.commissionRate) * 100).toFixed(1)}%
+                                            </span>
+                                        )}
+                                        {modalProductData.commission && (
+                                            <span className="text-green-400/70">
+                                                (R$ {parseFloat(modalProductData.commission).toFixed(2)})
+                                            </span>
+                                        )}
+                                    </div>
+                                    {modalProductData.shopName && (
+                                        <span className="text-[11px] text-neutral-500 mt-0.5">
+                                            Loja: {modalProductData.shopName}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1009,35 +1375,159 @@ export function CreativeTrack() {
                 {/* Right: Detail View */}
                 <div className="flex-1 min-w-0 flex flex-col gap-5">
                     {!selectedTrack ? (
-                        <div className="flex-1 flex items-center justify-center py-16 bg-surface-dark rounded-2xl border border-border-dark">
-                            <div className="text-center">
-                                <Target className="w-10 h-10 text-neutral-600 mx-auto mb-3" />
-                                <p className="text-neutral-400 text-sm">Selecione um track à esquerda</p>
+                        <div className="flex-1 flex flex-col gap-5">
+                            {/* General Overview Header */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Visão Geral</h2>
+                                    <p className="text-text-secondary text-sm">Compilado de todos os criativos</p>
+                                </div>
+                                <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
+                                    {tracks.length} criativos
+                                </span>
                             </div>
+
+                            {/* Global KPIs */}
+                            {globalKpis ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {[
+                                        { label: 'Lucro Total', value: `R$ ${formatBRL(globalKpis.totalProfit)}`, icon: DollarSign, color: globalKpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+                                        { label: 'Pedidos Totais', value: globalKpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+                                        { label: 'Média Pedidos/Dia', value: globalKpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+                                        { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
+                                        { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+                                        { label: '% Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                        { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
+                                        { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                    ].map((kpi, i) => (
+                                        <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                                                <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                            </div>
+                                            <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
+                                    Nenhum registro encontrado. Sincronize ou crie registros em cada track.
+                                </div>
+                            )}
+
+                            {/* Track Ranking Table */}
+                            {trackRanking.length > 0 && (
+                                <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                                    <div className="p-4 border-b border-border-dark">
+                                        <h3 className="text-sm font-bold text-white">Ranking de Criativos</h3>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-border-dark text-text-secondary text-xs">
+                                                    <th className="text-left p-3">Criativo</th>
+                                                    <th className="text-center p-3">Status</th>
+                                                    <th className="text-right p-3">Pedidos</th>
+                                                    <th className="text-right p-3">Comissão</th>
+                                                    <th className="text-right p-3">Investimento</th>
+                                                    <th className="text-right p-3">Lucro</th>
+                                                    <th className="text-right p-3">%</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {trackRanking.map((row) => {
+                                                    const statusColor = row.track.status === 'ativo' ? 'bg-green-500' : row.track.status === 'validado' ? 'bg-blue-500' : 'bg-red-500';
+                                                    return (
+                                                        <tr
+                                                            key={row.track.id}
+                                                            onClick={() => handleSelectTrack(row.track)}
+                                                            className="border-b border-border-dark/50 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                                                        >
+                                                            <td className="p-3">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-white font-medium text-sm">{row.track.name}</span>
+                                                                    {row.track.sub_id && <span className="text-[10px] text-text-secondary font-mono">{row.track.sub_id}</span>}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-3 text-center">
+                                                                <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
+                                                            </td>
+                                                            <td className="p-3 text-right text-neutral-300">{row.orders}</td>
+                                                            <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(row.commission)}</td>
+                                                            <td className="p-3 text-right text-orange-400">R$ {formatBRL(row.investment)}</td>
+                                                            <td className={`p-3 text-right font-bold ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(row.profit)}</td>
+                                                            <td className={`p-3 text-right text-xs ${row.pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(row.pct)}%</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <>
                             {/* Track Header */}
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                 <div className="flex flex-col gap-3">
-                                    <div className="flex items-center gap-3">
-                                        {editingTrack ? (
-                                            <input
-                                                className="bg-background-dark border border-primary rounded-lg p-2 text-white text-xl font-bold outline-none"
-                                                value={editName}
-                                                onChange={e => setEditName(e.target.value)}
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <h2 className={`text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
-                                                {selectedTrack.name}
-                                            </h2>
-                                        )}
-                                        {selectedTrack.sub_id && !editingTrack && (
-                                            <span className={`px-2 py-1 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
-                                                {selectedTrack.sub_id}
-                                            </span>
-                                        )}
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex flex-col gap-1">
+                                            {editingTrack ? (
+                                                <input
+                                                    className="bg-background-dark border border-primary rounded-lg p-2 text-white text-xl font-bold outline-none"
+                                                    value={editName}
+                                                    onChange={e => setEditName(e.target.value)}
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <div className="flex items-center gap-2 group">
+                                                    <h2 className={`text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
+                                                        {selectedTrack.name}
+                                                    </h2>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingTrack(true);
+                                                            setEditName(selectedTrack.name);
+                                                            setEditLink(selectedTrack.affiliate_link || '');
+                                                            setEditSubId(selectedTrack.sub_id || '');
+                                                        }}
+                                                        className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
+                                                        title="Editar Criativo"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {selectedTrack.sub_id && !editingTrack && (
+                                                <span className={`w-fit px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                    {selectedTrack.sub_id}
+                                                </span>
+                                            )}
+                                            {selectedTrack.affiliate_link && !editingTrack && (
+                                                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-surface-highlight/50 border border-border-dark rounded-lg w-fit">
+                                                    <span className={`text-[10px] sm:text-xs text-text-secondary font-mono truncate max-w-[150px] sm:max-w-[250px] transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                        {selectedTrack.affiliate_link}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => handleCopyTrackLink(selectedTrack.affiliate_link)}
+                                                        className="text-primary hover:text-primary-light transition-colors p-0.5"
+                                                        title="Copiar Link"
+                                                    >
+                                                        {trackLinkCopied ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> : <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                                                    </button>
+                                                    <a
+                                                        href={selectedTrack.affiliate_link}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-primary hover:text-primary-light transition-colors p-0.5"
+                                                        title="Acessar Link do Produto"
+                                                    >
+                                                        <ExternalLink className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
                                         {!editingTrack && (
                                             <div className="flex items-center gap-2 ml-2">
                                                 <button
@@ -1050,17 +1540,6 @@ export function CreativeTrack() {
                                                 >
                                                     {hideSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                                 </button>
-                                                {selectedTrack.affiliate_link && (
-                                                    <a
-                                                        href={selectedTrack.affiliate_link}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex flex-shrink-0 items-center justify-center p-1.5 rounded-lg bg-primary text-background-dark hover:bg-opacity-90 transition-colors shadow-[0_0_10px_rgba(242,162,13,0.3)]"
-                                                        title="Acessar Link do Produto"
-                                                    >
-                                                        <ExternalLink className="w-4 h-4" />
-                                                    </a>
-                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -1124,12 +1603,7 @@ export function CreativeTrack() {
                                             >
                                                 <Filter className="w-4 h-4" /> {linkedFunnel ? linkedFunnel.name : 'Vincular Funil'}
                                             </button>
-                                            <button
-                                                onClick={() => { setEditingTrack(true); setEditName(selectedTrack.name); setEditLink(selectedTrack.affiliate_link); setEditSubId(selectedTrack.sub_id); }}
-                                                className="px-3 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm flex items-center gap-1"
-                                            >
-                                                <Pencil className="w-4 h-4" /> Editar
-                                            </button>
+
 
                                             <button
                                                 onClick={() => handleDeleteTrack(selectedTrack)}
@@ -1207,17 +1681,34 @@ export function CreativeTrack() {
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
                                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                                         <PackageSearch className="w-4 h-4 text-orange-400" />
-                                        Dados do Produto <span className="text-xs font-normal text-text-secondary">(Opcional)</span>
+                                        Dados do Produto {!selectedTrack.product_name && <span className="text-xs font-normal text-text-secondary">(Opcional)</span>}
                                     </h3>
                                     {!editingProduct && (
-                                        <button
-                                            onClick={() => setEditingProduct(true)}
-                                            className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" /> Editar Dados
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => { setFetchProductError(null); handleFetchProductData(); }}
+                                                disabled={fetchingProductData || !selectedTrack.affiliate_link}
+                                                className="px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 transition-colors text-xs flex items-center gap-1.5 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {fetchingProductData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                {fetchingProductData ? 'Buscando...' : 'Buscar Dados Shopee'}
+                                            </button>
+                                            <button
+                                                onClick={() => setEditingProduct(true)}
+                                                className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" /> Editar Dados
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
+
+                                {fetchProductError && (
+                                    <div className="mb-3 bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-lg flex gap-2 text-xs">
+                                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                        <span>{fetchProductError}</span>
+                                    </div>
+                                )}
 
                                 {editingProduct ? (
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1265,7 +1756,154 @@ export function CreativeTrack() {
                                             </button>
                                         </div>
                                     </div>
+                                ) : selectedTrack.product_name ? (
+                                    /* ── Rich API Data View ── */
+                                    <div className="flex flex-col gap-4">
+                                        {/* Product header: image + name + shop */}
+                                        <div className="flex gap-4">
+                                            {selectedTrack.product_image_url ? (
+                                                <img
+                                                    src={selectedTrack.product_image_url}
+                                                    alt={selectedTrack.product_name}
+                                                    className="w-24 h-24 rounded-xl object-cover border border-border-dark flex-shrink-0"
+                                                />
+                                            ) : (
+                                                <div className="w-24 h-24 rounded-xl bg-background-dark border border-border-dark flex items-center justify-center flex-shrink-0">
+                                                    <ImageIcon className="w-8 h-8 text-neutral-600" />
+                                                </div>
+                                            )}
+                                            <div className="flex flex-col gap-1.5 min-w-0">
+                                                <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                                                    {selectedTrack.product_name}
+                                                </h4>
+                                                {selectedTrack.product_shop_name && (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Store className="w-3.5 h-3.5 text-neutral-500" />
+                                                        <span className="text-xs text-neutral-400">{selectedTrack.product_shop_name}</span>
+                                                        {selectedTrack.product_shop_rating != null && (
+                                                            <span className="text-xs text-yellow-400 flex items-center gap-0.5 ml-1">
+                                                                <Star className="w-3 h-3 fill-yellow-400" /> {selectedTrack.product_shop_rating}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {selectedTrack.product_link && (
+                                                    <a
+                                                        href={selectedTrack.product_link}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
+                                                    >
+                                                        <ExternalLink className="w-3 h-3" /> Ver na Shopee
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Data grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                                            {/* Price */}
+                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Preço</span>
+                                                <span className="text-sm font-bold text-primary">
+                                                    R$ {selectedTrack.product_price != null ? formatBRL(selectedTrack.product_price) : '--'}
+                                                </span>
+                                                {selectedTrack.product_price_min != null && selectedTrack.product_price_max != null && selectedTrack.product_price_min !== selectedTrack.product_price_max && (
+                                                    <span className="text-[10px] text-neutral-500 block">
+                                                        R$ {formatBRL(selectedTrack.product_price_min)} ~ R$ {formatBRL(selectedTrack.product_price_max)}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Discount */}
+                                            {selectedTrack.product_discount_rate != null && selectedTrack.product_discount_rate > 0 && (
+                                                <div className="bg-background-dark/50 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Desconto</span>
+                                                    <span className="text-sm font-bold text-red-400">-{selectedTrack.product_discount_rate}%</span>
+                                                </div>
+                                            )}
+
+                                            {/* Commission Total */}
+                                            <div className="bg-background-dark/50 border border-green-500/20 rounded-xl px-3 py-2.5">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Comissão</span>
+                                                <span className="text-sm font-bold text-green-400">
+                                                    {selectedTrack.product_commission != null ? `R$ ${formatBRL(selectedTrack.product_commission)}` : '--'}
+                                                </span>
+                                                {selectedTrack.product_commission_rate != null && (
+                                                    <span className="text-[10px] text-green-400/60 block">
+                                                        {(selectedTrack.product_commission_rate * 100).toFixed(1)}% total
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Seller Commission Rate */}
+                                            {selectedTrack.product_seller_commission_rate != null && (
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
+                                                    <span className="text-sm font-bold text-white">
+                                                        {(selectedTrack.product_seller_commission_rate * 100).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Shopee Commission Rate */}
+                                            {selectedTrack.product_shopee_commission_rate != null && (
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                    <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
+                                                    <span className="text-sm font-bold text-white">
+                                                        {(selectedTrack.product_shopee_commission_rate * 100).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Rating */}
+                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Avaliação</span>
+                                                <span className="text-sm font-bold text-white flex items-center gap-1">
+                                                    {selectedTrack.product_rating != null ? (
+                                                        <>
+                                                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                                                            {selectedTrack.product_rating}
+                                                            {selectedTrack.product_reviews != null && (
+                                                                <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews})</span>
+                                                            )}
+                                                        </>
+                                                    ) : '--'}
+                                                </span>
+                                            </div>
+
+                                            {/* Sales */}
+                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Vendidos</span>
+                                                <span className="text-sm font-bold text-white">
+                                                    {selectedTrack.product_sold != null ? selectedTrack.product_sold.toLocaleString('pt-BR') : '--'}
+                                                </span>
+                                            </div>
+
+                                            {/* Shipping */}
+                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Frete</span>
+                                                <span className="text-sm font-bold text-white">
+                                                    {selectedTrack.product_free_shipping ? (
+                                                        <span className="text-green-400">Grátis</span>
+                                                    ) : selectedTrack.product_shipping != null ? (
+                                                        `R$ ${formatBRL(selectedTrack.product_shipping)}`
+                                                    ) : (
+                                                        <span className="text-neutral-500 font-normal text-xs">Manual</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Fetched at timestamp */}
+                                        {selectedTrack.product_fetched_at && (
+                                            <p className="text-[10px] text-neutral-600 text-right">
+                                                Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
+                                            </p>
+                                        )}
+                                    </div>
                                 ) : (
+                                    /* ── Basic Manual View (old tracks without API data) ── */
                                     <div className="flex flex-wrap gap-4">
                                         <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
                                             <Tag className="w-4 h-4 text-text-secondary" />
@@ -1399,16 +2037,36 @@ export function CreativeTrack() {
                                 </div>
                             )}
 
-                            {/* Manual Entry Button */}
-                            <button
-                                onClick={() => setShowManualEntry(true)}
-                                className="flex items-center gap-2 bg-surface-dark border border-border-dark rounded-xl px-4 py-3 text-neutral-400 hover:text-white hover:border-primary/30 transition-all text-sm w-full sm:w-auto"
-                            >
-                                <Plus className="w-4 h-4" /> Criar Registro Manual
-                            </button>
+                            {/* Video KPIs */}
+                            {videoKpis && (
+                                <div className="mt-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Video className="w-4 h-4 text-violet-400" />
+                                        <span className="text-sm font-semibold text-white">Métricas de Vídeo</span>
+                                        <span className="text-[10px] text-text-secondary bg-violet-500/10 px-2 py-0.5 rounded-full">Termômetro do Criativo</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                        {[
+                                            { label: 'ThruPlay', value: videoKpis.totalThruplay.toLocaleString('pt-BR'), color: 'text-violet-400', hint: 'Assistiu 15s ou mais (ou o vídeo inteiro se for menor que 15s)' },
+                                            { label: '25% Assistido', value: videoKpis.totalP25.toLocaleString('pt-BR'), color: 'text-blue-400', hint: 'Assistiu pelo menos 25% do vídeo' },
+                                            { label: '50% Assistido', value: videoKpis.totalP50.toLocaleString('pt-BR'), color: 'text-cyan-400', hint: 'Assistiu pelo menos metade do vídeo' },
+                                            { label: '95% Assistido', value: videoKpis.totalP95.toLocaleString('pt-BR'), color: 'text-emerald-400', hint: 'Assistiu quase o vídeo inteiro (95%)' },
+                                            { label: 'Retenção (95/25)', value: `${videoKpis.retentionRate.toFixed(1)}%`, color: videoKpis.retentionRate >= 30 ? 'text-green-400' : 'text-amber-400', hint: 'De quem assistiu 25%, quantos foram até 95%' },
+                                        ].map((kpi, i) => (
+                                            <div key={i} className="bg-surface-dark border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-1.5">
+                                                <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                                <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                                <span className="text-[10px] leading-tight text-neutral-500">{kpi.hint}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+
 
                             {/* Entries Table */}
-                            {entries.length > 0 && (
+                            {
                                 <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
                                     <div className="p-4 border-b border-border-dark flex items-center justify-between">
                                         <div className="flex items-center gap-3">
@@ -1417,76 +2075,129 @@ export function CreativeTrack() {
                                                 Dê 2 cliques na linha para editar
                                             </span>
                                         </div>
+                                        <button
+                                            onClick={() => setShowManualEntry(true)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-all"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" /> Registro Manual
+                                        </button>
                                     </div>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="border-b border-border-dark text-text-secondary text-xs">
-                                                    {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
-                                                    <th className="text-left p-3">Data</th>
-                                                    <th className="text-right p-3">Cliq. Anúncio</th>
-                                                    <th className="text-right p-3">Cliq. Shopee</th>
-                                                    <th className="text-right p-3">CPC</th>
-                                                    <th className="text-right p-3">Pedidos</th>
-                                                    <th className="text-right p-3">Comissão</th>
-                                                    <th className="text-right p-3">Investimento</th>
-                                                    <th className="text-right p-3">Lucro</th>
-                                                    <th className="text-right p-3">%</th>
-                                                    <th className="text-center p-3"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {entries.map(entry => {
-                                                    const isEditing = editingEntryId === entry.id;
+                                    {entries.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-border-dark text-text-secondary text-xs">
+                                                        {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
+                                                        <th className="text-left p-3">Data</th>
+                                                        <th className="text-right p-3">Cliq. Anúncio</th>
+                                                        <th className="text-right p-3">Cliq. Shopee</th>
+                                                        <th className="text-right p-3">CPC</th>
+                                                        <th className="text-right p-3">Pedidos</th>
+                                                        <th className="text-right p-3">Comissão</th>
+                                                        <th className="text-right p-3">Investimento</th>
+                                                        <th className="text-right p-3">Lucro</th>
+                                                        <th className="text-right p-3">%</th>
+                                                        <th className="text-center p-3"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {entries.map(entry => {
+                                                        const isEditing = editingEntryId === entry.id;
 
-                                                    // Funnel evaluation
-                                                    const entryIndex = entries.indexOf(entry);
-                                                    const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
-                                                    let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
-                                                    if (linkedFunnel) {
-                                                        const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
-                                                        const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
-                                                        // Use maintenance conditions for days beyond configured ones
-                                                        const conditionsToEval = funnelDay
-                                                            ? funnelDay.conditions
-                                                            : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_conditions || []).length > 0)
-                                                                ? linkedFunnel.maintenance_conditions
-                                                                : null;
+                                                        // Funnel evaluation
+                                                        const entryIndex = entries.indexOf(entry);
+                                                        const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
+                                                        let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
+                                                        if (linkedFunnel) {
+                                                            const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
+                                                            const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
+                                                            // Use maintenance conditions for days beyond configured ones
+                                                            const conditionsToEval = funnelDay
+                                                                ? funnelDay.conditions
+                                                                : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_conditions || []).length > 0)
+                                                                    ? linkedFunnel.maintenance_conditions
+                                                                    : null;
 
-                                                        if (conditionsToEval && conditionsToEval.length > 0) {
-                                                            const eProfit = Number(entry.commission_value) - Number(entry.investment);
-                                                            const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
-                                                            const metricMap: Record<string, number> = {
-                                                                ad_clicks: Number(entry.ad_clicks),
-                                                                shopee_clicks: Number(entry.shopee_clicks),
-                                                                cpc: Number(entry.cpc),
-                                                                orders: Number(entry.orders),
-                                                                commission_value: Number(entry.commission_value),
-                                                                investment: Number(entry.investment),
-                                                                profit: eProfit,
-                                                                roi_percentage: eRoi,
-                                                            };
-                                                            const allPass = conditionsToEval.every(cond => {
-                                                                const actual = metricMap[cond.metric] ?? 0;
-                                                                switch (cond.operator) {
-                                                                    case '<=': return actual <= cond.value;
-                                                                    case '>=': return actual >= cond.value;
-                                                                    case '==': return actual === cond.value;
-                                                                    case '>': return actual > cond.value;
-                                                                    case '<': return actual < cond.value;
-                                                                    default: return false;
-                                                                }
-                                                            });
-                                                            funnelStatus = allPass ? 'pass' : 'fail';
+                                                            if (conditionsToEval && conditionsToEval.length > 0) {
+                                                                const eProfit = Number(entry.commission_value) - Number(entry.investment);
+                                                                const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
+                                                                const metricMap: Record<string, number> = {
+                                                                    ad_clicks: Number(entry.ad_clicks),
+                                                                    shopee_clicks: Number(entry.shopee_clicks),
+                                                                    cpc: Number(entry.cpc),
+                                                                    orders: Number(entry.orders),
+                                                                    commission_value: Number(entry.commission_value),
+                                                                    investment: Number(entry.investment),
+                                                                    profit: eProfit,
+                                                                    roi_percentage: eRoi,
+                                                                };
+                                                                const allPass = conditionsToEval.every(cond => {
+                                                                    const actual = metricMap[cond.metric] ?? 0;
+                                                                    switch (cond.operator) {
+                                                                        case '<=': return actual <= cond.value;
+                                                                        case '>=': return actual >= cond.value;
+                                                                        case '==': return actual === cond.value;
+                                                                        case '>': return actual > cond.value;
+                                                                        case '<': return actual < cond.value;
+                                                                        default: return false;
+                                                                    }
+                                                                });
+                                                                funnelStatus = allPass ? 'pass' : 'fail';
+                                                            }
                                                         }
-                                                    }
 
-                                                    if (isEditing) {
-                                                        const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
-                                                        const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
+                                                        if (isEditing) {
+                                                            const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
+                                                            const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
 
+                                                            return (
+                                                                <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
+                                                                    {linkedFunnel && (
+                                                                        <td className="p-3 text-center">
+                                                                            {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
+                                                                            {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
+                                                                            {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
+                                                                        </td>
+                                                                    )}
+                                                                    <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
+                                                                    </td>
+                                                                    <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
+                                                                    <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
+                                                                    <td className="p-3 text-center">
+                                                                        <div className="flex items-center justify-center gap-2">
+                                                                            <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
+                                                                                {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                                            </button>
+                                                                            <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
+                                                                                <X className="w-4 h-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        }
+
+                                                        const profit = Number(entry.commission_value) - Number(entry.investment);
+                                                        const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
                                                         return (
-                                                            <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
+                                                            <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
                                                                 {linkedFunnel && (
                                                                     <td className="p-3 text-center">
                                                                         {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
@@ -1495,71 +2206,30 @@ export function CreativeTrack() {
                                                                     </td>
                                                                 )}
                                                                 <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                                <td className="p-2">
-                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
-                                                                </td>
-                                                                <td className="p-2">
-                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
-                                                                </td>
-                                                                <td className="p-2">
-                                                                    <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
-                                                                </td>
-                                                                <td className="p-2">
-                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
-                                                                </td>
-                                                                <td className="p-2">
-                                                                    <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
-                                                                </td>
-                                                                <td className="p-2">
-                                                                    <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
-                                                                </td>
-                                                                <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
-                                                                <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
+                                                                <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
+                                                                <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
+                                                                <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
+                                                                <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
+                                                                <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
+                                                                <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
+                                                                <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
+                                                                <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
                                                                 <td className="p-3 text-center">
-                                                                    <div className="flex items-center justify-center gap-2">
-                                                                        <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
-                                                                            {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                                        </button>
-                                                                        <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
-                                                                            <X className="w-4 h-4" />
-                                                                        </button>
-                                                                    </div>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                                 </td>
                                                             </tr>
                                                         );
-                                                    }
-
-                                                    const profit = Number(entry.commission_value) - Number(entry.investment);
-                                                    const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
-                                                    return (
-                                                        <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
-                                                            {linkedFunnel && (
-                                                                <td className="p-3 text-center">
-                                                                    {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
-                                                                    {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
-                                                                    {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
-                                                                </td>
-                                                            )}
-                                                            <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                            <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
-                                                            <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
-                                                            <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
-                                                            <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
-                                                            <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
-                                                            <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
-                                                            <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
-                                                            <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
-                                                            <td className="p-3 text-center">
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 text-center text-neutral-400 text-sm">
+                                            Nenhum registro ainda. Adicione o primeiro abaixo.
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                            }
                         </>
                     )}
 

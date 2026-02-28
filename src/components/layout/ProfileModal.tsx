@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { generateShopeeLink } from '../../lib/shopeeApi';
 import { X, User as UserIcon, Mail, Lock, Key, AlertCircle, Save, Eye, EyeOff, Trash2, ShieldCheck, Loader2, ShoppingBag } from 'lucide-react';
 
 interface ProfileModalProps {
@@ -334,37 +335,31 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setShopeeVerificationResult(null);
         setMessage(null);
         try {
-            const response = await fetch('/api/generate-link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    originUrl: 'https://shopee.com.br/product/1/1',
-                    subIds: [],
-                    shopeeAppId,
-                    shopeeSecret,
-                }),
+            const { shortLink } = await generateShopeeLink({
+                originUrl: 'https://shopee.com.br/product/1/1',
+                subIds: [],
+                shopeeAppId,
+                shopeeSecret,
             });
-            const data = await response.json();
-            if (response.ok && data.shortLink) {
+            if (shortLink) {
                 setShopeeVerificationResult({
                     valid: true,
                     details: 'Credenciais verificadas com sucesso! A API da Shopee respondeu corretamente.',
                 });
             } else {
-                const errMsg = data.error || 'Erro desconhecido';
-                // Auth errors typically mean invalid credentials
-                const isAuthError = errMsg.toLowerCase().includes('auth') || errMsg.toLowerCase().includes('credential') || errMsg.toLowerCase().includes('signature');
                 setShopeeVerificationResult({
-                    valid: !isAuthError && response.ok,
-                    details: isAuthError
-                        ? `Credenciais inválidas: ${errMsg}`
-                        : `API respondeu (credenciais válidas): ${errMsg}`,
+                    valid: false,
+                    details: 'A API da Shopee retornou resposta vazia.',
                 });
             }
         } catch (error: any) {
+            const errMsg = error.message || 'Não foi possível conectar à API.';
+            const isAuthError = errMsg.toLowerCase().includes('auth') || errMsg.toLowerCase().includes('credential') || errMsg.toLowerCase().includes('signature');
             setShopeeVerificationResult({
                 valid: false,
-                details: `Erro de conexão: ${error.message || 'Não foi possível conectar à API.'}`,
+                details: isAuthError
+                    ? `Credenciais inválidas: ${errMsg}`
+                    : `Erro de conexão: ${errMsg}`,
             });
         } finally {
             setShopeeVerifying(false);
@@ -639,8 +634,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                 {/* Verification Result */}
                                 {verificationResult && (
                                     <div className={`p-4 rounded-xl text-sm space-y-2 ${verificationResult.valid
-                                            ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
                                         }`}>
                                         {verificationResult.details.split('\n').map((line, i) => (
                                             <p key={i}>{line}</p>
@@ -747,8 +742,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                 {/* Verification Result */}
                                 {shopeeVerificationResult && (
                                     <div className={`p-4 rounded-xl text-sm space-y-2 ${shopeeVerificationResult.valid
-                                            ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
                                         }`}>
                                         <p>{shopeeVerificationResult.details}</p>
                                     </div>

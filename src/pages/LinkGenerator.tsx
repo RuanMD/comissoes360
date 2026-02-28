@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Plus, X, Link as LinkIcon, ExternalLink, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { generateShopeeLink } from '../lib/shopeeApi';
 
 export function LinkGenerator() {
     const [originUrl, setOriginUrl] = useState('');
@@ -79,32 +80,13 @@ export function LinkGenerator() {
                 return;
             }
 
-            const response = await fetch('/api/generate-link', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    originUrl,
-                    subIds: activeSubIds,
-                    shopeeAppId,
-                    shopeeSecret
-                })
+            const { shortLink } = await generateShopeeLink({
+                originUrl,
+                subIds: activeSubIds,
+                shopeeAppId,
+                shopeeSecret,
             });
-
-            if (!response.ok) {
-                let errorMsg = `Erro do servidor (${response.status})`;
-                try {
-                    const data = await response.json();
-                    if (data.error) errorMsg = data.error;
-                } catch {
-                    // Response body is not JSON (e.g. 404 HTML page)
-                }
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
-            setGeneratedLink(data.shortLink);
+            setGeneratedLink(shortLink);
 
         } catch (err: any) {
             setError(err.message || 'Erro inesperado ao gerar link.');
@@ -274,8 +256,8 @@ export function LinkGenerator() {
                             <button
                                 onClick={handleCopy}
                                 className={`h-14 px-6 flex items-center justify-center gap-2 font-bold rounded-xl transition-all min-w-[140px] shadow-lg ${copied
-                                        ? 'bg-green-500 text-white shadow-green-500/20'
-                                        : 'bg-white text-background-dark hover:bg-neutral-200 shadow-white/10 hover:scale-[1.02]'
+                                    ? 'bg-green-500 text-white shadow-green-500/20'
+                                    : 'bg-white text-background-dark hover:bg-neutral-200 shadow-white/10 hover:scale-[1.02]'
                                     }`}
                             >
                                 {copied ? (
