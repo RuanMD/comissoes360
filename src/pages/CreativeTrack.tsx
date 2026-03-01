@@ -12,7 +12,7 @@ import {
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown, ChevronRight, FileEdit
+    ChevronDown, ChevronRight, FileEdit, ShoppingBag
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -102,6 +102,7 @@ interface TrackEntry {
     orders: number;
     commission_value: number;
     investment: number;
+    is_direct?: boolean;
 }
 
 interface FbLinkedAd {
@@ -194,6 +195,7 @@ interface ShopeeConversion {
     fraud_status: string | null;
     global_category_lv1: string | null;
     is_validated: boolean;
+    is_direct?: boolean;
     synced_at: string;
 }
 
@@ -2103,7 +2105,11 @@ export function CreativeTrack() {
         ]);
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
-        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc };
+        const directSales = filteredAllEntries.reduce((s, e) => s + (e.is_direct ? Number(e.orders) : 0), 0) +
+            filteredUnmatchedConversions.filter(c => c.is_direct).length;
+        const indirectSales = totalOrders - directSales;
+
+        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc, directSales, indirectSales };
     }, [filteredAllEntries, filteredUnmatchedConversions]);
 
     // ========== TRACK RANKING ==========
@@ -2609,6 +2615,7 @@ export function CreativeTrack() {
                                         { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
                                         { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
                                         { label: '% Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                        { label: 'Vendas Dir x Ind', value: `${globalKpis.directSales} / ${globalKpis.indirectSales}`, icon: ShoppingBag, color: 'text-indigo-400' },
                                         { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
                                         { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
                                         { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
