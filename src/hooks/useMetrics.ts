@@ -487,7 +487,7 @@ export function useMetrics() {
             .sort((a, b) => b.commission - a.commission);
 
         return {
-            isEmpty: unifiedCommission.length === 0 && clickData.length === 0 && dbTracks.length === 0,
+            isEmpty: commissionData.length === 0 && clickData.length === 0 && dbConversions.length === 0 && dbTracks.length === 0,
             totalOrders, totalNetCommission, totalOrderValue, totalClicks,
             epc,
             funnelBySubId,

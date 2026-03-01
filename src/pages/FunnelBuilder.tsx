@@ -15,9 +15,16 @@ interface FunnelCondition {
     value: number;
 }
 
+interface FunnelConditionGroup {
+    id: string;
+    conditions: FunnelCondition[];
+}
+
 interface FunnelDay {
     day: number;
-    conditions: FunnelCondition[];
+    condition_groups: FunnelConditionGroup[];
+    /** @deprecated Antiga estrutura mantida para migração fluida */
+    conditions?: FunnelCondition[];
 }
 
 interface Funnel {
@@ -25,7 +32,9 @@ interface Funnel {
     user_id: string;
     name: string;
     days: FunnelDay[];
-    maintenance_conditions: FunnelCondition[];
+    maintenance_condition_groups: FunnelConditionGroup[];
+    /** @deprecated Antiga estrutura mantida para migração fluida */
+    maintenance_conditions?: FunnelCondition[];
     created_at: string;
 }
 
@@ -82,7 +91,7 @@ export function FunnelBuilder() {
     const [selectedFunnel, setSelectedFunnel] = useState<Funnel | null>(null);
     const [editName, setEditName] = useState('');
     const [editDays, setEditDays] = useState<FunnelDay[]>([]);
-    const [editMaintenance, setEditMaintenance] = useState<FunnelCondition[]>([]);
+    const [editMaintenance, setEditMaintenance] = useState<FunnelConditionGroup[]>([]);
     const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
     const [showNewForm, setShowNewForm] = useState(false);
@@ -147,8 +156,27 @@ export function FunnelBuilder() {
     const handleSelectFunnel = (funnel: Funnel) => {
         setSelectedFunnel(funnel);
         setEditName(funnel.name);
-        setEditDays(JSON.parse(JSON.stringify(funnel.days || [])));
-        setEditMaintenance(JSON.parse(JSON.stringify(funnel.maintenance_conditions || [])));
+
+        // Migração de dados antigos para nova estrutura de Grupos
+        const migrateDay = (d: FunnelDay): FunnelDay => {
+            if (d.condition_groups && d.condition_groups.length > 0) return d;
+            return {
+                day: d.day,
+                condition_groups: [
+                    { id: crypto.randomUUID(), conditions: d.conditions || [] }
+                ]
+            };
+        };
+
+        const migrateMaintenance = (f: Funnel): FunnelConditionGroup[] => {
+            if (f.maintenance_condition_groups && f.maintenance_condition_groups.length > 0) return f.maintenance_condition_groups;
+            return [
+                { id: crypto.randomUUID(), conditions: f.maintenance_conditions || [] }
+            ];
+        };
+
+        setEditDays((funnel.days || []).map(migrateDay));
+        setEditMaintenance(migrateMaintenance(funnel));
         setExpandedDay(null);
     };
 
@@ -161,14 +189,16 @@ export function FunnelBuilder() {
                 .update({
                     name: editName.trim(),
                     days: editDays,
-                    maintenance_conditions: editMaintenance,
+                    maintenance_condition_groups: editMaintenance,
+                    // Manter campos antigos por segurança durante transição
+                    days_json_legacy: editDays,
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', selectedFunnel.id);
             if (error) throw error;
             showToast('Funil salvo!');
             fetchFunnels();
-            setSelectedFunnel({ ...selectedFunnel, name: editName, days: editDays, maintenance_conditions: editMaintenance });
+            setSelectedFunnel({ ...selectedFunnel, name: editName, days: editDays, maintenance_condition_groups: editMaintenance });
         } catch (err) {
             console.error(err);
             showToast('Erro ao salvar funil.', 'error');
@@ -201,7 +231,13 @@ export function FunnelBuilder() {
 
     const addDay = () => {
         const nextDay = editDays.length > 0 ? Math.max(...editDays.map(d => d.day)) + 1 : 1;
-        setEditDays([...editDays, { day: nextDay, conditions: [] }]);
+        const newDay: FunnelDay = {
+            day: nextDay,
+            condition_groups: [
+                { id: crypto.randomUUID(), conditions: [{ metric: 'cpc', operator: '<=', value: 1 }] }
+            ]
+        };
+        setEditDays([...editDays, newDay]);
         setExpandedDay(nextDay);
     };
 
@@ -214,47 +250,142 @@ export function FunnelBuilder() {
         const source = editDays.find(d => d.day === dayNumber);
         if (!source) return;
         const nextDay = Math.max(...editDays.map(d => d.day)) + 1;
-        setEditDays([...editDays, { day: nextDay, conditions: JSON.parse(JSON.stringify(source.conditions)) }]);
+        const newDay: FunnelDay = JSON.parse(JSON.stringify(source));
+        newDay.day = nextDay;
+        // Regenerar IDs dos grupos para evitar colisão
+        newDay.condition_groups.forEach(g => g.id = crypto.randomUUID());
+
+        setEditDays([...editDays, newDay]);
         setExpandedDay(nextDay);
     };
 
-    // ── Condition Management ─────────────────────────────
+    // ── Group Management ─────────────────────────────────
 
-    const addCondition = (dayNumber: number) => {
+    const addGroup = (dayNumber: number) => {
         setEditDays(editDays.map(d => {
             if (d.day !== dayNumber) return d;
             return {
                 ...d,
-                conditions: [...d.conditions, { metric: 'cpc', operator: '<=', value: 0 }],
+                condition_groups: [
+                    ...d.condition_groups,
+                    { id: crypto.randomUUID(), conditions: [{ metric: 'cpc', operator: '<=', value: 1 }] }
+                ]
             };
         }));
     };
 
-    const updateCondition = (dayNumber: number, condIndex: number, field: keyof FunnelCondition, val: string | number) => {
+    const removeGroup = (dayNumber: number, groupId: string) => {
         setEditDays(editDays.map(d => {
             if (d.day !== dayNumber) return d;
-            const updated = [...d.conditions];
-            updated[condIndex] = { ...updated[condIndex], [field]: field === 'value' ? Number(val) : val };
-            return { ...d, conditions: updated };
+            return {
+                ...d,
+                condition_groups: d.condition_groups.filter(g => g.id !== groupId)
+            };
         }));
     };
 
-    const removeCondition = (dayNumber: number, condIndex: number) => {
+    // ── Condition Management ─────────────────────────────
+
+    const addCondition = (dayNumber: number, groupId: string) => {
         setEditDays(editDays.map(d => {
             if (d.day !== dayNumber) return d;
-            const updated = [...d.conditions];
-            updated.splice(condIndex, 1);
-            return { ...d, conditions: updated };
+            return {
+                ...d,
+                condition_groups: d.condition_groups.map(g => {
+                    if (g.id !== groupId) return g;
+                    return { ...g, conditions: [...g.conditions, { metric: 'cpc', operator: '<=', value: 0 }] };
+                })
+            };
         }));
     };
 
-    /** Atualiza múltiplos campos de uma condição em um único setState */
-    const updateConditionFields = (dayNumber: number, condIndex: number, fields: Partial<FunnelCondition>) => {
-        setEditDays(prev => prev.map(d => {
+    const updateCondition = (dayNumber: number, groupId: string, condIndex: number, field: keyof FunnelCondition, val: string | number) => {
+        setEditDays(editDays.map(d => {
             if (d.day !== dayNumber) return d;
-            const updated = [...d.conditions];
-            updated[condIndex] = { ...updated[condIndex], ...fields };
-            return { ...d, conditions: updated };
+            return {
+                ...d,
+                condition_groups: d.condition_groups.map(g => {
+                    if (g.id !== groupId) return g;
+                    const updated = [...g.conditions];
+                    updated[condIndex] = { ...updated[condIndex], [field]: field === 'value' ? Number(val) : val };
+                    return { ...g, conditions: updated };
+                })
+            };
+        }));
+    };
+
+    const updateConditionFields = (dayNumber: number, groupId: string, condIndex: number, fields: Partial<FunnelCondition>) => {
+        setEditDays(dList => dList.map(d => {
+            if (d.day !== dayNumber) return d;
+            return {
+                ...d,
+                condition_groups: d.condition_groups.map(g => {
+                    if (g.id !== groupId) return g;
+                    const updated = [...g.conditions];
+                    updated[condIndex] = { ...updated[condIndex], ...fields };
+                    return { ...g, conditions: updated };
+                })
+            };
+        }));
+    };
+
+    const removeCondition = (dayNumber: number, groupId: string, condIndex: number) => {
+        setEditDays(editDays.map(d => {
+            if (d.day !== dayNumber) return d;
+            return {
+                ...d,
+                condition_groups: d.condition_groups.map(g => {
+                    if (g.id !== groupId) return g;
+                    const updated = [...g.conditions];
+                    updated.splice(condIndex, 1);
+                    return { ...g, conditions: updated };
+                })
+            };
+        }));
+    };
+
+    // ── Maintenance Management (Groups) ──────────────────
+
+    const addMaintenanceGroup = () => {
+        setEditMaintenance(prev => [
+            ...prev,
+            { id: crypto.randomUUID(), conditions: [{ metric: 'ad_clicks', operator: '>=', value: 1 }] }
+        ]);
+    };
+
+    const removeMaintenanceGroup = (groupId: string) => {
+        setEditMaintenance(prev => prev.filter(g => g.id !== groupId));
+    };
+
+    const addMaintenanceCondition = (groupId: string) => {
+        setEditMaintenance(prev => prev.map(g => {
+            if (g.id !== groupId) return g;
+            return { ...g, conditions: [...g.conditions, { metric: 'ad_clicks', operator: '>=', value: 0 }] };
+        }));
+    };
+
+    const updateMaintenanceCondition = (groupId: string, ci: number, field: keyof FunnelCondition, val: any) => {
+        setEditMaintenance(prev => prev.map(g => {
+            if (g.id !== groupId) return g;
+            const updated = [...g.conditions];
+            updated[ci] = { ...updated[ci], [field]: field === 'value' ? Number(val) : val };
+            return { ...g, conditions: updated };
+        }));
+    };
+
+    const updateMaintenanceConditionFields = (groupId: string, ci: number, fields: Partial<FunnelCondition>) => {
+        setEditMaintenance(prev => prev.map(g => {
+            if (g.id !== groupId) return g;
+            const updated = [...g.conditions];
+            updated[ci] = { ...updated[ci], ...fields };
+            return { ...g, conditions: updated };
+        }));
+    };
+
+    const removeMaintenanceCondition = (groupId: string, ci: number) => {
+        setEditMaintenance(prev => prev.map(g => {
+            if (g.id !== groupId) return g;
+            return { ...g, conditions: g.conditions.filter((_, i) => i !== ci) };
         }));
     };
 
@@ -451,9 +582,24 @@ export function FunnelBuilder() {
                                                 </div>
 
                                                 {/* Conditions Preview (collapsed) */}
-                                                {!isExpanded && funnelDay.conditions.length > 0 && (
+                                                {!isExpanded && (funnelDay.condition_groups || []).length > 0 && (
                                                     <div className="px-4 pb-3 flex flex-wrap gap-1.5">
-                                                        {funnelDay.conditions.map((cond, ci) => (
+                                                        {funnelDay.condition_groups.map((group, gi) => (
+                                                            <div key={gi} className="flex flex-wrap gap-1.5 items-center">
+                                                                {gi > 0 && <span className="text-[10px] text-text-secondary font-bold px-1">OU</span>}
+                                                                {group.conditions.map((cond, ci) => (
+                                                                    <span key={ci} className="text-[10px] bg-surface-highlight text-text-secondary px-2 py-0.5 rounded-full border border-border-dark">
+                                                                        {formatConditionPreview(cond)}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {/* Conditions Preview (collapsed) */}
+                                                {!isExpanded && (funnelDay.condition_groups || []).length === 0 && (funnelDay.conditions || []).length > 0 && (
+                                                    <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+                                                        {(funnelDay.conditions || []).map((cond, ci) => (
                                                             <span key={ci} className="text-[10px] bg-surface-highlight text-text-secondary px-2 py-0.5 rounded-full border border-border-dark">
                                                                 {formatConditionPreview(cond)}
                                                             </span>
@@ -463,99 +609,121 @@ export function FunnelBuilder() {
 
                                                 {/* Expanded: Condition Editor */}
                                                 {isExpanded && (
-                                                    <div className="border-t border-border-dark p-4 flex flex-col gap-3">
-                                                        {funnelDay.conditions.map((cond, ci) => {
-                                                            const isProfit = cond.metric === 'profit';
-                                                            return (
-                                                                <div key={ci} className="flex items-center gap-2 flex-wrap">
-                                                                    {/* Metric */}
-                                                                    <select
-                                                                        value={cond.metric}
-                                                                        onChange={(e) => {
-                                                                            const newMetric = e.target.value;
-                                                                            if (newMetric === 'profit') {
-                                                                                // Atualizar metric + operator + value de uma vez
-                                                                                updateConditionFields(funnelDay.day, ci, {
-                                                                                    metric: 'profit',
-                                                                                    operator: '>',
-                                                                                    value: 0,
-                                                                                });
-                                                                            } else {
-                                                                                updateCondition(funnelDay.day, ci, 'metric', newMetric);
-                                                                            }
-                                                                        }}
-                                                                        className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary flex-1 min-w-[140px]"
-                                                                    >
-                                                                        {METRICS.map(m => (
-                                                                            <option key={m.key} value={m.key}>{m.label}</option>
-                                                                        ))}
-                                                                    </select>
+                                                    <div className="border-t border-border-dark p-4 flex flex-col gap-4">
+                                                        {funnelDay.condition_groups.map((group, gi) => (
+                                                            <div key={group.id} className="relative bg-surface-highlight/20 border border-border-dark/50 rounded-lg p-3 pt-4">
+                                                                {/* OR Label for subsequent groups */}
+                                                                {gi > 0 && (
+                                                                    <div className="absolute -top-3 left-4 bg-background-dark border border-border-dark px-2 py-0.5 rounded text-[10px] font-bold text-primary">
+                                                                        OU
+                                                                    </div>
+                                                                )}
 
-                                                                    {isProfit ? (
-                                                                        /* Preset de Lucro */
-                                                                        <select
-                                                                            value={cond.operator}
-                                                                            onChange={(e) => {
-                                                                                const preset = PROFIT_PRESETS.find(p => p.operator === e.target.value);
-                                                                                if (preset) {
-                                                                                    updateCondition(funnelDay.day, ci, 'operator', preset.operator);
-                                                                                    updateCondition(funnelDay.day, ci, 'value', preset.value);
-                                                                                }
-                                                                            }}
-                                                                            className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary flex-1 min-w-[160px]"
-                                                                        >
-                                                                            {PROFIT_PRESETS.map(p => (
-                                                                                <option key={p.operator} value={p.operator}>{p.label}</option>
-                                                                            ))}
-                                                                        </select>
-                                                                    ) : (
-                                                                        <>
-                                                                            {/* Operator */}
+                                                                <div className="flex flex-col gap-3">
+                                                                    {group.conditions.map((cond, ci) => (
+                                                                        <div key={ci} className="flex items-center gap-2 flex-wrap">
+                                                                            {/* Metric */}
                                                                             <select
-                                                                                value={cond.operator}
-                                                                                onChange={(e) => updateCondition(funnelDay.day, ci, 'operator', e.target.value)}
-                                                                                className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary min-w-[120px]"
+                                                                                value={cond.metric}
+                                                                                onChange={(e) => {
+                                                                                    const newMetric = e.target.value;
+                                                                                    if (newMetric === 'profit') {
+                                                                                        // Atualizar metric + operator + value de uma vez
+                                                                                        updateConditionFields(funnelDay.day, group.id, ci, {
+                                                                                            metric: 'profit',
+                                                                                            operator: '>',
+                                                                                            value: 0,
+                                                                                        });
+                                                                                    } else {
+                                                                                        updateCondition(funnelDay.day, group.id, ci, 'metric', newMetric);
+                                                                                    }
+                                                                                }}
+                                                                                className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary flex-1 min-w-[140px]"
                                                                             >
-                                                                                {OPERATORS.map(o => (
-                                                                                    <option key={o.key} value={o.key}>{o.label}</option>
+                                                                                {METRICS.map(m => (
+                                                                                    <option key={m.key} value={m.key}>{m.label}</option>
                                                                                 ))}
                                                                             </select>
 
-                                                                            {/* Value */}
-                                                                            <div className="relative flex-1 min-w-[100px]">
-                                                                                {getMetricUnit(cond.metric) && (
-                                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-xs">
-                                                                                        {getMetricUnit(cond.metric)}
-                                                                                    </span>
-                                                                                )}
-                                                                                <input
-                                                                                    type="number"
-                                                                                    step="any"
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => updateCondition(funnelDay.day, ci, 'value', e.target.value)}
-                                                                                    className={`w-full bg-surface-dark border border-border-dark rounded-lg py-2 text-xs text-white outline-none focus:border-primary ${getMetricUnit(cond.metric) ? 'pl-8 pr-3' : 'px-3'
-                                                                                        }`}
-                                                                                />
-                                                                            </div>
-                                                                        </>
-                                                                    )}
+                                                                            {cond.metric === 'profit' ? (
+                                                                                <select
+                                                                                    value={cond.operator}
+                                                                                    onChange={(e) => {
+                                                                                        const preset = PROFIT_PRESETS.find(p => p.operator === e.target.value);
+                                                                                        if (preset) {
+                                                                                            updateCondition(funnelDay.day, group.id, ci, 'operator', preset.operator);
+                                                                                            updateCondition(funnelDay.day, group.id, ci, 'value', preset.value);
+                                                                                        }
+                                                                                    }}
+                                                                                    className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary flex-1 min-w-[160px]"
+                                                                                >
+                                                                                    {PROFIT_PRESETS.map(p => (
+                                                                                        <option key={p.operator} value={p.operator}>{p.label}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <select
+                                                                                        value={cond.operator}
+                                                                                        onChange={(e) => updateCondition(funnelDay.day, group.id, ci, 'operator', e.target.value)}
+                                                                                        className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-primary min-w-[120px]"
+                                                                                    >
+                                                                                        {OPERATORS.map(o => (
+                                                                                            <option key={o.key} value={o.key}>{o.label}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                    <div className="relative flex-1 min-w-[100px]">
+                                                                                        {getMetricUnit(cond.metric) && (
+                                                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-xs">
+                                                                                                {getMetricUnit(cond.metric)}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            step="any"
+                                                                                            value={cond.value}
+                                                                                            onChange={(e) => updateCondition(funnelDay.day, group.id, ci, 'value', e.target.value)}
+                                                                                            className={`w-full bg-surface-dark border border-border-dark rounded-lg py-2 text-xs text-white outline-none focus:border-primary ${getMetricUnit(cond.metric) ? 'pl-8 pr-3' : 'px-3'}`}
+                                                                                        />
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
 
-                                                                    {/* Remove */}
-                                                                    <button
-                                                                        onClick={() => removeCondition(funnelDay.day, ci)}
-                                                                        className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
-                                                                    >
-                                                                        <X className="w-3.5 h-3.5" />
-                                                                    </button>
+                                                                            <button
+                                                                                onClick={() => removeCondition(funnelDay.day, group.id, ci)}
+                                                                                className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                                                                            >
+                                                                                <X className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                            );
-                                                        })}
+
+                                                                <div className="flex items-center justify-between mt-2 border-t border-border-dark/30 pt-2">
+                                                                    <button
+                                                                        onClick={() => addCondition(funnelDay.day, group.id)}
+                                                                        className="text-primary text-[10px] font-medium hover:underline flex items-center gap-1"
+                                                                    >
+                                                                        <Plus className="w-3 h-3" /> Adicionar Condição (E)
+                                                                    </button>
+
+                                                                    {funnelDay.condition_groups.length > 1 && (
+                                                                        <button
+                                                                            onClick={() => removeGroup(funnelDay.day, group.id)}
+                                                                            className="text-red-400/70 hover:text-red-400 text-[10px] font-medium flex items-center gap-1"
+                                                                        >
+                                                                            <Trash2 className="w-3 h-3" /> Remover Grupo
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
 
                                                         <button
-                                                            onClick={() => addCondition(funnelDay.day)}
-                                                            className="text-primary text-xs font-medium hover:underline flex items-center gap-1 mt-1"
+                                                            onClick={() => addGroup(funnelDay.day)}
+                                                            className="w-full border border-dashed border-primary/30 rounded-lg py-2 text-xs text-primary/70 hover:text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
                                                         >
-                                                            <Plus className="w-3.5 h-3.5" /> Adicionar Condição
+                                                            <Plus className="w-3.5 h-3.5" /> Adicionar Grupo Alternativo (OU)
                                                         </button>
                                                     </div>
                                                 )}
@@ -572,104 +740,126 @@ export function FunnelBuilder() {
                                 </button>
 
                                 {/* ── Manutenção (Constant Day) ── */}
-                                <div className="bg-surface-dark border border-green-500/30 rounded-xl overflow-hidden">
+                                <div className="bg-surface-dark border border-green-500/30 rounded-xl overflow-hidden mt-2">
                                     <div className="flex items-center justify-between px-4 py-3 bg-green-500/5">
                                         <div className="flex items-center gap-3">
-                                            <span className="w-8 h-8 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">∞</span>
+                                            <span className="w-8 h-8 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-sm font-bold">∞</span>
                                             <div>
                                                 <span className="text-sm font-bold text-green-400">Manutenção</span>
                                                 <span className="text-xs text-text-secondary ml-2">
-                                                    {editMaintenance.length} condição(ões) · aplica a todos os dias após Dia {editDays.length}
+                                                    {(editMaintenance || []).length} grupo(s) · aplica a todos os dias após Dia {(editDays || []).length}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-4 space-y-3">
-                                        {editMaintenance.map((cond, ci) => {
-                                            const metricObj = METRICS.find(m => m.key === cond.metric);
-                                            return (
-                                                <div key={ci} className="flex items-center gap-2 flex-wrap">
-                                                    <select
-                                                        value={cond.metric}
-                                                        onChange={(e) => {
-                                                            const newMetric = e.target.value;
-                                                            const updated = [...editMaintenance];
-                                                            if (newMetric === 'profit') {
-                                                                updated[ci] = { ...updated[ci], metric: 'profit', operator: '>', value: 0 };
-                                                            } else {
-                                                                updated[ci] = { ...updated[ci], metric: newMetric };
-                                                            }
-                                                            setEditMaintenance(updated);
-                                                        }}
-                                                        className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 flex-1 min-w-[140px]"
-                                                    >
-                                                        {METRICS.map(m => (
-                                                            <option key={m.key} value={m.key}>{m.label}</option>
-                                                        ))}
-                                                    </select>
+                                    <div className="p-4 flex flex-col gap-4">
+                                        {editMaintenance.map((group, gi) => (
+                                            <div key={group.id} className="relative bg-green-500/5 border border-green-500/20 rounded-lg p-3 pt-4">
+                                                {gi > 0 && (
+                                                    <div className="absolute -top-3 left-4 bg-background-dark border border-green-500/20 px-2 py-0.5 rounded text-[10px] font-bold text-green-400">
+                                                        OU
+                                                    </div>
+                                                )}
 
-                                                    {cond.metric === 'profit' && isProfitPreset(cond) ? (
-                                                        <select
-                                                            value={`${cond.operator}|${cond.value}`}
-                                                            onChange={(e) => {
-                                                                const [op, val] = e.target.value.split('|');
-                                                                const updated = [...editMaintenance];
-                                                                updated[ci] = { ...updated[ci], operator: op, value: Number(val) };
-                                                                setEditMaintenance(updated);
-                                                            }}
-                                                            className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 flex-1 min-w-[160px]"
-                                                        >
-                                                            {PROFIT_PRESETS.map(p => (
-                                                                <option key={p.label} value={`${p.operator}|${p.value}`}>{p.label}</option>
-                                                            ))}
-                                                        </select>
-                                                    ) : (
-                                                        <>
+                                                <div className="flex flex-col gap-3">
+                                                    {group.conditions.map((cond, ci) => (
+                                                        <div key={ci} className="flex items-center gap-2 flex-wrap">
                                                             <select
-                                                                value={cond.operator}
+                                                                value={cond.metric}
                                                                 onChange={(e) => {
-                                                                    const updated = [...editMaintenance];
-                                                                    updated[ci] = { ...updated[ci], operator: e.target.value };
-                                                                    setEditMaintenance(updated);
+                                                                    const newMetric = e.target.value;
+                                                                    if (newMetric === 'profit') {
+                                                                        updateMaintenanceConditionFields(group.id, ci, { metric: 'profit', operator: '>', value: 0 });
+                                                                    } else {
+                                                                        updateMaintenanceCondition(group.id, ci, 'metric', newMetric);
+                                                                    }
                                                                 }}
-                                                                className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 w-[130px]"
+                                                                className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 flex-1 min-w-[140px]"
                                                             >
-                                                                {OPERATORS.map(o => (
-                                                                    <option key={o.key} value={o.key}>{o.label}</option>
+                                                                {METRICS.map(m => (
+                                                                    <option key={m.key} value={m.key}>{m.label}</option>
                                                                 ))}
                                                             </select>
-                                                            <div className="flex items-center gap-1">
-                                                                {metricObj?.unit && <span className="text-xs text-text-secondary">{metricObj.unit}</span>}
-                                                                <input
-                                                                    type="number"
-                                                                    step={metricObj?.type === 'decimal' ? '0.01' : '1'}
-                                                                    value={cond.value}
-                                                                    onChange={(e) => {
-                                                                        const updated = [...editMaintenance];
-                                                                        updated[ci] = { ...updated[ci], value: Number(e.target.value) };
-                                                                        setEditMaintenance(updated);
-                                                                    }}
-                                                                    className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 w-[90px] text-right"
-                                                                />
-                                                            </div>
-                                                        </>
-                                                    )}
 
-                                                    <button
-                                                        onClick={() => setEditMaintenance(editMaintenance.filter((_, i) => i !== ci))}
-                                                        className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                                    >
-                                                        <X className="w-3.5 h-3.5" />
-                                                    </button>
+                                                            {cond.metric === 'profit' ? (
+                                                                <select
+                                                                    value={cond.operator}
+                                                                    onChange={(e) => {
+                                                                        const preset = PROFIT_PRESETS.find(p => p.operator === e.target.value);
+                                                                        if (preset) {
+                                                                            updateMaintenanceCondition(group.id, ci, 'operator', preset.operator);
+                                                                            updateMaintenanceCondition(group.id, ci, 'value', preset.value);
+                                                                        }
+                                                                    }}
+                                                                    className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 flex-1 min-w-[160px]"
+                                                                >
+                                                                    {PROFIT_PRESETS.map(p => (
+                                                                        <option key={p.operator} value={p.operator}>{p.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <>
+                                                                    <select
+                                                                        value={cond.operator}
+                                                                        onChange={(e) => updateMaintenanceCondition(group.id, ci, 'operator', e.target.value)}
+                                                                        className="bg-surface-dark border border-border-dark rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-green-500 min-w-[120px]"
+                                                                    >
+                                                                        {OPERATORS.map(o => (
+                                                                            <option key={o.key} value={o.key}>{o.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <div className="relative flex-1 min-w-[100px]">
+                                                                        {getMetricUnit(cond.metric) && (
+                                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-xs">
+                                                                                {getMetricUnit(cond.metric)}
+                                                                            </span>
+                                                                        )}
+                                                                        <input
+                                                                            type="number"
+                                                                            step="any"
+                                                                            value={cond.value}
+                                                                            onChange={(e) => updateMaintenanceCondition(group.id, ci, 'value', e.target.value)}
+                                                                            className={`w-full bg-surface-dark border border-border-dark rounded-lg py-2 text-xs text-white outline-none focus:border-green-500 ${getMetricUnit(cond.metric) ? 'pl-8 pr-3' : 'px-3'}`}
+                                                                        />
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            <button
+                                                                onClick={() => removeMaintenanceCondition(group.id, ci)}
+                                                                className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            );
-                                        })}
+
+                                                <div className="flex items-center justify-between mt-2 border-t border-green-500/10 pt-2">
+                                                    <button
+                                                        onClick={() => addMaintenanceCondition(group.id)}
+                                                        className="text-green-400 text-[10px] font-medium hover:underline flex items-center gap-1"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> Adicionar Condição (E)
+                                                    </button>
+
+                                                    {editMaintenance.length > 1 && (
+                                                        <button
+                                                            onClick={() => removeMaintenanceGroup(group.id)}
+                                                            className="text-red-400/70 hover:text-red-400 text-[10px] font-medium flex items-center gap-1"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" /> Remover Grupo
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
 
                                         <button
-                                            onClick={() => setEditMaintenance([...editMaintenance, { metric: 'ad_clicks', operator: '<=', value: 0 }])}
-                                            className="text-green-400 text-xs font-medium hover:underline flex items-center gap-1 mt-1"
+                                            onClick={addMaintenanceGroup}
+                                            className="w-full border border-dashed border-green-500/30 rounded-lg py-2 text-xs text-green-400/70 hover:text-green-400 hover:bg-green-500/5 transition-colors flex items-center justify-center gap-2"
                                         >
-                                            <Plus className="w-3.5 h-3.5" /> Adicionar Condição de Manutenção
+                                            <Plus className="w-3.5 h-3.5" /> Adicionar Grupo Alternativo (OU)
                                         </button>
                                     </div>
                                 </div>

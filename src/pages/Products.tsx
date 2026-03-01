@@ -1,6 +1,6 @@
 import { useMetrics } from '../hooks/useMetrics';
 import { DateFilter } from '../components/ui/DateFilter';
-import { Package, Hash, DollarSign } from 'lucide-react';
+import { Package, Hash, DollarSign, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useOrderFilters } from '../hooks/useOrderFilters';
 import { OrderFiltersPanel } from '../components/ui/OrderFiltersPanel';
@@ -9,7 +9,7 @@ export function Products() {
     const metrics = useMetrics();
     const filterState = useOrderFilters(metrics.allOrders);
 
-    if (metrics.isEmpty || metrics.allOrders.length === 0) {
+    if (metrics.isEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-center">
                 <div className="w-20 h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-6 border border-border-dark shadow-2xl">
@@ -30,6 +30,39 @@ export function Products() {
                 </div>
                 <DateFilter />
             </header>
+
+            {/* Status KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                        <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-text-secondary">Pedidos Concluídos</p>
+                        <p className="font-bold text-xl text-emerald-400">{filterState.filteredMetrics.statusCounts?.completed || 0}</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                        <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-text-secondary">Pedidos Pendentes</p>
+                        <p className="font-bold text-xl text-amber-400">{filterState.filteredMetrics.statusCounts?.pending || 0}</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
+                    <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
+                        <XCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm text-text-secondary">Pedidos Cancelados</p>
+                        <p className="font-bold text-xl text-red-400">{filterState.filteredMetrics.statusCounts?.cancelled || 0}</p>
+                    </div>
+                </div>
+            </div>
 
             {/* Overview KPIs specific to Products context */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

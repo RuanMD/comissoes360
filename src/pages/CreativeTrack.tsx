@@ -133,16 +133,25 @@ interface FunnelCondition {
     value: number;
 }
 
+interface FunnelConditionGroup {
+    id: string;
+    conditions: FunnelCondition[];
+}
+
 interface FunnelDay {
     day: number;
-    conditions: FunnelCondition[];
+    condition_groups?: FunnelConditionGroup[];
+    /** @deprecated use condition_groups */
+    conditions?: FunnelCondition[];
 }
 
 interface LinkedFunnel {
     id: string;
     name: string;
     days: FunnelDay[];
-    maintenance_conditions: FunnelCondition[];
+    maintenance_condition_groups?: FunnelConditionGroup[];
+    /** @deprecated use maintenance_condition_groups */
+    maintenance_conditions?: FunnelCondition[];
 }
 
 const emptyEntryForm: EntryForm = {
@@ -3570,27 +3579,51 @@ export function CreativeTrack() {
                                                             if (linkedFunnel) {
                                                                 const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
                                                                 const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
-                                                                // Use maintenance conditions for days beyond configured ones
-                                                                const conditionsToEval = funnelDay
-                                                                    ? funnelDay.conditions
-                                                                    : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_conditions || []).length > 0)
-                                                                        ? linkedFunnel.maintenance_conditions
+
+                                                                // Use maintenance groups for days beyond configured ones
+                                                                const groupsToEval = funnelDay?.condition_groups?.length
+                                                                    ? funnelDay.condition_groups
+                                                                    : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_condition_groups || []).length > 0)
+                                                                        ? linkedFunnel.maintenance_condition_groups
                                                                         : null;
 
-                                                                if (conditionsToEval && conditionsToEval.length > 0) {
-                                                                    const eProfit = Number(entry.commission_value) - Number(entry.investment);
-                                                                    const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
-                                                                    const metricMap: Record<string, number> = {
-                                                                        ad_clicks: Number(entry.ad_clicks),
-                                                                        shopee_clicks: Number(entry.shopee_clicks),
-                                                                        cpc: Number(entry.cpc),
-                                                                        orders: Number(entry.orders),
-                                                                        commission_value: Number(entry.commission_value),
-                                                                        investment: Number(entry.investment),
-                                                                        profit: eProfit,
-                                                                        roi_percentage: eRoi,
-                                                                    };
-                                                                    const allPass = conditionsToEval.every(cond => {
+                                                                // Fallback for legacy structure if present
+                                                                const legacyConditions = funnelDay?.conditions || (dayNumber > maxFunnelDay ? linkedFunnel.maintenance_conditions : null);
+
+                                                                const eProfit = Number(entry.commission_value) - Number(entry.investment);
+                                                                const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
+                                                                const metricMap: Record<string, number> = {
+                                                                    ad_clicks: Number(entry.ad_clicks),
+                                                                    shopee_clicks: Number(entry.shopee_clicks),
+                                                                    cpc: Number(entry.cpc),
+                                                                    orders: Number(entry.orders),
+                                                                    commission_value: Number(entry.commission_value),
+                                                                    investment: Number(entry.investment),
+                                                                    profit: eProfit,
+                                                                    roi_percentage: eRoi,
+                                                                };
+
+                                                                if (groupsToEval && groupsToEval.length > 0) {
+                                                                    // LOGIC OR: If ANY group matches its internal conditions, the day passes
+                                                                    const anyGroupPass = groupsToEval.some(group => {
+                                                                        if (!group.conditions || group.conditions.length === 0) return false;
+                                                                        // LOGIC AND: All conditions in a group must match
+                                                                        return group.conditions.every(cond => {
+                                                                            const actual = metricMap[cond.metric] ?? 0;
+                                                                            switch (cond.operator) {
+                                                                                case '<=': return actual <= cond.value;
+                                                                                case '>=': return actual >= cond.value;
+                                                                                case '==': return actual === cond.value;
+                                                                                case '>': return actual > cond.value;
+                                                                                case '<': return actual < cond.value;
+                                                                                default: return false;
+                                                                            }
+                                                                        });
+                                                                    });
+                                                                    funnelStatus = anyGroupPass ? 'pass' : 'fail';
+                                                                } else if (legacyConditions && legacyConditions.length > 0) {
+                                                                    // Backward compatibility for legacy funnels
+                                                                    const allPass = legacyConditions.every(cond => {
                                                                         const actual = metricMap[cond.metric] ?? 0;
                                                                         switch (cond.operator) {
                                                                             case '<=': return actual <= cond.value;

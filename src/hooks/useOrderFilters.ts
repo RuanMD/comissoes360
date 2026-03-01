@@ -109,10 +109,28 @@ export function useOrderFilters(allOrders: any[]) {
         const totalUnits = filteredOrders.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
         const totalCommission = filteredOrders.reduce((sum, o) => sum + (Number(o.commission) || 0), 0);
 
+        const statusCounts = {
+            completed: 0,
+            pending: 0,
+            cancelled: 0
+        };
+
+        filteredOrders.forEach(order => {
+            const s = (order.status || '').toUpperCase();
+            if (['PAID', 'VALIDATED', 'COMPLETED', 'CONCLUÍDO'].includes(s)) {
+                statusCounts.completed++;
+            } else if (['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'CANCELADO'].includes(s)) {
+                statusCounts.cancelled++;
+            } else {
+                statusCounts.pending++;
+            }
+        });
+
         return {
             uniqueProductsCount: uniqueProducts.size,
             totalUnits,
-            totalCommission
+            totalCommission,
+            statusCounts
         };
     }, [filteredOrders]);
 
