@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
     X, LogOut, Settings, BarChart3, TrendingUp,
-    Package, Moon, Link, Upload
+    Package, Moon, Link, Upload, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
@@ -11,9 +11,10 @@ interface MobileMenuProps {
     isOpen: boolean;
     onClose: () => void;
     onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onRefresh?: () => void;
 }
 
-export function MobileMenu({ isOpen, onClose, onFileUpload }: MobileMenuProps) {
+export function MobileMenu({ isOpen, onClose, onFileUpload, onRefresh }: MobileMenuProps) {
     const { signOut, isAdmin } = useAuth();
     const { hasAccess } = useFeatureAccess();
 
@@ -61,6 +62,16 @@ export function MobileMenu({ isOpen, onClose, onFileUpload }: MobileMenuProps) {
                                 <span>Importar Vendas (CSV)</span>
                                 <input type="file" accept=".csv" onChange={(e) => { onFileUpload(e); onClose(); }} className="hidden" />
                             </label>
+
+                            {onRefresh && (
+                                <button
+                                    onClick={() => { onRefresh(); onClose(); }}
+                                    className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-surface-highlight border border-border-dark text-white rounded-2xl active:scale-95 transition-all font-bold w-full box-border text-sm sm:text-base mb-2"
+                                >
+                                    <RefreshCw className="w-5 h-5 text-primary" />
+                                    <span>Forçar atualização das métricas</span>
+                                </button>
+                            )}
 
                             <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2">
                                 {visibleOthers.map((item) => (

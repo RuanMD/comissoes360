@@ -144,6 +144,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                     isOpen={isMobileMenuOpen}
                     onClose={() => setIsMobileMenuOpen(false)}
                     onFileUpload={handleFileUpload}
+                    onRefresh={() => {
+                        window.location.reload();
+                    }}
                 />
             </div>
 
