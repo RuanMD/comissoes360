@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { BarChart3 } from 'lucide-react';
 
 interface PublicLayoutProps {
@@ -7,6 +7,9 @@ interface PublicLayoutProps {
 }
 
 export function PublicLayout({ children }: PublicLayoutProps) {
+    const location = useLocation();
+    const isLoginPage = location.pathname === '/login';
+
     return (
         <div className="min-h-screen bg-[#121212] text-white flex flex-col font-['Manrope',sans-serif]">
             {/* Header da Landing Page / Public */}
@@ -27,12 +30,14 @@ export function PublicLayout({ children }: PublicLayoutProps) {
                     </nav>
 
                     <div className="flex items-center">
-                        <Link
-                            to="/login"
-                            className="px-6 py-2 rounded-lg bg-[#f2a20d] text-black font-semibold hover:bg-[#d98f0a] transition-all"
-                        >
-                            Entrar
-                        </Link>
+                        {!isLoginPage && (
+                            <Link
+                                to="/login"
+                                className="px-6 py-2 rounded-lg bg-[#f2a20d] text-black font-semibold hover:bg-[#d98f0a] transition-all"
+                            >
+                                Entrar
+                            </Link>
+                        )}
                     </div>
                 </div>
             </header>
