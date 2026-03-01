@@ -407,6 +407,7 @@ export function CreativeTrack() {
 
     // Shopee Conversions state
     const [shopeeConversions, setShopeeConversions] = useState<ShopeeConversion[]>([]);
+    const [allUserConversions, setAllUserConversions] = useState<ShopeeConversion[]>([]);
     const [syncingConversions, setSyncingConversions] = useState(false);
     const [syncingValidated, setSyncingValidated] = useState(false);
 
@@ -417,6 +418,7 @@ export function CreativeTrack() {
             fetchFbToken();
             fetchUserFunnels();
             fetchAllEntries();
+            fetchAllUserConversions();
         }
     }, [user]);
 
@@ -452,6 +454,19 @@ export function CreativeTrack() {
                 .in('track_id', trackIds);
             setAllEntries(data || []);
         }
+    };
+
+    const fetchAllUserConversions = async () => {
+        if (!user) return;
+        const { data, error } = await supabase
+            .from('shopee_conversions')
+            .select('*')
+            .eq('user_id', user.id);
+        if (error) {
+            console.error('Erro ao buscar conversões do usuário:', error);
+            return;
+        }
+        setAllUserConversions(data || []);
     };
 
     const fetchFbToken = async () => {
@@ -1211,6 +1226,7 @@ export function CreativeTrack() {
             .upsert(entriesUpsert, { onConflict: 'track_id,date' });
 
         await fetchAllEntries();
+        await fetchAllUserConversions();
     };
 
     // ========== SYNC CONVERSIONS ==========
@@ -1254,6 +1270,7 @@ export function CreativeTrack() {
 
                         rows.push({
                             track_id: selectedTrack.id,
+                            user_id: user!.id,
                             conversion_id: node.conversionId || `${node.checkoutId}-${item.itemId}`,
                             click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                             purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
@@ -1323,7 +1340,7 @@ export function CreativeTrack() {
             } else {
                 const { error } = await supabase
                     .from('shopee_conversions')
-                    .upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
+                    .upsert(rows, { onConflict: 'user_id,conversion_id,item_id' });
                 if (error) throw error;
                 showToast(`${rows.length} conversão(ões) sincronizada(s)!`);
             }
@@ -1381,6 +1398,7 @@ export function CreativeTrack() {
 
                         rows.push({
                             track_id: selectedTrack.id,
+                            user_id: user!.id,
                             conversion_id: node.conversionId || `validated-${order.orderId}-${item.itemId}`,
                             click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                             purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
@@ -1450,7 +1468,7 @@ export function CreativeTrack() {
             } else {
                 const { error } = await supabase
                     .from('shopee_conversions')
-                    .upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
+                    .upsert(rows, { onConflict: 'user_id,conversion_id,item_id' });
                 if (error) throw error;
                 showToast(`${rows.length} conversão(ões) validada(s) sincronizada(s)!`);
             }
@@ -1484,7 +1502,7 @@ export function CreativeTrack() {
             }>();
 
             // 1. Process Shopee Data
-            if ((mode === 'all' || mode === 'shopee') && tracks.length > 0) {
+            if (mode === 'all' || mode === 'shopee') {
                 const creds = await getShopeeCredentials();
                 if (!creds) {
                     showToast('Credenciais da Shopee não configuradas.', 'error');
@@ -1505,6 +1523,7 @@ export function CreativeTrack() {
                     }
 
                     const shopeeRowsMap = new Map<string, any>();
+                    let unmatchedCount = 0;
 
                     for (const node of allNodes) {
                         if (!node.orders) continue;
@@ -1518,17 +1537,18 @@ export function CreativeTrack() {
                                     (t.sub_id && node.utmContent && node.utmContent.includes(t.sub_id))
                                 );
 
-                                if (!matchedTrack) continue;
-
                                 const conversionId = node.conversionId || `${node.checkoutId || 'unknown'}-${item.itemId}`;
-                                const rowKey = `${matchedTrack.id}_${conversionId}_${item.itemId}`;
+                                const trackId = matchedTrack?.id || null;
+                                const rowKey = trackId ? `${trackId}_${conversionId}_${item.itemId}` : `unmatched_${conversionId}_${item.itemId}`;
+                                if (!matchedTrack) unmatchedCount++;
 
                                 // Determine validation from conversionStatus
                                 const status = node.conversionStatus || '';
                                 const isValidated = status === 'PAID' || status === 'COMPLETED' || status === 'SETTLED';
 
                                 shopeeRowsMap.set(rowKey, {
-                                    track_id: matchedTrack.id,
+                                    track_id: trackId,
+                                    user_id: user!.id,
                                     conversion_id: conversionId,
                                     click_time: node.clickTime ? new Date(node.clickTime * 1000).toISOString() : null,
                                     purchase_time: node.purchaseTime ? new Date(node.purchaseTime * 1000).toISOString() : null,
@@ -1590,26 +1610,28 @@ export function CreativeTrack() {
                                     synced_at: new Date().toISOString(),
                                 });
 
-                                // Aggregate for entries (use local date, not UTC)
-                                const orderStatus = order.orderStatus || node.conversionStatus || '';
-                                if (node.purchaseTime && orderStatus !== 'CANCELLED') {
-                                    const dateStr = format(new Date(node.purchaseTime * 1000), 'yyyy-MM-dd');
-                                    const aggKey = `${matchedTrack.id}_${dateStr}`;
-                                    const curr = globalEntriesMap.get(aggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
-                                    if (order.orderId) curr.orderIds!.add(order.orderId);
-                                    curr.commission_value = (curr.commission_value || 0) + (item.itemTotalCommission || 0);
-                                    globalEntriesMap.set(aggKey, curr);
-                                }
+                                // Aggregate for entries only for matched tracks (use purchaseTime for date)
+                                if (matchedTrack) {
+                                    const orderStatus = order.orderStatus || node.conversionStatus || '';
+                                    if (node.purchaseTime && orderStatus !== 'CANCELLED') {
+                                        const dateStr = format(new Date(node.purchaseTime * 1000), 'yyyy-MM-dd');
+                                        const aggKey = `${matchedTrack.id}_${dateStr}`;
+                                        const curr = globalEntriesMap.get(aggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
+                                        if (order.orderId) curr.orderIds!.add(order.orderId);
+                                        curr.commission_value = (curr.commission_value || 0) + (Number(item.itemTotalCommission) || 0);
+                                        globalEntriesMap.set(aggKey, curr);
+                                    }
 
-                                // Count shopee clicks (unique clicks per day per track)
-                                if (node.clickTime) {
-                                    const clickDateStr = format(new Date(node.clickTime * 1000), 'yyyy-MM-dd');
-                                    const clickAggKey = `${matchedTrack.id}_${clickDateStr}`;
-                                    const clickCurr = globalEntriesMap.get(clickAggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
-                                    const clickUniqueId = `${node.conversionId || node.checkoutId}_${node.clickTime}`;
-                                    clickCurr.clickIds!.add(clickUniqueId);
-                                    clickCurr.shopee_clicks = clickCurr.clickIds!.size;
-                                    globalEntriesMap.set(clickAggKey, clickCurr);
+                                    // Count shopee clicks (unique clicks per day per track)
+                                    if (node.clickTime) {
+                                        const clickDateStr = format(new Date(node.clickTime * 1000), 'yyyy-MM-dd');
+                                        const clickAggKey = `${matchedTrack.id}_${clickDateStr}`;
+                                        const clickCurr = globalEntriesMap.get(clickAggKey) || { orderIds: new Set(), clickIds: new Set(), commission_value: 0, shopee_clicks: 0 };
+                                        const clickUniqueId = `${node.conversionId || node.checkoutId}_${node.clickTime}`;
+                                        clickCurr.clickIds!.add(clickUniqueId);
+                                        clickCurr.shopee_clicks = clickCurr.clickIds!.size;
+                                        globalEntriesMap.set(clickAggKey, clickCurr);
+                                    }
                                 }
                             }
                         }
@@ -1617,11 +1639,17 @@ export function CreativeTrack() {
 
                     const rows = Array.from(shopeeRowsMap.values());
                     if (rows.length > 0) {
-                        const { error } = await supabase.from('shopee_conversions').upsert(rows, { onConflict: 'track_id,conversion_id,item_id' });
-                        if (error) throw error;
+                        // Upsert ALL rows (matched + unmatched) using user_id-based unique constraint
+                        const batchSize = 100;
+                        for (let i = 0; i < rows.length; i += batchSize) {
+                            const batch = rows.slice(i, i + batchSize);
+                            const { error } = await supabase.from('shopee_conversions').upsert(batch, { onConflict: 'user_id,conversion_id,item_id' });
+                            if (error) throw error;
+                        }
                     }
 
-                    console.log(`[Global Sync] Shopee: ${allNodes.length} conversões encontradas, ${rows.length} linhas vinculadas aos tracks`);
+                    const matchedCount = rows.length - unmatchedCount;
+                    console.log(`[Global Sync] Shopee: ${allNodes.length} conversões encontradas, ${matchedCount} vinculadas a tracks, ${unmatchedCount} sem track (salvas para análise)`);
                 }
             }
 
@@ -1692,9 +1720,10 @@ export function CreativeTrack() {
                     const existing = existingEntries?.find(e => e.track_id === trackId && e.date === date);
 
                     const ordersVal = agg.orderIds && agg.orderIds.size > 0 ? agg.orderIds.size : (existing?.orders ?? 0);
-                    const commVal = agg.commission_value !== undefined && agg.commission_value > 0 ? agg.commission_value : (existing?.commission_value ?? 0);
+                    const commRaw = agg.commission_value !== undefined && Number(agg.commission_value) > 0 ? Number(agg.commission_value) : Number(existing?.commission_value ?? 0);
+                    const commVal = Number.isFinite(commRaw) ? commRaw : 0;
                     const clicksVal = agg.ad_clicks !== undefined ? agg.ad_clicks : (existing?.ad_clicks ?? 0);
-                    const investVal = agg.investment !== undefined ? agg.investment : (existing?.investment ?? 0);
+                    const investVal = agg.investment !== undefined ? Number(agg.investment) : Number(existing?.investment ?? 0);
                     const shopeeClicksVal = agg.shopee_clicks !== undefined && agg.shopee_clicks > 0 ? agg.shopee_clicks : (existing?.shopee_clicks ?? 0);
 
                     const calculatedCpc = (clicksVal > 0 && investVal > 0) ? investVal / clicksVal : 0;
@@ -1718,6 +1747,7 @@ export function CreativeTrack() {
             }
 
             await fetchAllEntries();
+            await fetchAllUserConversions();
             if (selectedTrack) {
                 const { data: trackEntries } = await supabase.from('creative_track_entries').select('*').eq('track_id', selectedTrack.id).order('date', { ascending: false });
                 setEntries(trackEntries || []);
@@ -1917,6 +1947,37 @@ export function CreativeTrack() {
         });
     }, [allEntries, dateFilter, customRange]);
 
+    // Unmatched conversions (track_id is null) filtered by date
+    const filteredUnmatchedConversions = useMemo(() => {
+        const unmatched = allUserConversions.filter(c => !c.track_id);
+        if (!unmatched.length) return [];
+        if (dateFilter === 'all') return unmatched;
+
+        const now = new Date();
+        let start: Date = new Date(0);
+        let end: Date = endOfDay(now);
+
+        switch (dateFilter) {
+            case 'today': start = startOfDay(now); break;
+            case 'yesterday': start = startOfDay(subDays(now, 1)); end = endOfDay(subDays(now, 1)); break;
+            case 'anteontem': start = startOfDay(subDays(now, 2)); end = endOfDay(subDays(now, 2)); break;
+            case '7days': start = startOfDay(subDays(now, 7)); break;
+            case '30days': start = startOfDay(subDays(now, 30)); break;
+            case 'custom':
+                if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                break;
+            default: return unmatched;
+        }
+
+        return unmatched.filter(c => {
+            if (!c.purchase_time) return false;
+            const dateObj = new Date(c.purchase_time);
+            if (isNaN(dateObj.getTime())) return false;
+            return isWithinInterval(dateObj, { start, end });
+        });
+    }, [allUserConversions, dateFilter, customRange]);
+
     const filteredConversions = useMemo(() => {
         if (!shopeeConversions.length) return [];
         if (dateFilter === 'all') return shopeeConversions;
@@ -2015,27 +2076,43 @@ export function CreativeTrack() {
         return { totalThruplay, totalP25, totalP50, totalP95, retentionRate };
     }, [fbMetrics, dateFilter, customRange]);
 
-    // ========== GLOBAL KPIs (all tracks) ==========
+    // ========== GLOBAL KPIs (all tracks + unmatched) ==========
     const globalKpis = useMemo(() => {
-        if (filteredAllEntries.length === 0) return null;
-        const totalCommission = filteredAllEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+        if (filteredAllEntries.length === 0 && filteredUnmatchedConversions.length === 0) return null;
+
+        // Tracked entries (from creative_track_entries)
+        const trackedCommission = filteredAllEntries.reduce((s, e) => s + Number(e.commission_value), 0);
         const totalInvestment = filteredAllEntries.reduce((s, e) => s + Number(e.investment), 0);
-        const totalOrders = filteredAllEntries.reduce((s, e) => s + Number(e.orders), 0);
+        const trackedOrders = filteredAllEntries.reduce((s, e) => s + Number(e.orders), 0);
         const totalShopeeClicks = filteredAllEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
         const totalAdClicks = filteredAllEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+
+        // Unmatched conversions (from shopee_conversions where track_id is null)
+        // Count unique orders by conversion_id
+        const unmatchedOrderIds = new Set(filteredUnmatchedConversions.map(c => c.conversion_id));
+        const unmatchedOrders = unmatchedOrderIds.size;
+        const unmatchedCommission = filteredUnmatchedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+
+        const totalCommission = trackedCommission + unmatchedCommission;
+        const totalOrders = trackedOrders + unmatchedOrders;
         const totalProfit = totalCommission - totalInvestment;
         const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
-        const uniqueDates = new Set(filteredAllEntries.map(e => e.date));
+        const uniqueDates = new Set([
+            ...filteredAllEntries.map(e => e.date),
+            ...filteredUnmatchedConversions.map(c => c.purchase_time ? format(new Date(c.purchase_time), 'yyyy-MM-dd') : '').filter(Boolean),
+        ]);
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
         return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc };
-    }, [filteredAllEntries]);
+    }, [filteredAllEntries, filteredUnmatchedConversions]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
-        if (creativeTracks.length === 0 || filteredAllEntries.length === 0) return [];
+        const hasEntries = filteredAllEntries.length > 0;
+        const hasUnmatched = filteredUnmatchedConversions.length > 0;
+        if (!hasEntries && !hasUnmatched) return [];
 
-        return creativeTracks.map(track => {
+        const ranked = hasEntries ? creativeTracks.map(track => {
             const trackEntries = filteredAllEntries.filter(e => e.track_id === track.id);
             const commission = trackEntries.reduce((s, e) => s + Number(e.commission_value), 0);
             const investment = trackEntries.reduce((s, e) => s + Number(e.investment), 0);
@@ -2045,10 +2122,40 @@ export function CreativeTrack() {
             const profit = commission - investment;
             const pct = investment > 0 ? (profit / investment) * 100 : 0;
             const cpc = adClicks > 0 ? investment / adClicks : 0;
-            return { track, orders, commission, investment, profit, pct, adClicks, shopeeClicks, cpc };
+            return { track, orders, commission, investment, profit, pct, adClicks, shopeeClicks, cpc, isUnmatched: false };
         }).filter(r => r.orders > 0 || r.investment > 0 || r.commission > 0 || r.adClicks > 0)
-            .sort((a, b) => b.profit - a.profit);
-    }, [tracks, filteredAllEntries]);
+            .sort((a, b) => b.profit - a.profit) as { track: Track; orders: number; commission: number; investment: number; profit: number; pct: number; adClicks: number; shopeeClicks: number; cpc: number; isUnmatched: boolean }[] : [];
+
+        // Add "Sem Track" row for unmatched conversions
+        if (hasUnmatched) {
+            const unmatchedOrderIds = new Set(filteredUnmatchedConversions.map(c => c.conversion_id));
+            const unmatchedCommission = filteredUnmatchedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+            const semTrack: Track = {
+                id: '__sem_track__',
+                user_id: '',
+                name: 'Sem Track',
+                affiliate_link: '',
+                sub_id: '',
+                created_at: '',
+                funnel_id: null,
+                status: 'desativado',
+            };
+            ranked.push({
+                track: semTrack,
+                orders: unmatchedOrderIds.size,
+                commission: unmatchedCommission,
+                investment: 0,
+                profit: unmatchedCommission,
+                pct: 0,
+                adClicks: 0,
+                shopeeClicks: 0,
+                cpc: 0,
+                isUnmatched: true,
+            });
+        }
+
+        return ranked;
+    }, [tracks, filteredAllEntries, filteredUnmatchedConversions]);
 
     const entryProfit = (parseFloat(entryForm.commission_value) || 0) - (parseFloat(entryForm.investment) || 0);
     const entryProfitPct = (parseFloat(entryForm.investment) || 0) > 0
@@ -2550,17 +2657,19 @@ export function CreativeTrack() {
                                             </thead>
                                             <tbody>
                                                 {trackRanking.map((row) => {
-                                                    const statusColor = row.track.status === 'ativo' ? 'bg-green-500' : row.track.status === 'validado' ? 'bg-blue-500' : 'bg-red-500';
+                                                    const isUnmatched = row.isUnmatched;
+                                                    const statusColor = isUnmatched ? 'bg-red-500' : row.track.status === 'ativo' ? 'bg-green-500' : row.track.status === 'validado' ? 'bg-blue-500' : 'bg-red-500';
                                                     return (
                                                         <tr
                                                             key={row.track.id}
-                                                            onClick={() => handleSelectTrack(row.track)}
-                                                            className="border-b border-border-dark/50 hover:bg-white/[0.03] cursor-pointer transition-colors"
+                                                            onClick={() => !isUnmatched && handleSelectTrack(row.track)}
+                                                            className={`border-b border-border-dark/50 hover:bg-white/[0.03] transition-colors ${isUnmatched ? 'opacity-80 bg-red-500/[0.03]' : 'cursor-pointer'}`}
                                                         >
                                                             <td className="p-3">
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-white font-medium text-sm">{row.track.name}</span>
+                                                                    <span className={`font-medium text-sm ${isUnmatched ? 'text-red-400 italic' : 'text-white'}`}>{row.track.name}</span>
                                                                     {row.track.sub_id && <span className="text-[10px] text-text-secondary font-mono">{row.track.sub_id}</span>}
+                                                                    {isUnmatched && <span className="text-[10px] text-red-400/70">Conversões não vinculadas a nenhum criativo</span>}
                                                                 </div>
                                                             </td>
                                                             <td className="p-3 text-center">
@@ -2584,21 +2693,23 @@ export function CreativeTrack() {
                                     {/* Mobile Card View */}
                                     <div className="md:hidden flex flex-col gap-3 p-3 bg-background-dark/30">
                                         {trackRanking.map((row) => {
-                                            const statusColor = row.track.status === 'ativo' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                                                row.track.status === 'validado' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                                                    row.track.status === 'rascunho' ? 'bg-white/10 text-white border-white/20' :
-                                                        'bg-red-500/20 text-red-400 border-red-500/30';
+                                            const isUnmatched = row.isUnmatched;
+                                            const statusColor = isUnmatched ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                                                row.track.status === 'ativo' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                                                    row.track.status === 'validado' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                                                        row.track.status === 'rascunho' ? 'bg-white/10 text-white border-white/20' :
+                                                            'bg-red-500/20 text-red-400 border-red-500/30';
 
                                             return (
                                                 <div
                                                     key={row.track.id}
-                                                    onClick={() => handleSelectTrack(row.track)}
-                                                    className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 shadow-lg active:scale-[0.98] transition-all flex flex-col gap-3 sm:gap-4"
+                                                    onClick={() => !isUnmatched && handleSelectTrack(row.track)}
+                                                    className={`bg-surface-dark border rounded-2xl p-3 sm:p-4 shadow-lg transition-all flex flex-col gap-3 sm:gap-4 ${isUnmatched ? 'border-red-500/30 opacity-80' : 'border-border-dark active:scale-[0.98]'}`}
                                                 >
                                                     {/* Card Header: Title & Status */}
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex flex-col min-w-0 flex-1">
-                                                            <h4 className="text-white font-bold text-base sm:text-lg leading-tight truncate">
+                                                            <h4 className={`font-bold text-base sm:text-lg leading-tight truncate ${isUnmatched ? 'text-red-400 italic' : 'text-white'}`}>
                                                                 {row.track.name}
                                                             </h4>
                                                             {row.track.sub_id && (
@@ -2606,12 +2717,15 @@ export function CreativeTrack() {
                                                                     {row.track.sub_id}
                                                                 </span>
                                                             )}
+                                                            {isUnmatched && (
+                                                                <span className="text-[10px] text-red-400/70 mt-1">Conversões não vinculadas</span>
+                                                            )}
                                                         </div>
                                                         <div className="flex flex-col items-end gap-2">
                                                             <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider ${statusColor}`}>
-                                                                {row.track.status}
+                                                                {isUnmatched ? 'sem track' : row.track.status}
                                                             </span>
-                                                            <ChevronRight className="w-4 h-4 text-text-secondary/30" />
+                                                            {!isUnmatched && <ChevronRight className="w-4 h-4 text-text-secondary/30" />}
                                                         </div>
                                                     </div>
 

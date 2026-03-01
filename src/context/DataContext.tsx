@@ -77,6 +77,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (!user || (!clickData.length && !commissionData.length)) return;
 
         const syncCsvWithDb = async () => {
+            const parseCurrency = (val: any) => {
+                if (!val) return 0;
+                const clean = val.toString().replace(/[^0-9,.-]/g, '').replace(',', '.');
+                const parsed = parseFloat(clean);
+                return isNaN(parsed) ? 0 : parsed;
+            };
+
             setIsAutoSyncing(true);
             try {
                 // 1. Fetch user's creative_tracks
@@ -183,7 +190,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
                     if (!dateObj) return;
                     const dateKey = format(dateObj, 'yyyy-MM-dd');
 
-                    const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
+
+                    const netComm = parseCurrency(item['Comissão líquida do afiliado(R$)']);
 
                     if (!matchedAgg[trackId]) matchedAgg[trackId] = {};
                     if (!matchedAgg[trackId][dateKey]) matchedAgg[trackId][dateKey] = {};
@@ -198,40 +206,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
                     const canonical = parts.join('-') || 'Sem Sub_id';
                     const trackId = getMatch(canonical);
-                    if (!trackId) return;
 
                     const dateObj = parseShopeeDate(item['Horário do pedido']);
                     if (!dateObj) return;
 
                     conversionRows.push({
                         track_id: trackId,
-                        conversion_id: item['ID do pedido']?.toString() || `${trackId}-${dateObj.getTime()}`,
+                        user_id: user?.id || null,
+                        conversion_id: item['ID do pedido']?.toString() || `${trackId || 'unmatched'}-${dateObj.getTime()}`,
                         click_time: parseShopeeDate(item['Tempo dos Cliques'])?.toISOString() || null,
                         purchase_time: dateObj.toISOString(),
                         order_id: item['ID do pedido']?.toString() || null,
                         order_status: item['Status do pedido'] || null,
                         item_id: parseInt(item['ID do item']?.toString() || '0') || null,
                         item_name: item['Nome do Produto'] || null,
-                        item_price: parseFloat(item['Preço unitário do item(R$)']?.toString().replace(',', '.') || '0'),
+                        item_price: parseCurrency(item['Preço unitário do item(R$)']),
                         qty: parseInt(item['Quantidade']?.toString() || '1'),
-                        actual_amount: parseFloat(item['Preço unitário do item(R$)']?.toString().replace(',', '.') || '0'),
-                        total_commission: parseFloat(item['Comissão total do afiliado(R$)']?.toString().replace(',', '.') || '0'),
-                        seller_commission: parseFloat(item['Comissão do vendedor(R$)']?.toString().replace(',', '.') || '0'),
-                        shopee_commission: parseFloat(item['Comissões extras da Shopee(R$)']?.toString().replace(',', '.') || '0'),
-                        net_commission: parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0'),
-                        item_total_commission: parseFloat(item['Comissão total do afiliado(R$)']?.toString().replace(',', '.') || '0'),
+                        actual_amount: parseCurrency(item['Preço unitário do item(R$)']),
+                        total_commission: parseCurrency(item['Comissão total do afiliado(R$)']),
+                        seller_commission: parseCurrency(item['Comissão do vendedor(R$)']),
+                        shopee_commission: parseCurrency(item['Comissões extras da Shopee(R$)']),
+                        net_commission: parseCurrency(item['Comissão líquida do afiliado(R$)']),
+                        item_total_commission: parseCurrency(item['Comissão total do afiliado(R$)']),
                         synced_at: new Date().toISOString()
                     });
                 });
 
                 if (conversionRows.length > 0) {
-                    // Batching conversions upsert to avoid payload limits if large
+                    // Batch upsert all rows (matched + unmatched) using user_id-based constraint
                     const chunkSize = 100;
                     for (let i = 0; i < conversionRows.length; i += chunkSize) {
                         const chunk = conversionRows.slice(i, i + chunkSize);
                         await supabase
                             .from('shopee_conversions')
-                            .upsert(chunk, { onConflict: 'track_id,conversion_id,item_id' });
+                            .upsert(chunk, { onConflict: 'user_id,conversion_id,item_id' });
                     }
                 }
 

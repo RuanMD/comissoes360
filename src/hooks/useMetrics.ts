@@ -344,9 +344,16 @@ export function useMetrics() {
             });
         });
 
+        const parseCurrency = (val: any) => {
+            if (!val) return 0;
+            const clean = val.toString().replace(/[^0-9,.-]/g, '').replace(',', '.');
+            const parsed = parseFloat(clean);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
         unifiedCommission.forEach((item: any) => {
-            const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
-            const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
+            const netComm = parseCurrency(item['Comissão líquida do afiliado(R$)']);
+            const orderVal = parseCurrency(item['Valor de Compra(R$)']);
             totalNetCommission += netComm;
             totalOrderValue += orderVal;
 
@@ -363,8 +370,8 @@ export function useMetrics() {
             if (buyerType.toLowerCase() === 'novo') newBuyersCount++;
             else if (buyerType.toLowerCase() === 'existente') existingBuyersCount++;
 
-            const shopeeComm = parseFloat(item['Comissão Shopee(R$)']?.toString().replace(',', '.') || '0');
-            const sellerComm = parseFloat(item['Comissão do vendedor(R$)']?.toString().replace(',', '.') || '0');
+            const shopeeComm = parseCurrency(item['Comissão Shopee(R$)']);
+            const sellerComm = parseCurrency(item['Comissão do vendedor(R$)']);
             shopeeCommissionTotal += shopeeComm;
             sellerCommissionTotal += sellerComm;
 
