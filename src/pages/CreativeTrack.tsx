@@ -12,7 +12,7 @@ import {
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown, ChevronRight, FileEdit, ShoppingBag
+    ChevronDown, ChevronRight, FileEdit, ShoppingBag, Archive, ArchiveRestore
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -62,6 +62,7 @@ interface Track {
     created_at: string;
     funnel_id: string | null;
     status: 'ativo' | 'desativado' | 'validado' | 'rascunho';
+    is_archived?: boolean;
     // Manual product fields (schema_14)
     product_price?: number | null;
     product_shipping?: number | null;
@@ -217,9 +218,14 @@ export function CreativeTrack() {
     const [newTrackLink, setNewTrackLink] = useState('');
     const [newTrackSubId, setNewTrackSubId] = useState('');
 
+    const [showArchived, setShowArchived] = useState(false);
+
     const creativeTracks = useMemo(() => {
-        return tracks.filter(t => !t.name.startsWith('Orgânico -'));
-    }, [tracks]);
+        return tracks
+            .filter(t => !t.name.startsWith('Orgânico -'))
+            .filter(t => !!t.is_archived === showArchived)
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true }));
+    }, [tracks, showArchived]);
 
     const nextSubId = useMemo(() => {
         const count = creativeTracks.length + 1;
@@ -431,7 +437,7 @@ export function CreativeTrack() {
                 .from('creative_tracks')
                 .select('*')
                 .eq('user_id', user!.id)
-                .order('created_at', { ascending: true });
+                .order('name', { ascending: true });
             if (error) throw error;
             setTracks(data || []);
         } catch (error) {
@@ -699,7 +705,12 @@ export function CreativeTrack() {
 
     // ========== DELETE TRACK ==========
     const handleDeleteTrack = async (track: Track) => {
-        if (!window.confirm(`Excluir "${track.name}" e todos os seus registros? Esta ação não pode ser desfeita.`)) return;
+        if (!track.is_archived) {
+            showToast('Arquive o track antes de excluí-lo permanentemente.', 'info');
+            return;
+        }
+
+        if (!window.confirm(`ATENÇÃO: Excluir "${track.name}" e todos os seus registros permanentemente? Esta ação NÃO PODE SER DESFEITA e você perderá todo o histórico de métricas.`)) return;
         setSaving(true);
         try {
             // Optimistic 
@@ -713,7 +724,7 @@ export function CreativeTrack() {
                 }
             }
 
-            showToast('Track excluído localmente!');
+            showToast('Track excluído permanentemente!');
 
             // Queue sync
             await syncService.addToQueue({
@@ -723,6 +734,36 @@ export function CreativeTrack() {
         } catch (error) {
             console.error(error);
             showToast('Erro ao excluir track.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // ========== ARCHIVE TRACK ==========
+    const handleArchiveTrack = async (track: Track, archive: boolean) => {
+        setSaving(true);
+        try {
+            const updates = { is_archived: archive };
+            const updated = { ...track, ...updates };
+
+            // Optimistic
+            setTracks(prev => prev.map(t => t.id === track.id ? updated : t));
+            if (selectedTrack?.id === track.id) {
+                // If archiving the currently selected track, deselect it since it will disappear from the current view
+                setSelectedTrack(null);
+                setEntries([]);
+            }
+
+            showToast(archive ? 'Track arquivado!' : 'Track restaurado!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'UPDATE_TRACK',
+                payload: { id: track.id, updates }
+            });
+        } catch (error) {
+            console.error(error);
+            showToast('Erro ao alterar status de arquivamento.', 'error');
         } finally {
             setSaving(false);
         }
@@ -2518,28 +2559,50 @@ export function CreativeTrack() {
             {newTrackModal}
 
             {/* Mobile: horizontal scroll tabs - MOVED HERE */}
-            <div className="flex md:hidden overflow-x-auto gap-2 pb-2 -mx-1 px-1 hide-scrollbar shrink-0">
-                {creativeTracks.map(track => {
-                    const isActive = selectedTrack?.id === track.id;
-                    return (
-                        <button
-                            key={track.id}
-                            onClick={() => handleSelectTrack(track)}
-                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${isActive
-                                ? 'bg-primary text-background-dark'
-                                : 'bg-surface-dark text-text-secondary border border-border-dark'
-                                }`}
-                        >
-                            {track.name}
-                        </button>
-                    );
-                })}
+            <div className="flex md:hidden items-center gap-2 mb-2">
+                <button
+                    onClick={() => setShowArchived(!showArchived)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${showArchived
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                        : 'bg-surface-dark border-border-dark text-text-secondary'
+                        }`}
+                >
+                    {showArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                    {showArchived ? 'Ver Ativos' : 'Arquivados'}
+                </button>
+                <div className="flex overflow-x-auto gap-2 pb-1 hide-scrollbar shrink-0">
+                    {creativeTracks.map(track => {
+                        const isActive = selectedTrack?.id === track.id;
+                        return (
+                            <button
+                                key={track.id}
+                                onClick={() => handleSelectTrack(track)}
+                                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${isActive
+                                    ? 'bg-primary text-background-dark'
+                                    : 'bg-surface-dark text-text-secondary border border-border-dark'
+                                    }`}
+                            >
+                                {track.name}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Two-column layout: Tracks list + Detail */}
             <div className="flex gap-4 min-h-0">
                 {/* Left: Tracks List */}
-                <div className="w-48 flex-shrink-0 flex flex-col gap-1 hidden md:flex">
+                <div className="w-48 flex-shrink-0 flex flex-col gap-3 hidden md:flex">
+                    <button
+                        onClick={() => setShowArchived(!showArchived)}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${showArchived
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
+                            : 'bg-surface-dark border-border-dark text-text-secondary hover:border-primary/30 hover:text-white'
+                            }`}
+                    >
+                        {showArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                        {showArchived ? 'Ver Ativos' : 'Ver Arquivados'}
+                    </button>
                     <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar">
                         {creativeTracks.map(track => {
                             const isActive = selectedTrack?.id === track.id;
@@ -3013,9 +3076,25 @@ export function CreativeTrack() {
 
 
                                             <button
+                                                onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
+                                                disabled={saving}
+                                                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
+                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
+                                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                                                    }`}
+                                            >
+                                                {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                                                {selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
+                                            </button>
+
+                                            <button
                                                 onClick={() => handleDeleteTrack(selectedTrack)}
                                                 disabled={saving}
-                                                className="px-3 py-2 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-sm flex items-center gap-1 disabled:opacity-50"
+                                                className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50 ${selectedTrack.is_archived
+                                                    ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                                                    : 'text-neutral-500 cursor-not-allowed'
+                                                    }`}
+                                                title={selectedTrack.is_archived ? 'Excluir permanentemente' : 'Arquive antes de excluir'}
                                             >
                                                 <Trash2 className="w-4 h-4" /> Excluir
                                             </button>
