@@ -1,16 +1,70 @@
-import { useMetrics } from '../hooks/useMetrics';
+import { useMemo } from 'react';
+import { useMetrics, parseShopeeDate } from '../hooks/useMetrics';
 import { DateFilter } from '../components/ui/DateFilter';
 import { CalendarDays, Clock, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-// MOCK DATA for Time Analysis logic not yet in Context parser
-const MOCK_HOURLY = Array.from({ length: 24 }).map((_, i) => ({
-    hour: `${i.toString().padStart(2, '0')}:00`,
-    orders: Math.floor(Math.random() * 50) + 10
-}));
-
 export function TemporalAnalysis() {
     const metrics = useMetrics();
+
+    const hourlyData = useMemo(() => {
+        const data = Array.from({ length: 24 }).map((_, i) => ({
+            hour: `${i.toString().padStart(2, '0')}:00`,
+            orders: 0
+        }));
+
+        metrics.allOrders.forEach(order => {
+            const dateObj = parseShopeeDate(order.date);
+            if (dateObj) {
+                const hour = dateObj.getHours();
+                data[hour].orders += 1;
+            }
+        });
+
+        return data;
+    }, [metrics.allOrders]);
+
+    const peakHourInfo = useMemo(() => {
+        let maxOrders = -1;
+        let peakHour = 0;
+
+        // Sliding window of 2 hours for peak
+        for (let i = 0; i < 24; i++) {
+            const currentPair = hourlyData[i].orders + hourlyData[(i + 1) % 24].orders;
+            if (currentPair > maxOrders) {
+                maxOrders = currentPair;
+                peakHour = i;
+            }
+        }
+
+        if (maxOrders <= 0) return '—';
+        return `${peakHour.toString().padStart(2, '0')}:00 - ${((peakHour + 2) % 24).toString().padStart(2, '0')}:00`;
+    }, [hourlyData]);
+
+    const strongestDayInfo = useMemo(() => {
+        const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        const dayCounts = Array(7).fill(0);
+
+        metrics.allOrders.forEach(order => {
+            const dateObj = parseShopeeDate(order.date);
+            if (dateObj) {
+                const day = dateObj.getDay();
+                dayCounts[day] += 1;
+            }
+        });
+
+        let maxVal = -1;
+        let bestDay = -1;
+        dayCounts.forEach((count, i) => {
+            if (count > maxVal) {
+                maxVal = count;
+                bestDay = i;
+            }
+        });
+
+        if (maxVal <= 0) return '—';
+        return days[bestDay];
+    }, [metrics.allOrders]);
 
     if (metrics.isEmpty) {
         return (
@@ -41,7 +95,7 @@ export function TemporalAnalysis() {
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Horário de Pico (Aprox)</p>
-                        <p className="font-bold text-xl">19:00 - 21:00</p>
+                        <p className="font-bold text-xl">{peakHourInfo}</p>
                     </div>
                 </div>
 
@@ -51,7 +105,7 @@ export function TemporalAnalysis() {
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Dia mais Forte da Semana</p>
-                        <p className="font-bold text-xl">Terça-feira</p>
+                        <p className="font-bold text-xl">{strongestDayInfo}</p>
                     </div>
                 </div>
             </div>
@@ -64,7 +118,7 @@ export function TemporalAnalysis() {
                 </div>
                 <div className="relative h-[400px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8 overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={MOCK_HOURLY}>
+                        <BarChart data={hourlyData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#393328" vertical={false} />
                             <XAxis dataKey="hour" stroke="#baaf9c" fontSize={11} tickLine={false} axisLine={false} />
                             <YAxis stroke="#baaf9c" fontSize={11} tickLine={false} axisLine={false} />

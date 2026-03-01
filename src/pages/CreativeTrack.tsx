@@ -149,9 +149,8 @@ interface LinkedFunnel {
     id: string;
     name: string;
     days: FunnelDay[];
-    maintenance_condition_groups?: FunnelConditionGroup[];
-    /** @deprecated use maintenance_condition_groups */
-    maintenance_conditions?: FunnelCondition[];
+    /** @deprecated Antiga estrutura ou nova em coluna única conforme DB */
+    maintenance_conditions?: (FunnelCondition[] | FunnelConditionGroup[]) & any;
 }
 
 const emptyEntryForm: EntryForm = {
@@ -3581,14 +3580,19 @@ export function CreativeTrack() {
                                                                 const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
 
                                                                 // Use maintenance groups for days beyond configured ones
+                                                                const mConds = linkedFunnel.maintenance_conditions;
+                                                                const maintenanceGroups = (Array.isArray(mConds) && mConds.length > 0 && typeof mConds[0] === 'object' && 'id' in mConds[0])
+                                                                    ? (mConds as FunnelConditionGroup[])
+                                                                    : null;
+
                                                                 const groupsToEval = funnelDay?.condition_groups?.length
                                                                     ? funnelDay.condition_groups
-                                                                    : (dayNumber > maxFunnelDay && (linkedFunnel.maintenance_condition_groups || []).length > 0)
-                                                                        ? linkedFunnel.maintenance_condition_groups
+                                                                    : (dayNumber > maxFunnelDay && maintenanceGroups)
+                                                                        ? maintenanceGroups
                                                                         : null;
 
                                                                 // Fallback for legacy structure if present
-                                                                const legacyConditions = funnelDay?.conditions || (dayNumber > maxFunnelDay ? linkedFunnel.maintenance_conditions : null);
+                                                                const legacyConditions = funnelDay?.conditions || (dayNumber > maxFunnelDay && !maintenanceGroups ? (mConds as FunnelCondition[]) : null);
 
                                                                 const eProfit = Number(entry.commission_value) - Number(entry.investment);
                                                                 const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
