@@ -10,12 +10,12 @@ interface OfflineBannerProps {
 }
 
 export const OfflineBanner: React.FC<OfflineBannerProps> = ({ isOffline, lastSync, onRefresh }) => {
-    if (!isOffline && !lastSync) return null;
+    if (!isOffline) return null;
 
     return (
         <div className={`w-full py-2 px-4 flex items-center justify-between text-xs sm:text-sm transition-colors duration-300 ${isOffline
-                ? 'bg-red-500/10 text-red-500 border-b border-red-500/20'
-                : 'bg-green-500/10 text-green-500 border-b border-green-500/20'
+            ? 'bg-red-500/10 text-red-500 border-b border-red-500/20'
+            : 'bg-green-500/10 text-green-500 border-b border-green-500/20'
             }`}>
             <div className="flex items-center gap-2">
                 {isOffline ? (
