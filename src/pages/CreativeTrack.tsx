@@ -4,14 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl, fetchConversionReport } from '../lib/shopeeApi';
 import {
-    Loader2, Plus, Trash2, Pencil, Save, X,
+    Loader2, Plus, Trash2, Pencil, Save, X, Edit2,
     DollarSign, ShoppingCart, TrendingUp, MousePointerClick,
     BarChart3, Target, PiggyBank, Percent, ExternalLink,
     Link2, RefreshCw, Calendar, Filter, Eye, EyeOff,
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown
+    ChevronDown, FileEdit
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -60,7 +60,7 @@ interface Track {
     sub_id: string;
     created_at: string;
     funnel_id: string | null;
-    status: 'ativo' | 'desativado' | 'validado';
+    status: 'ativo' | 'desativado' | 'validado' | 'rascunho';
     // Manual product fields (schema_14)
     product_price?: number | null;
     product_shipping?: number | null;
@@ -88,6 +88,7 @@ interface Track {
     product_shop_rating?: number | null;
     product_shop_image_url?: string | null;
     product_fetched_at?: string | null;
+    custom_fields?: Record<string, string> | null;
 }
 
 interface TrackEntry {
@@ -205,18 +206,128 @@ export function CreativeTrack() {
     const [newTrackLink, setNewTrackLink] = useState('');
     const [newTrackSubId, setNewTrackSubId] = useState('');
 
+    const creativeTracks = useMemo(() => {
+        return tracks.filter(t => !t.name.startsWith('Orgânico -'));
+    }, [tracks]);
+
+    const nextSubId = useMemo(() => {
+        const count = creativeTracks.length + 1;
+        return count.toString().padStart(3, '0');
+    }, [creativeTracks]);
+
+    useEffect(() => {
+        if (showNewForm) {
+            setModalSubIds([nextSubId]);
+            setNewTrackName(`${nextSubId} - `);
+        }
+    }, [showNewForm, nextSubId]);
+
+    const handleNewTrackNameChange = (val: string) => {
+        setNewTrackName(val);
+
+        // Auto-fill Sub-ID 2 based on product name
+        // Example: "008 - Calça Legging" -> Sub-ID 2: "CalcaLegging"
+        const parts = val.split(' - ');
+        if (parts.length > 1) {
+            const productName = parts.slice(1).join(' - ');
+            // Sanitize: remove accents, spaces, and special chars
+            const cleanedSlug = productName.normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "") // Remove accents
+                .replace(/[^a-zA-Z0-9]/g, ""); // Keep only letters and numbers
+
+            const truncatedSlug = cleanedSlug.substring(0, 50);
+
+            setModalSubIds(prev => {
+                const next = [...prev];
+                if (next.length < 2) {
+                    while (next.length < 2) next.push('');
+                }
+                next[1] = truncatedSlug;
+                return next;
+            });
+        } else {
+            // If name is cleared or doesn't have a product part, clear sub_id[1]
+            setModalSubIds(prev => {
+                const next = [...prev];
+                if (next.length > 1) {
+                    next[1] = '';
+                }
+                return next;
+            });
+        }
+    };
+
+    const handleModalCheckUrl = async () => {
+        if (!modalOriginUrl.trim()) {
+            setModalError('Informe o link do produto.');
+            return;
+        }
+
+        setModalFetchingProduct(true);
+        setModalProductError(null);
+        setModalError(null);
+
+        try {
+            // 1. Get credentials
+            const { data: creds, error: credsError } = await supabase.rpc('get_shopee_credentials');
+            if (credsError) throw credsError;
+            if (!creds || creds.length === 0) {
+                throw new Error('Credenciais da Shopee não configuradas.');
+            }
+            const { shopee_app_id: appId, shopee_secret: secret } = creds[0];
+
+            // 2. Extract IDs
+            let ids = extractShopeeIds(modalOriginUrl);
+            if (!ids) {
+                // Try resolving if it's a short link
+                const resolved = await resolveShopeeUrl(modalOriginUrl);
+                ids = extractShopeeIds(resolved);
+            }
+
+            if (!ids) {
+                throw new Error('Link inválido ou não reconhecido como Shopee.');
+            }
+
+            // 3. Fetch product
+            const { product, shop } = await fetchShopeeProduct({
+                shopId: ids.shopId,
+                itemId: ids.itemId,
+                shopeeAppId: appId,
+                shopeeSecret: secret,
+            });
+
+            if (product) {
+                setModalProductData(product);
+                setModalShopData(shop);
+
+                // Update Track Name: keep prefix but add product name
+                // Example: "009 - " -> "009 - Calça Legging..."
+                const parts = newTrackName.split(' - ');
+                const prefix = parts[0] || nextSubId;
+                const newName = `${prefix} - ${product.productName}`;
+                handleNewTrackNameChange(newName);
+            } else {
+                throw new Error('Produto não encontrado na Shopee.');
+            }
+        } catch (e: any) {
+            console.error('Error in modal check:', e);
+            setModalProductError(e.message || 'Erro ao buscar dados do produto');
+        } finally {
+            setModalFetchingProduct(false);
+        }
+    };
+
     // New Track Modal states
     const [modalOriginUrl, setModalOriginUrl] = useState('');
     const [modalSubIds, setModalSubIds] = useState<string[]>(['']);
-    const [modalGeneratedLink, setModalGeneratedLink] = useState('');
     const [modalGenerating, setModalGenerating] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
-    const [modalCopied, setModalCopied] = useState(false);
     // Product data fetched from API during modal flow
     const [modalProductData, setModalProductData] = useState<any | null>(null);
     const [modalShopData, setModalShopData] = useState<any | null>(null);
     const [modalFetchingProduct, setModalFetchingProduct] = useState(false);
     const [modalProductError, setModalProductError] = useState<string | null>(null);
+    const [modalCustomFields, setModalCustomFields] = useState<{ key: string, value: string }[]>([]);
 
     const [editingTrack, setEditingTrack] = useState(false);
     const [editName, setEditName] = useState('');
@@ -237,7 +348,7 @@ export function CreativeTrack() {
     const [inlineEditForm, setInlineEditForm] = useState<EntryForm>({ ...emptyEntryForm });
 
     // Tabs Navigation State
-    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions'>('metrics');
+    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions' | 'custom'>('metrics');
 
     // Product Details State
     const [editingProduct, setEditingProduct] = useState(false);
@@ -378,16 +489,70 @@ export function CreativeTrack() {
         }
         setSaving(true);
         try {
+            let affiliateLink = newTrackLink.trim();
+            let subId = newTrackSubId.trim();
+            let finalProductData = modalProductData;
+            let finalShopData = modalShopData;
+
+            // IF modalOriginUrl is provided, we auto-generate the link and fetch product data
+            if (modalOriginUrl.trim()) {
+                setModalGenerating(true);
+                try {
+                    // 1. Fetch Shopee credentials
+                    const { data: creds, error: credsError } = await supabase.rpc('get_shopee_credentials');
+                    if (credsError) throw credsError;
+                    if (!creds || creds.length === 0) {
+                        throw new Error('Credenciais da Shopee não configuradas.');
+                    }
+                    const { shopee_app_id: appId, shopee_secret: secret } = creds[0];
+
+                    // 2. Generate link
+                    const activeSubIds = modalSubIds.map(id => id.trim()).filter(id => id !== '');
+                    const { shortLink } = await generateShopeeLink({
+                        originUrl: modalOriginUrl,
+                        subIds: activeSubIds,
+                        shopeeAppId: appId,
+                        shopeeSecret: secret,
+                    });
+                    affiliateLink = shortLink;
+                    if (activeSubIds.length > 0) subId = activeSubIds.join(', ');
+
+                    // 3. Fetch product info
+                    const ids = extractShopeeIds(modalOriginUrl);
+                    if (ids) {
+                        try {
+                            const { product, shop } = await fetchShopeeProduct({
+                                shopId: ids.shopId,
+                                itemId: ids.itemId,
+                                shopeeAppId: appId,
+                                shopeeSecret: secret,
+                            });
+                            finalProductData = product;
+                            finalShopData = shop;
+                        } catch (e) {
+                            console.warn('Failed to fetch product data, continuing without it:', e);
+                        }
+                    }
+                } catch (e: any) {
+                    setModalError(e.message || 'Erro ao processar link da Shopee');
+                    setSaving(false);
+                    setModalGenerating(false);
+                    return;
+                } finally {
+                    setModalGenerating(false);
+                }
+            }
+
             const insertPayload: Record<string, any> = {
                 user_id: user!.id,
                 name: newTrackName.trim(),
-                affiliate_link: newTrackLink.trim(),
-                sub_id: newTrackSubId.trim(),
+                affiliate_link: affiliateLink,
+                sub_id: subId,
             };
 
             // Merge auto-fetched product data
-            if (modalProductData) {
-                const p = modalProductData;
+            if (finalProductData) {
+                const p = finalProductData;
                 Object.assign(insertPayload, {
                     product_item_id: p.itemId ?? null,
                     product_name: p.productName || null,
@@ -412,9 +577,15 @@ export function CreativeTrack() {
                 });
             }
 
+            // Convert modalCustomFields back to record object
+            const customFieldsObj: Record<string, string> = {};
+            modalCustomFields.forEach(f => {
+                if (f.key.trim()) customFieldsObj[f.key.trim()] = f.value;
+            });
+
             // Merge shop data if available
-            if (modalShopData) {
-                const s = modalShopData;
+            if (finalShopData) {
+                const s = finalShopData;
                 Object.assign(insertPayload, {
                     product_shop_rating: s.ratingStar ? parseFloat(s.ratingStar) : null,
                     product_shop_image_url: s.imageUrl || null,
@@ -425,7 +596,10 @@ export function CreativeTrack() {
 
             const { data, error } = await supabase
                 .from('creative_tracks')
-                .insert(insertPayload)
+                .insert({
+                    ...insertPayload,
+                    custom_fields: customFieldsObj
+                })
                 .select()
                 .single();
             if (error) throw error;
@@ -449,13 +623,28 @@ export function CreativeTrack() {
         setNewTrackSubId('');
         setModalOriginUrl('');
         setModalSubIds(['']);
-        setModalGeneratedLink('');
         setModalError(null);
-        setModalCopied(false);
         setModalProductData(null);
         setModalShopData(null);
         setModalFetchingProduct(false);
         setModalProductError(null);
+        setModalCustomFields([]);
+    };
+
+    const handleModalAddCustomField = () => {
+        if (modalCustomFields.length < 10) {
+            setModalCustomFields([...modalCustomFields, { key: '', value: '' }]);
+        }
+    };
+
+    const handleModalRemoveCustomField = (index: number) => {
+        setModalCustomFields(modalCustomFields.filter((_, i) => i !== index));
+    };
+
+    const handleModalCustomFieldChange = (index: number, field: 'key' | 'value', val: string) => {
+        const updated = [...modalCustomFields];
+        updated[index][field] = val;
+        setModalCustomFields(updated);
     };
 
     const handleModalAddSubId = () => {
@@ -467,116 +656,12 @@ export function CreativeTrack() {
     };
 
     const handleModalSubIdChange = (index: number, value: string) => {
+        const sanitized = value.replace(/[^a-zA-Z0-9]/g, '');
         const updated = [...modalSubIds];
-        updated[index] = value;
+        updated[index] = sanitized;
         setModalSubIds(updated);
     };
 
-    const handleModalGenerateLink = async () => {
-        setModalError(null);
-        setModalGeneratedLink('');
-
-        if (!modalOriginUrl.trim()) {
-            setModalError('Informe a URL do produto da Shopee.');
-            return;
-        }
-
-        try {
-            const parsed = new URL(modalOriginUrl);
-            if (!parsed.hostname.includes('shopee')) {
-                setModalError('O link não parece ser um produto válido da Shopee.');
-                return;
-            }
-        } catch {
-            setModalError('URL inválida.');
-            return;
-        }
-
-        const activeSubIds = modalSubIds.map(id => id.trim()).filter(id => id !== '');
-
-        // Fetch Shopee credentials
-        let shopeeAppId: string | null = null;
-        let shopeeSecret: string | null = null;
-        try {
-            const { data: creds, error: credsError } = await supabase.rpc('get_shopee_credentials');
-            if (credsError) throw credsError;
-            if (creds && creds.length > 0) {
-                shopeeAppId = creds[0].shopee_app_id;
-                shopeeSecret = creds[0].shopee_secret;
-            }
-        } catch (err) {
-            console.error('Error fetching Shopee credentials:', err);
-        }
-
-        if (!shopeeAppId || !shopeeSecret) {
-            setModalError('Credenciais da Shopee não configuradas. Vá em Configurações → Shopee API.');
-            return;
-        }
-
-        setModalGenerating(true);
-        try {
-            const { shortLink } = await generateShopeeLink({
-                originUrl: modalOriginUrl,
-                subIds: activeSubIds,
-                shopeeAppId,
-                shopeeSecret,
-            });
-
-            setModalGeneratedLink(shortLink);
-            // Auto-fill the track form fields
-            setNewTrackLink(shortLink);
-            // Use the first sub-ID as the track Sub_ID identifier
-            if (activeSubIds.length > 0) {
-                setNewTrackSubId(activeSubIds.join(', '));
-            }
-
-            // Auto-fetch product data from Shopee API
-            const ids = extractShopeeIds(modalOriginUrl);
-            if (ids) {
-                setModalFetchingProduct(true);
-                setModalProductError(null);
-                try {
-                    const { product, shop } = await fetchShopeeProduct({
-                        shopId: ids.shopId,
-                        itemId: ids.itemId,
-                        shopeeAppId,
-                        shopeeSecret,
-                    });
-                    setModalProductData(product);
-                    setModalShopData(shop);
-
-                    // Auto-fill existing manual product fields
-                    if (product) {
-                        setProductForm({
-                            price: product.price?.toString() || '',
-                            shipping: '',
-                            free_shipping: false,
-                            reviews: '',
-                            sold: product.sales?.toString() || '',
-                            rating: product.ratingStar?.toString() || ''
-                        });
-                    }
-                } catch (fetchErr: any) {
-                    console.error('Product fetch error:', fetchErr);
-                    setModalProductError(fetchErr.message || 'Falha ao buscar dados do produto.');
-                } finally {
-                    setModalFetchingProduct(false);
-                }
-            }
-        } catch (err: any) {
-            setModalError(err.message || 'Erro ao gerar link.');
-        } finally {
-            setModalGenerating(false);
-        }
-    };
-
-    const handleModalCopy = () => {
-        if (modalGeneratedLink) {
-            navigator.clipboard.writeText(modalGeneratedLink);
-            setModalCopied(true);
-            setTimeout(() => setModalCopied(false), 2000);
-        }
-    };
 
     // ========== DELETE TRACK ==========
     const handleDeleteTrack = async (track: Track) => {
@@ -631,8 +716,58 @@ export function CreativeTrack() {
         }
     };
 
+    const [tabCustomFields, setTabCustomFields] = useState<{ key: string; value: string }[]>([]);
+    const [editingCustomFields, setEditingCustomFields] = useState(false);
+
+    const handleTabAddCustomField = () => {
+        if (tabCustomFields.length < 10) {
+            setTabCustomFields([...tabCustomFields, { key: '', value: '' }]);
+        }
+    };
+
+    const handleTabRemoveCustomField = (index: number) => {
+        setTabCustomFields(tabCustomFields.filter((_, i) => i !== index));
+    };
+
+    const handleTabCustomFieldChange = (index: number, field: 'key' | 'value', val: string) => {
+        const updated = [...tabCustomFields];
+        updated[index][field] = val;
+        setTabCustomFields(updated);
+    };
+
+    const handleUpdateCustomFields = async () => {
+        if (!selectedTrack) return;
+        setSaving(true);
+        try {
+            const customFieldsObj: Record<string, string> = {};
+            tabCustomFields.forEach(f => {
+                if (f.key.trim() && f.value.trim()) {
+                    customFieldsObj[f.key.trim()] = f.value.trim();
+                }
+            });
+
+            const { error } = await supabase
+                .from('creative_tracks')
+                .update({ custom_fields: customFieldsObj })
+                .eq('id', selectedTrack.id);
+
+            if (error) throw error;
+
+            const updated = { ...selectedTrack, custom_fields: customFieldsObj };
+            setSelectedTrack(updated);
+            setTracks(prev => prev.map(t => t.id === updated.id ? updated : t));
+            setEditingCustomFields(false);
+            showToast('Campos personalizados salvos!');
+        } catch (error) {
+            console.error(error);
+            showToast('Erro ao salvar campos.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     // ========== UPDATE STATUS ==========
-    const handleUpdateStatus = async (track: Track, newStatus: 'ativo' | 'desativado' | 'validado') => {
+    const handleUpdateStatus = async (track: Track, newStatus: 'ativo' | 'desativado' | 'validado' | 'rascunho') => {
         setSaving(true);
         try {
             const { error } = await supabase
@@ -1802,10 +1937,11 @@ export function CreativeTrack() {
         const totalShopeeClicks = filteredEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
         const totalAdClicks = filteredEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
         const totalProfit = totalCommission - totalInvestment;
+        const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
         const avgOrdersPerDay = filteredEntries.length > 0 ? totalOrders / filteredEntries.length : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
 
-        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
+        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc };
     }, [filteredEntries]);
 
     // ========== VIDEO KPIs ==========
@@ -1857,24 +1993,29 @@ export function CreativeTrack() {
         const totalShopeeClicks = filteredAllEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
         const totalAdClicks = filteredAllEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
         const totalProfit = totalCommission - totalInvestment;
+        const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
         const uniqueDates = new Set(filteredAllEntries.map(e => e.date));
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
-        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks };
+        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc };
     }, [filteredAllEntries]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
-        if (tracks.length === 0 || filteredAllEntries.length === 0) return [];
-        return tracks.map(track => {
+        if (creativeTracks.length === 0 || filteredAllEntries.length === 0) return [];
+
+        return creativeTracks.map(track => {
             const trackEntries = filteredAllEntries.filter(e => e.track_id === track.id);
             const commission = trackEntries.reduce((s, e) => s + Number(e.commission_value), 0);
             const investment = trackEntries.reduce((s, e) => s + Number(e.investment), 0);
             const orders = trackEntries.reduce((s, e) => s + Number(e.orders), 0);
+            const adClicks = trackEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+            const shopeeClicks = trackEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
             const profit = commission - investment;
             const pct = investment > 0 ? (profit / investment) * 100 : 0;
-            return { track, orders, commission, investment, profit, pct };
-        }).filter(r => r.orders > 0 || r.investment > 0 || r.commission > 0)
+            const cpc = adClicks > 0 ? investment / adClicks : 0;
+            return { track, orders, commission, investment, profit, pct, adClicks, shopeeClicks, cpc };
+        }).filter(r => r.orders > 0 || r.investment > 0 || r.commission > 0 || r.adClicks > 0)
             .sort((a, b) => b.profit - a.profit);
     }, [tracks, filteredAllEntries]);
 
@@ -1902,20 +2043,6 @@ export function CreativeTrack() {
                         </button>
                     </div>
 
-                    {/* Track Name */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-semibold text-neutral-300">Nome do Criativo *</label>
-                        <input
-                            className="bg-background-dark border border-border-dark rounded-xl p-3 text-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all text-sm"
-                            value={newTrackName}
-                            onChange={e => setNewTrackName(e.target.value)}
-                            placeholder="Ex: MOP, TOALHA, UMIDIFICADOR..."
-                            autoFocus
-                        />
-                    </div>
-
-                    <div className="h-px bg-border-dark"></div>
-
                     {/* Product Link (Shopee) */}
                     <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-semibold text-neutral-300">Link do Produto (Shopee)</label>
@@ -1926,86 +2053,32 @@ export function CreativeTrack() {
                                 value={modalOriginUrl}
                                 onChange={e => setModalOriginUrl(e.target.value)}
                                 placeholder="https://shopee.com.br/product/..."
-                                className="w-full bg-background-dark border border-border-dark rounded-xl pl-10 pr-4 py-3 text-white placeholder-neutral-600 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all text-sm"
+                                className="w-full bg-background-dark border border-border-dark rounded-xl pl-10 pr-24 py-3 text-white placeholder-neutral-600 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all text-sm"
+                                autoFocus
                             />
+                            <button
+                                type="button"
+                                onClick={handleModalCheckUrl}
+                                disabled={modalFetchingProduct || !modalOriginUrl.trim()}
+                                className="absolute right-2 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold transition-all border border-primary/20 flex items-center gap-1.5"
+                            >
+                                {modalFetchingProduct ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                )}
+                                Verificar
+                            </button>
                         </div>
                     </div>
 
-                    {/* Sub IDs */}
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                            <label className="text-sm font-semibold text-neutral-300">
-                                Sub IDs <span className="text-xs text-neutral-500 ml-1 font-normal">(Opcional)</span>
-                            </label>
-                            {modalSubIds.length < 5 && (
-                                <button type="button" onClick={handleModalAddSubId} className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1 bg-primary/10 px-2 py-1 rounded transition-colors">
-                                    <Plus className="w-3 h-3" /> Add Sub-ID
-                                </button>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {modalSubIds.map((subId, index) => (
-                                <div key={index} className="relative flex items-center group">
-                                    <div className="absolute left-2.5 w-5 h-5 bg-surface-highlight text-neutral-400 text-xs font-bold rounded-full flex items-center justify-center pointer-events-none">
-                                        {index + 1}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={subId}
-                                        onChange={e => handleModalSubIdChange(index, e.target.value)}
-                                        placeholder={`Ex: campanhav${index + 1}`}
-                                        className="w-full bg-background-dark border border-border-dark rounded-lg pl-9 pr-9 py-2.5 text-sm text-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all"
-                                    />
-                                    {modalSubIds.length > 1 && (
-                                        <button type="button" onClick={() => handleModalRemoveSubId(index)} className="absolute right-2 p-1 text-neutral-500 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        <p className="text-xs text-neutral-500">Até 5 Sub-IDs para rastreamento de tráfego.</p>
-                    </div>
-
-                    {/* Error message */}
-                    {modalError && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex gap-2 text-sm">
-                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                            <span>{modalError}</span>
-                        </div>
-                    )}
-
-                    {/* Generate Link Button */}
-                    <button
-                        type="button"
-                        onClick={handleModalGenerateLink}
-                        disabled={modalGenerating || !modalOriginUrl.trim()}
-                        className={`w-full py-3 flex items-center justify-center gap-2 font-bold text-background-dark rounded-xl transition-all shadow-lg shadow-primary/20 text-sm ${modalGenerating ? 'bg-primary/70 cursor-not-allowed' : 'bg-primary hover:bg-primary/90 hover:scale-[1.01]'}`}
-                    >
-                        {modalGenerating ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Gerando Link Curto...</>
-                        ) : (
-                            <>Gerar Link Curto</>
-                        )}
-                    </button>
-
-                    {/* Generated Link Result */}
-                    {modalGeneratedLink && (
-                        <div className="bg-surface-highlight/30 border border-primary/30 rounded-xl p-4 flex flex-col gap-3">
-                            <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>Link Gerado!</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    readOnly
-                                    value={modalGeneratedLink}
-                                    className="flex-1 bg-background-dark border border-primary/20 rounded-lg px-3 py-2 text-white font-mono text-xs outline-none"
-                                    onClick={e => (e.target as HTMLInputElement).select()}
-                                />
-                                <button onClick={handleModalCopy} className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${modalCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                                    {modalCopied ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
-                                </button>
+                    {/* Progress feedback for unified flow */}
+                    {modalGenerating && (
+                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-primary">Processando Track...</span>
+                                <span className="text-[10px] text-neutral-400">Gerando link encurtado e buscando dados do produto...</span>
                             </div>
                         </div>
                     )}
@@ -2049,37 +2122,136 @@ export function CreativeTrack() {
                                             </span>
                                         )}
                                         {modalProductData.ratingStar && (
-                                            <span className="text-yellow-400 flex items-center gap-1">
-                                                <Star className="w-3 h-3 fill-yellow-400" /> {modalProductData.ratingStar}
-                                            </span>
+                                            <div className="flex items-center gap-1 text-amber-400">
+                                                <span>⭐ {parseFloat(modalProductData.ratingStar).toFixed(1)}</span>
+                                            </div>
                                         )}
-                                        {modalProductData.sales != null && (
-                                            <span className="text-neutral-400">
-                                                {modalProductData.sales.toLocaleString('pt-BR')} vendidos
-                                            </span>
+                                        {modalProductData.sales > 0 && (
+                                            <span className="text-neutral-500">{modalProductData.sales} vendidos</span>
                                         )}
                                     </div>
-                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-0.5">
-                                        {modalProductData.commissionRate && (
-                                            <span className="text-green-400 font-semibold">
-                                                Comissao: {(parseFloat(modalProductData.commissionRate) * 100).toFixed(1)}%
-                                            </span>
+                                    <div className="flex flex-col gap-0.5 mt-1 border-t border-white/5 pt-1.5">
+                                        {modalProductData.commissionRate > 0 && (
+                                            <p className="text-[11px] font-bold text-green-400">
+                                                Comissao: {modalProductData.commissionRate}%
+                                                <span className="ml-1 text-green-500/70 font-normal">
+                                                    (R$ {parseFloat(modalProductData.commission || 0).toFixed(2)})
+                                                </span>
+                                            </p>
                                         )}
-                                        {modalProductData.commission && (
-                                            <span className="text-green-400/70">
-                                                (R$ {parseFloat(modalProductData.commission).toFixed(2)})
-                                            </span>
+                                        {modalShopData?.shopName && (
+                                            <p className="text-[10px] text-neutral-500">Loja: {modalShopData.shopName}</p>
                                         )}
                                     </div>
-                                    {modalProductData.shopName && (
-                                        <span className="text-[11px] text-neutral-500 mt-0.5">
-                                            Loja: {modalProductData.shopName}
-                                        </span>
-                                    )}
                                 </div>
                             </div>
                         </div>
                     )}
+
+                    {/* Track Name */}
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-semibold text-neutral-300">Nome do Criativo *</label>
+                        <input
+                            className="bg-background-dark border border-border-dark rounded-xl p-3 text-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all text-sm"
+                            value={newTrackName}
+                            onChange={e => handleNewTrackNameChange(e.target.value)}
+                            placeholder="Ex: MOP, TOALHA, UMIDIFICADOR..."
+                        />
+                    </div>
+
+                    <div className="h-px bg-border-dark"></div>
+
+                    {/* Sub IDs */}
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-semibold text-neutral-300">
+                                Sub IDs <span className="text-xs text-neutral-500 ml-1 font-normal">(Opcional)</span>
+                            </label>
+                            {modalSubIds.length < 5 && (
+                                <button type="button" onClick={handleModalAddSubId} className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1 bg-primary/10 px-2 py-1 rounded transition-colors">
+                                    <Plus className="w-3 h-3" /> Add Sub-ID
+                                </button>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {modalSubIds.map((subId, index) => (
+                                <div key={index} className="relative flex items-center group">
+                                    <div className="absolute left-2.5 w-5 h-5 bg-surface-highlight text-neutral-400 text-xs font-bold rounded-full flex items-center justify-center pointer-events-none">
+                                        {index + 1}
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={subId}
+                                        onChange={e => handleModalSubIdChange(index, e.target.value)}
+                                        placeholder={`Ex: campanhav${index + 1}`}
+                                        className="w-full bg-background-dark border border-border-dark rounded-lg pl-9 pr-9 py-2.5 text-sm text-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all"
+                                        maxLength={50}
+                                    />
+                                    {modalSubIds.length > 1 && (
+                                        <button type="button" onClick={() => handleModalRemoveSubId(index)} className="absolute right-2 p-1 text-neutral-500 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all">
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-xs text-neutral-500">Até 5 Sub-IDs para rastreamento de tráfego.</p>
+                    </div>
+
+                    {/* Error message */}
+                    {modalError && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex gap-2 text-sm">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>{modalError}</span>
+                        </div>
+                    )}
+
+                    {/* Campos Personalizados */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase flex items-center gap-1.5">
+                                <Tag className="w-3 h-3" /> Campos Personalizados
+                            </label>
+                            <button
+                                type="button"
+                                onClick={handleModalAddCustomField}
+                                className="text-[10px] text-primary hover:text-primary/80 font-bold flex items-center gap-1"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Adicionar
+                            </button>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            {modalCustomFields.map((field, idx) => (
+                                <div key={idx} className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                        <input
+                                            placeholder="Nome (ex: Campanha)"
+                                            value={field.key}
+                                            onChange={(e) => handleModalCustomFieldChange(idx, 'key', e.target.value)}
+                                            className="bg-background-dark border border-white/5 rounded-lg px-3 py-2 text-xs text-white focus:border-primary/50 outline-none transition-all placeholder:text-neutral-600"
+                                        />
+                                        <input
+                                            placeholder="Valor"
+                                            value={field.value}
+                                            onChange={(e) => handleModalCustomFieldChange(idx, 'value', e.target.value)}
+                                            className="bg-background-dark border border-white/5 rounded-lg px-3 py-2 text-xs text-white focus:border-primary/50 outline-none transition-all placeholder:text-neutral-600"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleModalRemoveCustomField(idx)}
+                                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            {modalCustomFields.length === 0 && (
+                                <p className="text-[10px] text-neutral-600 italic">Nenhum campo adicional definido.</p>
+                            )}
+                        </div>
+                    </div>
 
                     <div className="h-px bg-border-dark"></div>
 
@@ -2180,42 +2352,45 @@ export function CreativeTrack() {
             <div className="flex gap-4 min-h-0">
                 {/* Left: Tracks List */}
                 <div className="w-48 flex-shrink-0 flex flex-col gap-1 hidden md:flex">
-                    {tracks.map(track => {
-                        const isActive = selectedTrack?.id === track.id;
-                        return (
-                            <button
-                                key={track.id}
-                                onClick={() => handleSelectTrack(track)}
-                                className={`text-left px-3 py-2.5 rounded-xl transition-all group flex items-center justify-between gap-2 ${isActive
-                                    ? 'bg-primary text-background-dark shadow-lg shadow-primary/20'
-                                    : 'text-text-secondary hover:bg-surface-dark hover:text-white'
-                                    }`}
-                            >
-                                <div className="flex flex-col min-w-0">
-                                    <span className={`text-sm truncate ${isActive ? 'font-bold' : 'font-medium'}`}>
-                                        {track.name}
-                                    </span>
-                                    {track.sub_id && (
-                                        <span className={`text-[10px] font-mono truncate ${isActive ? 'text-background-dark/70' : 'text-text-secondary/50'}`}>
-                                            {track.sub_id}
-                                        </span>
-                                    )}
-                                </div>
-                                <div
-                                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-[0_0_8px] transition-all ${track.status === 'ativo' ? 'bg-green-500 shadow-green-500/50' :
-                                        track.status === 'validado' ? 'bg-blue-500 shadow-blue-500/50' :
-                                            'bg-red-500 shadow-red-500/50'
+                    <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                        {creativeTracks.map(track => {
+                            const isActive = selectedTrack?.id === track.id;
+                            return (
+                                <button
+                                    key={track.id}
+                                    onClick={() => handleSelectTrack(track)}
+                                    className={`text-left px-3 py-2.5 rounded-xl transition-all group flex items-center justify-between gap-2 ${isActive
+                                        ? 'bg-primary text-background-dark shadow-lg shadow-primary/20'
+                                        : 'text-text-secondary hover:bg-surface-dark hover:text-white'
                                         }`}
-                                    title={track.status.charAt(0).toUpperCase() + track.status.slice(1)}
-                                />
-                            </button>
-                        );
-                    })}
+                                >
+                                    <div className="flex flex-col min-w-0">
+                                        <span className={`text-sm truncate ${isActive ? 'font-bold' : 'font-medium'}`}>
+                                            {track.name}
+                                        </span>
+                                        {track.sub_id && (
+                                            <span className={`text-[10px] font-mono truncate ${isActive ? 'text-background-dark/70' : 'text-text-secondary/50'}`}>
+                                                {track.sub_id}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div
+                                        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-[0_0_8px] transition-all ${track.status === 'ativo' ? 'bg-green-500 shadow-green-500/50' :
+                                            track.status === 'validado' ? 'bg-blue-500 shadow-blue-500/50' :
+                                                track.status === 'rascunho' ? 'bg-white shadow-white/50' :
+                                                    'bg-red-500 shadow-red-500/50'
+                                            }`}
+                                        title={track.status.charAt(0).toUpperCase() + track.status.slice(1)}
+                                    />
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 {/* Mobile: horizontal scroll tabs */}
                 <div className="flex md:hidden overflow-x-auto gap-2 pb-2 -mx-1 px-1 hide-scrollbar">
-                    {tracks.map(track => {
+                    {creativeTracks.map(track => {
                         const isActive = selectedTrack?.id === track.id;
                         return (
                             <button
@@ -2244,7 +2419,7 @@ export function CreativeTrack() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
-                                        {tracks.length} criativos
+                                        {creativeTracks.length} {creativeTracks.length === 1 ? 'criativo' : 'criativos'}
                                     </span>
 
                                     {/* Global Sync Dropdown */}
@@ -2298,6 +2473,7 @@ export function CreativeTrack() {
                                         { label: '% Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
                                         { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
                                         { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                        { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
                                     ].map((kpi, i) => (
                                         <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
                                             <div className="flex items-center gap-2">
@@ -2326,6 +2502,9 @@ export function CreativeTrack() {
                                                 <tr className="border-b border-border-dark text-text-secondary text-xs">
                                                     <th className="text-left p-3">Criativo</th>
                                                     <th className="text-center p-3">Status</th>
+                                                    <th className="text-right p-3">Cliq. Anúncio</th>
+                                                    <th className="text-right p-3">Cliq. Shopee</th>
+                                                    <th className="text-right p-3">CPC</th>
                                                     <th className="text-right p-3">Pedidos</th>
                                                     <th className="text-right p-3">Comissão</th>
                                                     <th className="text-right p-3">Investimento</th>
@@ -2351,6 +2530,9 @@ export function CreativeTrack() {
                                                             <td className="p-3 text-center">
                                                                 <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
                                                             </td>
+                                                            <td className="p-3 text-right text-neutral-300">{row.adClicks.toLocaleString('pt-BR')}</td>
+                                                            <td className="p-3 text-right text-neutral-300">{row.shopeeClicks.toLocaleString('pt-BR')}</td>
+                                                            <td className="p-3 text-right text-amber-400 font-mono text-xs">R$ {formatBRL(row.cpc)}</td>
                                                             <td className="p-3 text-right text-neutral-300">{row.orders}</td>
                                                             <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(row.commission)}</td>
                                                             <td className="p-3 text-right text-orange-400">R$ {formatBRL(row.investment)}</td>
@@ -2384,18 +2566,34 @@ export function CreativeTrack() {
                                                     <h2 className={`text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
                                                         {selectedTrack.name}
                                                     </h2>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingTrack(true);
-                                                            setEditName(selectedTrack.name);
-                                                            setEditLink(selectedTrack.affiliate_link || '');
-                                                            setEditSubId(selectedTrack.sub_id || '');
-                                                        }}
-                                                        className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
-                                                        title="Editar Criativo"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await navigator.clipboard.writeText(selectedTrack.name);
+                                                                    showToast('Nome copiado para a área de transferência!', 'success');
+                                                                } catch (err) {
+                                                                    showToast('Erro ao copiar nome.', 'error');
+                                                                }
+                                                            }}
+                                                            className="p-1 rounded-md text-neutral-500 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                                                            title="Copiar Nome"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingTrack(true);
+                                                                setEditName(selectedTrack.name);
+                                                                setEditLink(selectedTrack.affiliate_link || '');
+                                                                setEditSubId(selectedTrack.sub_id || '');
+                                                            }}
+                                                            className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
+                                                            title="Editar Criativo"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
                                             {selectedTrack.sub_id && !editingTrack && (
@@ -2475,6 +2673,16 @@ export function CreativeTrack() {
 
                                     {!editingTrack && selectedTrack && (
                                         <div className="flex items-center gap-1 bg-background-dark/50 p-1 rounded-xl border border-border-dark w-fit">
+                                            <button
+                                                onClick={() => handleUpdateStatus(selectedTrack, 'rascunho')}
+                                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'rascunho'
+                                                    ? 'bg-white text-background-dark shadow-lg shadow-white/20'
+                                                    : 'text-neutral-500 hover:text-white hover:bg-white/10'
+                                                    }`}
+                                                title="Marcar como Rascunho"
+                                            >
+                                                <FileEdit className="w-3.5 h-3.5" /> Rascunho
+                                            </button>
                                             <button
                                                 onClick={() => handleUpdateStatus(selectedTrack, 'ativo')}
                                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'ativo'
@@ -2561,6 +2769,12 @@ export function CreativeTrack() {
                                     <PackageSearch className="w-4 h-4" /> Dados do Produto
                                 </button>
                                 <button
+                                    onClick={() => setActiveTab('custom')}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'custom' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                >
+                                    <Tag className="w-4 h-4" /> Campos
+                                </button>
+                                <button
                                     onClick={() => setActiveTab('conversions')}
                                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'conversions' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
                                 >
@@ -2623,7 +2837,7 @@ export function CreativeTrack() {
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <label className="text-xs text-text-secondary">Sub_ID</label>
-                                            <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editSubId} onChange={e => setEditSubId(e.target.value)} placeholder="Ex: MOP" />
+                                            <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editSubId} onChange={e => setEditSubId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} placeholder="Ex: MOP" />
                                         </div>
                                     </div>
                                 )}
@@ -2850,9 +3064,10 @@ export function CreativeTrack() {
                                                 </div>
                                             </div>
 
+
                                             {/* Fetched at timestamp */}
                                             {selectedTrack.product_fetched_at && (
-                                                <p className="text-[10px] text-neutral-600 text-right">
+                                                <p className="text-[10px] text-neutral-600 text-right mt-2">
                                                     Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
                                                 </p>
                                             )}
@@ -2912,6 +3127,121 @@ export function CreativeTrack() {
                                     )}
                                 </div>
 
+                            </div>
+
+
+                            <div className={activeTab === 'custom' ? 'flex flex-col gap-4' : 'hidden'}>
+                                <div className="bg-surface-dark border border-border-dark rounded-2xl p-6">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div className="flex flex-col gap-1">
+                                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                                <Tag className="w-5 h-5 text-primary" /> Campos Personalizados
+                                            </h3>
+                                            <p className="text-xs text-text-secondary">Defina informações extras chave-valor para este criativo.</p>
+                                        </div>
+                                        {!editingCustomFields ? (
+                                            <button
+                                                onClick={() => {
+                                                    const fields = Object.entries(selectedTrack?.custom_fields || {}).map(([key, value]) => ({ key, value }));
+                                                    setTabCustomFields(fields.length > 0 ? fields : []);
+                                                    setEditingCustomFields(true);
+                                                }}
+                                                className="bg-primary/10 text-primary border border-primary/20 px-4 py-2 rounded-xl font-bold hover:bg-primary/20 transition-all text-sm flex items-center gap-2"
+                                            >
+                                                <Edit2 className="w-4 h-4" /> Editar Campos
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setEditingCustomFields(false)}
+                                                    className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                                <button
+                                                    onClick={handleUpdateCustomFields}
+                                                    disabled={saving}
+                                                    className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2 text-sm shadow-lg shadow-primary/10"
+                                                >
+                                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {!editingCustomFields ? (
+                                        <div className="flex flex-col gap-3">
+                                            {selectedTrack?.custom_fields && Object.keys(selectedTrack.custom_fields).length > 0 ? (
+                                                Object.entries(selectedTrack.custom_fields).map(([k, v]) => (
+                                                    <div key={k} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-background-dark/50 border border-border-dark rounded-xl px-4 py-3 group hover:border-primary/30 transition-all">
+                                                        <div className="flex-shrink-0 w-full sm:w-32 py-1 px-2.5 bg-white/5 rounded-lg border border-white/10 uppercase text-[10px] font-bold text-neutral-400">
+                                                            {k}
+                                                        </div>
+                                                        <div className="text-sm text-white font-bold break-all flex-1">
+                                                            {v}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="col-span-full py-12 flex flex-col items-center justify-center bg-background-dark/30 rounded-2xl border border-dashed border-border-dark">
+                                                    <Tag className="w-8 h-8 text-neutral-700 mb-3" />
+                                                    <p className="text-sm text-neutral-500">Nenhum campo personalizado definido.</p>
+                                                    <button
+                                                        onClick={() => {
+                                                            setTabCustomFields([]);
+                                                            setEditingCustomFields(true);
+                                                        }}
+                                                        className="mt-4 text-xs text-primary hover:underline font-bold"
+                                                    >
+                                                        + Adicionar Primeiro Campo
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-3">
+                                            {tabCustomFields.map((field, idx) => (
+                                                <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Nome do Campo</label>
+                                                            <input
+                                                                placeholder="Ex: Campanha"
+                                                                value={field.key}
+                                                                onChange={(e) => handleTabCustomFieldChange(idx, 'key', e.target.value)}
+                                                                className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Valor</label>
+                                                            <input
+                                                                placeholder="Valor"
+                                                                value={field.value}
+                                                                onChange={(e) => handleTabCustomFieldChange(idx, 'value', e.target.value)}
+                                                                className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleTabRemoveCustomField(idx)}
+                                                        className="mt-6 p-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                                                        title="Remover"
+                                                    >
+                                                        <X className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+
+                                            <button
+                                                onClick={handleTabAddCustomField}
+                                                disabled={tabCustomFields.length >= 10}
+                                                className="mt-2 w-fit flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 transition-all border border-dashed border-primary/30"
+                                            >
+                                                <Plus className="w-4 h-4" /> Adicionar Novo Campo
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
@@ -2992,7 +3322,8 @@ export function CreativeTrack() {
                                             { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
                                             { label: '% Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
                                             { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
-                                            { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toString(), icon: Target, color: 'text-pink-400' },
+                                            { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                            { label: 'CPC Médio', value: `R$ ${formatBRL(kpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
                                         ].map((kpi, i) => (
                                             <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
                                                 <div className="flex items-center gap-2">

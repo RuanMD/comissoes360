@@ -49,8 +49,8 @@ export function SubIdAnalysis() {
     const expandedSubIdOrders = useMemo(() => {
         if (!expandedSubId) return [];
         return metrics.allOrders.filter(o =>
-            (expandedSubId === 'Sem Sub_id' && (!o.channel || o.channel === 'Desconhecido')) ||
-            (expandedSubId !== 'Sem Sub_id' && o.channel.includes(expandedSubId))
+            (expandedSubId === 'Sem Sub_id' && (!o.subId || o.subId === 'Sem Sub_id')) ||
+            (expandedSubId !== 'Sem Sub_id' && o.subId === expandedSubId)
         );
     }, [metrics.allOrders, expandedSubId]);
 
@@ -254,9 +254,9 @@ export function SubIdAnalysis() {
 
             {/* Sync Banner (all tracks) */}
             {showTrackColumn && matchedTracks.length > 0 && (
-                <div className={`rounded - 2xl border p - 4 flex flex - col sm: flex - row items - start sm: items - center justify - between gap - 3 ${isAutoSyncing ? 'bg-primary/5 border-primary/30' : 'bg-green-500/5 border-green-500/30'} `}>
+                <div className={`rounded-2xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${isAutoSyncing ? 'bg-primary/5 border-primary/30' : 'bg-green-500/5 border-green-500/30'}`}>
                     <div className="flex items-center gap-3">
-                        <div className={`w - 10 h - 10 rounded - xl flex items - center justify - center ${isAutoSyncing ? 'bg-primary/10' : 'bg-green-500/10'} `}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isAutoSyncing ? 'bg-primary/10' : 'bg-green-500/10'}`}>
                             {isAutoSyncing ? <Clapperboard className="w-5 h-5 text-primary" /> : <CheckCircle2 className="w-5 h-5 text-green-400" />}
                         </div>
                         <div>
@@ -401,10 +401,10 @@ export function SubIdAnalysis() {
                     <button
                         onClick={() => setHideNames(prev => !prev)}
                         title={hideNames ? 'Mostrar Sub IDs' : 'Ocultar Sub IDs'}
-                        className={`flex items - center gap - 2 text - xs font - medium px - 3 py - 1.5 rounded - lg border transition - colors ${hideNames
+                        className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${hideNames
                             ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
                             : 'bg-surface-highlight text-text-secondary border-border-dark hover:text-white'
-                            } `}
+                            }`}
                     >
                         {hideNames ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         {hideNames ? 'Sub IDs ocultos' : 'Ocultar Sub IDs'}
@@ -439,7 +439,7 @@ export function SubIdAnalysis() {
                                     <Fragment key={item.subId || idx}>
                                         <tr
                                             onClick={() => toggleExpand(item.subId)}
-                                            className={`hover: bg - background - dark / 30 transition - colors cursor - pointer ${isExpanded ? 'bg-background-dark/20' : ''} `}
+                                            className={`hover:bg-background-dark/30 transition-colors cursor-pointer ${isExpanded ? 'bg-background-dark/20' : ''}`}
                                         >
                                             <td className="p-4 text-sm font-medium text-white max-w-[200px] truncate" title={hideNames ? `Sub ID #${idx + 1} ` : item.subId}>
                                                 <div className="flex items-center gap-2">
@@ -469,8 +469,8 @@ export function SubIdAnalysis() {
                                                 <div className="flex items-center justify-end gap-2">
                                                     <div className="w-16 h-1.5 bg-background-dark rounded-full overflow-hidden hidden sm:block">
                                                         <div
-                                                            className={`h - full ${parseFloat(item.conversion) > 5 ? 'bg-green-500' : 'bg-primary'} `}
-                                                            style={{ width: `${Math.min(parseFloat(item.conversion) * 5, 100)}% ` }}>
+                                                            className={`h-full ${parseFloat(item.conversion) > 5 ? 'bg-green-500' : 'bg-primary'}`}
+                                                            style={{ width: `${Math.min(parseFloat(item.conversion) * 5, 100)}%` }}>
                                                         </div>
                                                     </div>
                                                     <span className="font-mono">{item.conversion}%</span>
@@ -503,168 +503,190 @@ export function SubIdAnalysis() {
 
                                         {/* Expanded Detail Row */}
                                         {isExpanded && details && (
-                                            <tr key={`${idx} -detail`}>
+                                            <tr key={`${idx}-detail`}>
                                                 <td colSpan={colCount} className="p-0">
-                                                    <div className="bg-background-dark/60 border-t border-b border-primary/20 px-6 py-5">
+                                                    <div className="bg-background-dark/60 border-t border-b border-primary/20 px-6 py-6 flex flex-col gap-6">
                                                         {/* Detail Tabs */}
-                                                        <div className="flex gap-2 mb-4">
+                                                        <div className="flex gap-3">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('products'); }}
-                                                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - lg text - xs font - medium transition - colors ${detailTab === 'products' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                    } `}
+                                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${detailTab === 'products'
+                                                                    ? 'bg-primary text-slate-950 shadow-lg shadow-primary/20'
+                                                                    : 'text-text-secondary hover:text-white bg-surface-dark/60 border border-border-dark'
+                                                                    }`}
                                                             >
-                                                                <ShoppingBag className="w-3.5 h-3.5" />
+                                                                <ShoppingBag className="w-4 h-4" />
                                                                 Pedidos Detalhados
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setDetailTab('channels'); }}
-                                                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - lg text - xs font - medium transition - colors ${detailTab === 'channels' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'
-                                                                    } `}
+                                                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${detailTab === 'channels'
+                                                                    ? 'bg-primary text-slate-950 shadow-lg shadow-primary/20'
+                                                                    : 'text-text-secondary hover:text-white bg-surface-dark/60 border border-border-dark'
+                                                                    }`}
                                                             >
-                                                                <Radio className="w-3.5 h-3.5" />
+                                                                <Radio className="w-4 h-4" />
                                                                 Canais ({details.channelBreakdown.length})
                                                             </button>
                                                         </div>
 
-                                                        {/* Products Tab */}
-                                                        {detailTab === 'products' && (
-                                                            <div className="flex flex-col gap-4">
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-2">
-                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
-                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Vendas (Filtrado)</p>
-                                                                        <p className="text-lg font-bold text-white font-mono">{filterState.filteredMetrics.totalUnits}</p>
+                                                        {/* Details Content */}
+                                                        {detailTab === 'products' ? (
+                                                            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                    <div className="bg-surface-dark/40 border border-border-dark/60 p-4 rounded-xl backdrop-blur-sm">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-2 font-bold opacity-70">Vendas (Filtrado)</p>
+                                                                        <p className="text-2xl font-bold text-white font-mono leading-none">{filterState.filteredMetrics.totalUnits}</p>
                                                                     </div>
-                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
-                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Comissão (Filtrada)</p>
-                                                                        <p className="text-lg font-bold text-primary font-mono">
-                                                                            R$ {filterState.filteredMetrics.totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                        </p>
+                                                                    <div className="bg-surface-dark/40 border border-border-dark/60 p-4 rounded-xl backdrop-blur-sm">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-2 font-bold opacity-70">Comissão (Filtrada)</p>
+                                                                        <div className="flex items-baseline gap-1">
+                                                                            <span className="text-xs text-primary font-bold">R$</span>
+                                                                            <p className="text-2xl font-bold text-primary font-mono leading-none">
+                                                                                {filterState.filteredMetrics.totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="bg-surface-dark/40 border border-border-dark p-3 rounded-xl">
-                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-1 font-semibold">Produtos Únicos</p>
-                                                                        <p className="text-lg font-bold text-white font-mono">{filterState.filteredMetrics.uniqueProductsCount}</p>
+                                                                    <div className="bg-surface-dark/40 border border-border-dark/60 p-4 rounded-xl backdrop-blur-sm">
+                                                                        <p className="text-text-secondary text-[10px] uppercase tracking-wider mb-2 font-bold opacity-70">Produtos Únicos</p>
+                                                                        <p className="text-2xl font-bold text-white font-mono leading-none">{filterState.filteredMetrics.uniqueProductsCount}</p>
                                                                     </div>
                                                                 </div>
+
                                                                 <OrderFiltersPanel {...filterState} />
-                                                                <div className="rounded-xl overflow-hidden border border-border-dark">
-                                                                    <table className="w-full text-left text-sm">
+
+                                                                <div className="rounded-xl overflow-hidden border border-border-dark shadow-2xl">
+                                                                    <div className="overflow-x-auto">
+                                                                        <table className="w-full text-left text-sm min-w-[1000px]">
+                                                                            <thead>
+                                                                                <tr className="bg-surface-dark/80 backdrop-blur-md">
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider whitespace-nowrap">Data</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider">Produto</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-right whitespace-nowrap">Qtd</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-center whitespace-nowrap">Canal</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-center whitespace-nowrap">Sub ID</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-center whitespace-nowrap">Status</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-center whitespace-nowrap">Atribuição</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-right whitespace-nowrap">Comissão</th>
+                                                                                    <th className="px-5 py-3.5 font-bold text-text-secondary text-[11px] uppercase tracking-wider text-right whitespace-nowrap">Pedido</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y divide-border-dark/50">
+                                                                                {filterState.filteredOrders.slice(0, 50).map((order, i) => {
+                                                                                    const isCompleted = ['PAID', 'VALIDATED', 'COMPLETED', 'Concluído'].some(s => order.status?.toUpperCase().includes(s.toUpperCase()));
+                                                                                    const isCancelled = ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'Cancelado'].some(s => order.status?.toUpperCase().includes(s.toUpperCase()));
+
+                                                                                    return (
+                                                                                        <tr key={i} className="hover:bg-white/[0.03] transition-colors group">
+                                                                                            <td className="px-5 py-3.5 text-text-secondary whitespace-nowrap text-xs font-mono">
+                                                                                                {order.date !== '—' ? format(new Date(order.date), 'dd/MM HH:mm') : '—'}
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-white min-w-0">
+                                                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                                                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-surface-dark/40 flex-shrink-0 border border-white/5 group-hover:border-primary/30 transition-colors">
+                                                                                                        {order.imageUrl ? (
+                                                                                                            <img src={order.imageUrl} alt="" className="w-full h-full object-cover" />
+                                                                                                        ) : (
+                                                                                                            <div className="w-full h-full flex items-center justify-center bg-white/5">
+                                                                                                                <ShoppingBag className="w-4 h-4 text-text-secondary opacity-30" />
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                    <span className="truncate max-w-[280px] text-xs font-medium group-hover:text-primary transition-colors" title={order.productName}>
+                                                                                                        {order.productName}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-white text-right font-bold font-mono text-xs">{order.qty}</td>
+                                                                                            <td className="px-5 py-3.5 text-center">
+                                                                                                <span className="inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight bg-white/5 border border-white/10 text-text-secondary group-hover:border-white/20 transition-colors">
+                                                                                                    {order.channel}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-center">
+                                                                                                <span className="font-mono text-[10px] text-text-secondary bg-surface-dark/40 px-1.5 py-0.5 rounded border border-white/5 group-hover:text-white transition-colors">
+                                                                                                    {order.subId || '—'}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                                                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${isCompleted
+                                                                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                                                    : isCancelled
+                                                                                                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]'
+                                                                                                    }`}>
+                                                                                                    <span className={`w-1 h-1 rounded-full ${isCompleted ? 'bg-emerald-400' : isCancelled ? 'bg-rose-400' : 'bg-amber-400 animate-pulse'}`} />
+                                                                                                    {isCompleted ? 'Concluído' : isCancelled ? 'Cancelado' : 'Pendente'}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                                                                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${order.type === 'Direta' ? 'text-emerald-400' : 'text-amber-400 opacity-80'}`}>
+                                                                                                    {order.type || 'Indireta'}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-primary font-black text-right font-mono">
+                                                                                                {order.commission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                                                            </td>
+                                                                                            <td className="px-5 py-3.5 text-text-secondary text-right font-mono text-[10px] opacity-60 hover:opacity-100 transition-opacity">
+                                                                                                {order.id.length > 8 ? order.id.slice(-8) : order.id}
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    );
+                                                                                })}
+                                                                                {filterState.filteredOrders.length === 0 && (
+                                                                                    <tr>
+                                                                                        <td colSpan={9} className="px-4 py-8 text-center text-text-secondary">
+                                                                                            Nenhum pedido encontrado com estes filtros.
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                )}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="rounded-xl overflow-hidden border border-border-dark animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                <div className="overflow-x-auto">
+                                                                    <table className="w-full text-left border-collapse">
                                                                         <thead>
                                                                             <tr className="bg-surface-dark/50">
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary whitespace-nowrap">Data</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary">Produto</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Qtd</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Canal</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Sub ID</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Status</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-center whitespace-nowrap">Tipo</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Comissão</th>
-                                                                                <th className="px-4 py-2.5 font-medium text-text-secondary text-right whitespace-nowrap">Pedido ID</th>
+                                                                                <th className="px-4 py-3 text-xs font-bold text-text-secondary uppercase tracking-wider whitespace-nowrap">Canal</th>
+                                                                                <th className="px-4 py-3 text-xs font-bold text-text-secondary text-right uppercase tracking-wider whitespace-nowrap">Cliques</th>
+                                                                                <th className="px-4 py-3 text-xs font-bold text-text-secondary text-right uppercase tracking-wider whitespace-nowrap">% Cliques</th>
+                                                                                <th className="px-4 py-3 text-xs font-bold text-text-secondary text-right uppercase tracking-wider whitespace-nowrap">Vendas</th>
+                                                                                <th className="px-4 py-3 text-xs font-bold text-text-secondary text-right uppercase tracking-wider whitespace-nowrap">Comissão</th>
                                                                             </tr>
                                                                         </thead>
-                                                                        <tbody className="divide-y divide-border-dark">
-                                                                            {filterState.filteredOrders.slice(0, 50).map((order, i) => (
-                                                                                <tr key={i} className="hover:bg-surface-dark/30">
-                                                                                    <td className="px-4 py-2.5 text-text-secondary whitespace-nowrap">
-                                                                                        {order.date !== '—' ? format(new Date(order.date), 'dd/MM HH:mm') : '—'}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-white min-w-0">
-                                                                                        <div className="flex items-center gap-2 min-w-0">
-                                                                                            {order.imageUrl && (
-                                                                                                <img src={order.imageUrl} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
-                                                                                            )}
-                                                                                            <span className="truncate max-w-[200px]" title={order.productName}>{order.productName}</span>
-                                                                                        </div>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-white text-right font-mono">{order.qty}</td>
-                                                                                    <td className="px-4 py-2.5 text-center">
-                                                                                        <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 border border-white/10 text-text-secondary">
-                                                                                            {order.channel}
-                                                                                        </span>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-center font-mono text-xs text-text-secondary">
-                                                                                        {order.subId || '—'}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                                                                                        <span className={`inline - flex px - 1.5 py - 0.5 rounded text - [10px] font - medium ${['PAID', 'VALIDATED', 'COMPLETED', 'Concluído'].includes(order.status)
-                                                                                            ? 'bg-emerald-500/20 text-emerald-400'
-                                                                                            : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'Cancelado'].includes(order.status)
-                                                                                                ? 'bg-red-500/20 text-red-400'
-                                                                                                : 'bg-amber-500/20 text-amber-400'
-                                                                                            } `}>
-                                                                                            {order.status || 'PENDING'}
-                                                                                        </span>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-center whitespace-nowrap">
-                                                                                        <span className={`text - [10px] ${['DIRECT', 'direct', 'Direta'].includes(order.type)
-                                                                                            ? 'text-green-400' : 'text-amber-400'
-                                                                                            } `}>
-                                                                                            {['DIRECT', 'direct', 'Direta'].includes(order.type) ? 'Direta' : order.type || '—'}
-                                                                                        </span>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-primary font-bold text-right font-mono">
-                                                                                        {order.commission.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-text-secondary text-right font-mono text-xs">
-                                                                                        {order.id.length > 8 ? order.id.slice(-8) : order.id}
-                                                                                    </td>
-                                                                                </tr>
-                                                                            ))}
-                                                                            {filterState.filteredOrders.length === 0 && (
-                                                                                <tr>
-                                                                                    <td colSpan={9} className="px-4 py-8 text-center text-text-secondary">
-                                                                                        Nenhum pedido encontrado com estes filtros.
-                                                                                    </td>
-                                                                                </tr>
+                                                                        <tbody className="divide-y divide-border-dark/50">
+                                                                            {details.channelBreakdown.map((ch, i) => {
+                                                                                const totalChannelClicks = details.channelBreakdown.reduce((s, c) => s + c.clicks, 0);
+                                                                                const pct = totalChannelClicks > 0 ? ((ch.clicks / totalChannelClicks) * 100).toFixed(1) : '0.0';
+                                                                                return (
+                                                                                    <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                                                                                        <td className="px-4 py-3 text-sm text-white">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                                                                                <span className="truncate max-w-[150px] font-medium" title={ch.channel}>{ch.channel}</span>
+                                                                                            </div>
+                                                                                        </td>
+                                                                                        <td className="px-4 py-3 text-sm text-white text-right font-mono">{ch.clicks}</td>
+                                                                                        <td className="px-4 py-3 text-sm text-right">
+                                                                                            <span className="font-mono text-text-secondary text-xs">{pct}%</span>
+                                                                                        </td>
+                                                                                        <td className="px-4 py-3 text-sm text-white text-right font-mono">{ch.orders}</td>
+                                                                                        <td className="px-4 py-3 text-sm text-primary font-bold text-right font-mono">
+                                                                                            R$ {ch.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                            {details.channelBreakdown.length === 0 && (
+                                                                                <tr><td colSpan={5} className="px-4 py-8 text-center text-text-secondary text-sm">Nenhum canal encontrado.</td></tr>
                                                                             )}
                                                                         </tbody>
                                                                     </table>
                                                                 </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Channels Tab */}
-                                                        {detailTab === 'channels' && (
-                                                            <div className="rounded-xl overflow-hidden border border-border-dark">
-                                                                <table className="w-full text-left border-collapse">
-                                                                    <thead>
-                                                                        <tr className="bg-surface-dark/50">
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary whitespace-nowrap">Canal</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Cliques</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">% Cliques</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Vendas</th>
-                                                                            <th className="px-4 py-2.5 text-xs font-medium text-text-secondary text-right whitespace-nowrap">Comissão</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-border-dark">
-                                                                        {details.channelBreakdown.map((ch, i) => {
-                                                                            const totalChannelClicks = details.channelBreakdown.reduce((s, c) => s + c.clicks, 0);
-                                                                            const pct = totalChannelClicks > 0 ? ((ch.clicks / totalChannelClicks) * 100).toFixed(1) : '0.0';
-                                                                            return (
-                                                                                <tr key={i} className="hover:bg-surface-dark/30">
-                                                                                    <td className="px-4 py-2.5 text-sm text-white">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                                                                                            <span className="truncate max-w-[150px]" title={ch.channel}>{ch.channel}</span>
-                                                                                        </div>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-sm text-white text-right font-mono">{ch.clicks}</td>
-                                                                                    <td className="px-4 py-2.5 text-sm text-right">
-                                                                                        <div className="flex items-center justify-end gap-2">
-                                                                                            <span className="font-mono text-text-secondary">{pct}%</span>
-                                                                                        </div>
-                                                                                    </td>
-                                                                                    <td className="px-4 py-2.5 text-sm text-white text-right font-mono">{ch.orders}</td>
-                                                                                    <td className="px-4 py-2.5 text-sm text-primary font-bold text-right font-mono">
-                                                                                        R$ {ch.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                                    </td>
-                                                                                </tr>
-                                                                            );
-                                                                        })}
-                                                                        {details.channelBreakdown.length === 0 && (
-                                                                            <tr><td colSpan={5} className="px-4 py-6 text-center text-text-secondary text-sm">Nenhum canal encontrado.</td></tr>
-                                                                        )}
-                                                                    </tbody>
-                                                                </table>
                                                             </div>
                                                         )}
                                                     </div>

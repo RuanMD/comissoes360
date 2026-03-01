@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { X, Search, Loader2, ChevronRight, Check, Link2, Trash2 } from 'lucide-react';
+import { X, Search, Loader2, ChevronRight, Check, Link2, Trash2, Eye, Image as ImageIcon } from 'lucide-react';
 
 const extractFbAdLink = (creative: any): string | null => {
     if (!creative) return null;
@@ -69,8 +69,21 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
     const [searchCampaign, setSearchCampaign] = useState('');
     const [searchAdSet, setSearchAdSet] = useState('');
     const [searchAd, setSearchAd] = useState('');
-
     const [error, setError] = useState('');
+
+    const [previewAdId, setPreviewAdId] = useState<string | null>(null);
+    const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (previewAdId) {
+            fetchPreview(previewAdId);
+        } else {
+            setPreviewHtml(null);
+            setPreviewError(null);
+        }
+    }, [previewAdId]);
 
     useEffect(() => {
         if (isOpen && user) {
@@ -86,6 +99,8 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
             setAdAccounts([]);
             setSelectedAccount('');
             setError('');
+            setPreviewAdId(null);
+            setPreviewHtml(null);
         }
     }, [isOpen, user]);
 
@@ -197,6 +212,28 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
         }
     };
 
+    const fetchPreview = async (adId: string) => {
+        setPreviewLoading(true);
+        setPreviewError(null);
+        setPreviewHtml(null);
+        try {
+            const url = `https://graph.facebook.com/v21.0/${adId}/previews?ad_format=DESKTOP_FEED_STANDARD&access_token=${fbToken}`;
+            const res = await fetch(url);
+            const json = await res.json();
+
+            if (json.error) throw new Error(json.error.message);
+            if (json.data && json.data.length > 0) {
+                setPreviewHtml(json.data[0].body);
+            } else {
+                setPreviewError('Nenhum preview disponível');
+            }
+        } catch (err: any) {
+            setPreviewError(`Erro ao carregar preview: ${err.message}`);
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
     const toggleCampaign = (id: string) => {
         const next = new Set(selectedCampaigns);
         if (next.has(id)) next.delete(id); else next.add(id);
@@ -283,7 +320,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm">
-            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-border-dark shrink-0">
                     <div>
@@ -347,11 +384,11 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                         <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
                     )}
 
-                    {/* 3-column cascading selector */}
+                    {/* 4-column cascading selector */}
                     {(campaigns.length > 0 || loadingCampaigns) && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             {/* Campaigns */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col max-h-64">
+                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -388,7 +425,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                             </div>
 
                             {/* Ad Sets */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col max-h-64">
+                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -427,7 +464,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                             </div>
 
                             {/* Ads */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col max-h-64">
+                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -448,20 +485,78 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                                     ) : filteredAds.length === 0 ? (
                                         <p className="text-xs text-neutral-500 p-2 text-center">Nenhum anúncio</p>
                                     ) : filteredAds.map(a => (
-                                        <button
+                                        <div
                                             key={a.id}
-                                            onClick={() => toggleAd(a.id)}
-                                            className={`w-full text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors ${selectedAds.has(a.id) ? 'bg-green-500/10 text-green-400' : 'text-neutral-300 hover:bg-surface-highlight'
-                                                }`}
+                                            className={`w-full group/ad text-left px-2 py-1.5 rounded-lg text-xs flex items-center gap-2 transition-colors ${selectedAds.has(a.id) ? 'bg-green-500/10 text-green-400' : 'text-neutral-300 hover:bg-surface-highlight'
+                                                } ${previewAdId === a.id ? 'ring-1 ring-primary/50 bg-primary/5' : ''}`}
                                         >
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selectedAds.has(a.id) ? 'bg-green-500 border-green-500' : 'border-neutral-600'
-                                                }`}>
-                                                {selectedAds.has(a.id) && <Check className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <span className="truncate min-w-0">{a.name}</span>
-                                            <span className={`ml-auto shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${statusBadge(a.status)}`}>{a.status}</span>
-                                        </button>
+                                            <button
+                                                onClick={() => toggleAd(a.id)}
+                                                className="flex-1 flex items-center gap-2 min-w-0"
+                                            >
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selectedAds.has(a.id) ? 'bg-green-500 border-green-500' : 'border-neutral-600'
+                                                    }`}>
+                                                    {selectedAds.has(a.id) && <Check className="w-3 h-3 text-white" />}
+                                                </div>
+                                                <span className="truncate min-w-0">{a.name}</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => setPreviewAdId(a.id)}
+                                                className={`p-1 rounded hover:bg-white/10 transition-colors ${previewAdId === a.id ? 'text-primary' : 'text-neutral-500 hover:text-white'}`}
+                                                title="Ver Preview"
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                            </button>
+                                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${statusBadge(a.status)}`}>{a.status}</span>
+                                        </div>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Preview Column */}
+                            <div className="bg-background-dark/30 rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] shadow-inner backdrop-blur-[2px]">
+                                <div className="p-2 border-b border-border-dark shrink-0 flex items-center justify-between bg-surface-dark/40">
+                                    <h3 className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 leading-none">
+                                        <ImageIcon className="w-3 h-3 text-primary" />
+                                        Preview do Anúncio
+                                    </h3>
+                                    {previewAdId && (
+                                        <span className="text-[8px] text-neutral-500 font-mono truncate max-w-[80px]">ID: {previewAdId}</span>
+                                    )}
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-2 custom-scrollbar flex flex-col scroll-smooth">
+                                    {!previewAdId ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-4">
+                                            <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center mb-3">
+                                                <Eye className="w-6 h-6 text-neutral-500" />
+                                            </div>
+                                            <p className="text-[10px] text-neutral-400 max-w-[120px]">Selecione o <Eye className="w-3 h-3 inline pb-0.5 mx-0.5" /> no anúncio para ver</p>
+                                        </div>
+                                    ) : previewLoading ? (
+                                        <div className="h-full flex flex-col items-center justify-center py-4 gap-3">
+                                            <div className="relative">
+                                                <div className="absolute inset-0 blur-sm bg-primary/20 animate-pulse rounded-full" />
+                                                <Loader2 className="w-6 h-6 animate-spin text-primary relative z-10" />
+                                            </div>
+                                            <span className="text-[10px] text-neutral-400 font-medium tracking-wide">Buscando preview...</span>
+                                        </div>
+                                    ) : previewError ? (
+                                        <div className="h-full flex items-center justify-center p-4 text-center">
+                                            <p className="text-[10px] text-red-400 leading-tight bg-red-500/5 p-3 rounded-lg border border-red-500/10">{previewError}</p>
+                                        </div>
+                                    ) : previewHtml ? (
+                                        <div className="w-full flex justify-center scale-[0.85] origin-top transform transition-all duration-300">
+                                            <div
+                                                className="w-full bg-white rounded-xl overflow-hidden shadow-2xl ring-1 ring-black/5"
+                                                dangerouslySetInnerHTML={{ __html: previewHtml }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-neutral-500 text-[10px] italic">
+                                            Conteúdo não disponível
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

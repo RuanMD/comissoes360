@@ -88,15 +88,6 @@ export function Dashboard() {
         );
     }
 
-    const formatTimeToBuy = (mins: number) => {
-        if (mins === 0) return '-';
-        if (mins < 60) return `${Math.round(mins)} min`;
-        const hours = mins / 60;
-        if (hours < 24) return `${Math.round(hours)}h`;
-        const days = hours / 24;
-        return `${Math.round(days)} dias`;
-    };
-
     return (
         <div className="flex flex-col gap-6">
             <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-6">
@@ -116,7 +107,7 @@ export function Dashboard() {
             </header>
 
             {/* KPI Cards Row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                 <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
                     <div className="flex items-start justify-between mb-2">
                         <p className="text-text-secondary text-sm font-medium">Vendas Totais</p>
@@ -143,13 +134,6 @@ export function Dashboard() {
                         <p className="text-text-secondary text-sm font-medium">Taxa Conversão</p>
                     </div>
                     <p className="text-white text-3xl font-bold tracking-tight">{metrics.conversionRate}%</p>
-                </div>
-
-                <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark group hover:border-primary/50 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                        <p className="text-text-secondary text-sm font-medium">Tempo Decisão</p>
-                    </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">{formatTimeToBuy(metrics.avgTimeToBuyMins)}</p>
                 </div>
 
                 <div className="flex flex-col p-5 rounded-2xl bg-gradient-to-br from-primary/10 to-surface-dark border border-primary/30 relative overflow-hidden group">
@@ -300,6 +284,6 @@ export function Dashboard() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

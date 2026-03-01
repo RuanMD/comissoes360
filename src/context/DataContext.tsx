@@ -82,23 +82,79 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 // 1. Fetch user's creative_tracks
                 const { data: tracks, error: tracksErr } = await supabase
                     .from('creative_tracks')
-                    .select('id, sub_id')
+                    .select('id, sub_id, channel')
                     .eq('user_id', user.id);
 
                 if (tracksErr) throw tracksErr;
-                if (!tracks || tracks.length === 0) return;
+                const currentTracks = tracks || [];
 
-                // 2. Identify canonical sub_ids from currently parsed CSV and build aggregation
+                // 2. Identify unique sub_ids and channels from CSV that need a track
+                const neededSubIds = new Set<string>();
+                const subIdToChannelMap = new Map<string, string>();
+
+                clickData.forEach(click => {
+                    const raw = click['Sub_id'] || '';
+                    const canonical = raw.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    neededSubIds.add(canonical);
+                    if (click['Referenciador'] && click['Referenciador'] !== 'Desconhecido') {
+                        subIdToChannelMap.set(canonical, click['Referenciador']);
+                    }
+                });
+
+                commissionData.forEach(item => {
+                    const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
+                    const canonical = parts.join('-') || 'Sem Sub_id';
+                    neededSubIds.add(canonical);
+                    if (item['Canal'] && item['Canal'] !== 'Desconhecido') {
+                        subIdToChannelMap.set(canonical, item['Canal']);
+                    }
+                });
+
+                // 3. Auto-create tracks for missing Sub_IDs
+                const updatedTracks = [...currentTracks];
+                const newTracksToCreate: any[] = [];
+
+                for (const subId of neededSubIds) {
+                    const exists = currentTracks.find(t =>
+                        t.sub_id && (subId === t.sub_id || subId.includes(t.sub_id) || t.sub_id.includes(subId))
+                    );
+
+                    if (!exists) {
+                        const channel = subIdToChannelMap.get(subId) || 'Orgânico';
+                        newTracksToCreate.push({
+                            user_id: user.id,
+                            sub_id: subId,
+                            name: subId === 'Sem Sub_id' ? `Orgânico - ${channel}` : subId,
+                            channel: channel,
+                            status: 'ativo'
+                        });
+                    }
+                }
+
+                if (newTracksToCreate.length > 0) {
+                    const { data: created, error: createErr } = await supabase
+                        .from('creative_tracks')
+                        .insert(newTracksToCreate)
+                        .select();
+
+                    if (!createErr && created) {
+                        updatedTracks.push(...created);
+                    }
+                }
+
+                // 4. Identify canonical track IDs for aggregation
                 const matchedAgg: Record<string, Record<string, { shopee_clicks?: number, orders?: number, commission_value?: number }>> = {};
                 const channelUpdates: Record<string, string> = {};
 
                 const getMatch = (raw: string) => {
-                    const canonical = (raw || '').split('-').filter(Boolean).join('-');
-                    if (!canonical) return null;
-                    const track = tracks.find(t => t.sub_id && (canonical === t.sub_id || canonical.includes(t.sub_id) || t.sub_id.includes(canonical)));
+                    const canonical = (raw || '').split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    const track = updatedTracks.find(t =>
+                        t.sub_id && (canonical === t.sub_id || canonical.includes(t.sub_id) || t.sub_id.includes(canonical))
+                    );
                     return track ? track.id : null;
                 };
 
+                // Filter out entries that didn't match any track (should be rare now)
                 clickData.forEach(click => {
                     const trackId = getMatch(click['Sub_id']);
                     if (!trackId) return;
@@ -112,7 +168,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                     matchedAgg[trackId][dateKey].shopee_clicks = (matchedAgg[trackId][dateKey].shopee_clicks || 0) + 1;
 
-                    // Capture channel from CSV
                     if (click['Referenciador'] && click['Referenciador'] !== 'Desconhecido') {
                         channelUpdates[trackId] = click['Referenciador'];
                     }
@@ -120,7 +175,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 commissionData.forEach(item => {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                    const canonical = parts.join('-');
+                    const canonical = parts.join('-') || 'Sem Sub_id';
                     const trackId = getMatch(canonical);
                     if (!trackId) return;
 
@@ -137,7 +192,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
                     matchedAgg[trackId][dateKey].commission_value = (matchedAgg[trackId][dateKey].commission_value || 0) + netComm;
                 });
 
-                // 3. For each track, sync the dates doing an intelligent merge with existing data
+                // 5. Build individual commission rows for shopee_conversions (Detailed Orders)
+                const conversionRows: any[] = [];
+                commissionData.forEach(item => {
+                    const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
+                    const canonical = parts.join('-') || 'Sem Sub_id';
+                    const trackId = getMatch(canonical);
+                    if (!trackId) return;
+
+                    const dateObj = parseShopeeDate(item['Horário do pedido']);
+                    if (!dateObj) return;
+
+                    conversionRows.push({
+                        track_id: trackId,
+                        conversion_id: item['ID do pedido']?.toString() || `${trackId}-${dateObj.getTime()}`,
+                        click_time: parseShopeeDate(item['Tempo dos Cliques'])?.toISOString() || null,
+                        purchase_time: dateObj.toISOString(),
+                        order_id: item['ID do pedido']?.toString() || null,
+                        order_status: item['Status do pedido'] || null,
+                        item_id: parseInt(item['ID do item']?.toString() || '0') || null,
+                        item_name: item['Nome do Produto'] || null,
+                        item_price: parseFloat(item['Preço unitário do item(R$)']?.toString().replace(',', '.') || '0'),
+                        qty: parseInt(item['Quantidade']?.toString() || '1'),
+                        actual_amount: parseFloat(item['Preço unitário do item(R$)']?.toString().replace(',', '.') || '0'),
+                        total_commission: parseFloat(item['Comissão total do afiliado(R$)']?.toString().replace(',', '.') || '0'),
+                        seller_commission: parseFloat(item['Comissão do vendedor(R$)']?.toString().replace(',', '.') || '0'),
+                        shopee_commission: parseFloat(item['Comissões extras da Shopee(R$)']?.toString().replace(',', '.') || '0'),
+                        net_commission: parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0'),
+                        item_total_commission: parseFloat(item['Comissão total do afiliado(R$)']?.toString().replace(',', '.') || '0'),
+                        synced_at: new Date().toISOString()
+                    });
+                });
+
+                if (conversionRows.length > 0) {
+                    // Batching conversions upsert to avoid payload limits if large
+                    const chunkSize = 100;
+                    for (let i = 0; i < conversionRows.length; i += chunkSize) {
+                        const chunk = conversionRows.slice(i, i + chunkSize);
+                        await supabase
+                            .from('shopee_conversions')
+                            .upsert(chunk, { onConflict: 'track_id,conversion_id,item_id' });
+                    }
+                }
+
+                // 6. For each track, sync the dates doing an intelligent merge with existing data (Daily Aggregates)
                 for (const trackId of Object.keys(matchedAgg)) {
                     const datesObj = matchedAgg[trackId];
                     const dates = Object.keys(datesObj);
@@ -159,9 +257,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                         return {
                             track_id: trackId,
                             date,
-                            // Merging logic: if this CSV parse *provided* a click value, use it. Otherwise, fallback to DB.
                             shopee_clicks: csvValues.shopee_clicks !== undefined ? csvValues.shopee_clicks : (dbValues?.shopee_clicks ?? 0),
-                            // Merging logic: same for orders and commissions.
                             orders: csvValues.orders !== undefined ? csvValues.orders : (dbValues?.orders ?? 0),
                             commission_value: csvValues.commission_value !== undefined
                                 ? Math.round(csvValues.commission_value * 100) / 100
@@ -177,18 +273,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
                         .upsert(payloads, { onConflict: 'track_id,date' });
                 }
 
-                // 4. Update track channels if discovered
-                const channelUpdateKeys = Object.keys(channelUpdates);
-                if (channelUpdateKeys.length > 0) {
-                    for (const trackId of channelUpdateKeys) {
-                        await supabase
-                            .from('creative_tracks')
-                            .update({ channel: channelUpdates[trackId] })
-                            .eq('id', trackId);
+                // 7. Update track channels if discovered and changed
+                const channelUpdateEntries = Object.entries(channelUpdates);
+                if (channelUpdateEntries.length > 0) {
+                    for (const [trackId, channel] of channelUpdateEntries) {
+                        const track = updatedTracks.find(t => t.id === trackId);
+                        if (track && track.channel !== channel) {
+                            await supabase
+                                .from('creative_tracks')
+                                .update({ channel })
+                                .eq('id', trackId);
+                        }
                     }
                 }
 
-                console.log("CSV Auto-sync completed.");
+                console.log("CSV Auto-sync completed with track auto-creation.");
             } catch (err) {
                 console.error("Auto-sync error:", err);
             } finally {
@@ -198,7 +297,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
         syncCsvWithDb();
 
-    }, [clickData, commissionData, fileName, user]); // Only trigger when a new file processes, clickData or commissionData changes 
+    }, [clickData, commissionData, fileName, user]);
+    // Only trigger when a new file processes, clickData or commissionData changes 
 
     return (
         <DataContext.Provider value={{
