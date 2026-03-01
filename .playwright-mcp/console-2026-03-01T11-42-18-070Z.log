@@ -1,0 +1,2 @@
+[   20176ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5175/src/pages/CreativeTrack.tsx?t=1772365358078:0
+[   20176ms] [ERROR] [hmr] Failed to reload /src/pages/CreativeTrack.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5175/@vite/client:175

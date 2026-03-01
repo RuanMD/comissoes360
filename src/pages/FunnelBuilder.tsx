@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { syncService } from '../lib/syncService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import {
@@ -129,24 +130,29 @@ export function FunnelBuilder() {
         if (!newFunnelName.trim()) return;
         setSaving(true);
         try {
-            const { data, error } = await supabase
-                .from('funnels')
-                .insert({
-                    user_id: user!.id,
-                    name: newFunnelName.trim(),
-                    days: [],
-                    maintenance_conditions: [],
-                })
-                .select()
-                .single();
-            if (error) throw error;
-            if (data) {
-                setFunnels(prev => [data, ...prev]);
-                setNewFunnelName('');
-                setShowNewForm(false);
-                handleSelectFunnel(data);
-                showToast('Funil criado!');
-            }
+            const newFunnelId = crypto.randomUUID();
+            const fullPayload = {
+                id: newFunnelId,
+                user_id: user!.id,
+                name: newFunnelName.trim(),
+                days: [],
+                maintenance_conditions: [],
+                created_at: new Date().toISOString()
+            };
+
+            // Optimistic
+            const newFunnel: Funnel = { ...fullPayload, maintenance_condition_groups: [] };
+            setFunnels(prev => [newFunnel, ...prev]);
+            setNewFunnelName('');
+            setShowNewForm(false);
+            handleSelectFunnel(newFunnel);
+            showToast('Funil criado localmente!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'CREATE_FUNNEL',
+                payload: fullPayload
+            });
         } catch (err) {
             console.error(err);
             showToast('Erro ao criar funil.', 'error');
@@ -191,19 +197,30 @@ export function FunnelBuilder() {
         if (!selectedFunnel) return;
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('funnels')
-                .update({
-                    name: editName.trim(),
-                    days: editDays,
-                    maintenance_conditions: editMaintenance,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', selectedFunnel.id);
-            if (error) throw error;
-            showToast('Funil salvo!');
-            fetchFunnels();
-            setSelectedFunnel({ ...selectedFunnel, name: editName, days: editDays, maintenance_condition_groups: editMaintenance });
+            const payload = {
+                name: editName.trim(),
+                days: editDays,
+                maintenance_conditions: editMaintenance,
+                updated_at: new Date().toISOString(),
+            };
+
+            // Optimistic
+            const updatedFunnel = {
+                ...selectedFunnel,
+                name: editName,
+                days: editDays,
+                maintenance_condition_groups: editMaintenance
+            };
+            setFunnels(prev => prev.map(f => f.id === selectedFunnel.id ? updatedFunnel : f));
+            setSelectedFunnel(updatedFunnel);
+
+            showToast('Funil salvo localmente!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'UPDATE_FUNNEL',
+                payload: { id: selectedFunnel.id, ...payload }
+            });
         } catch (err) {
             console.error(err);
             showToast('Erro ao salvar funil.', 'error');
@@ -216,14 +233,19 @@ export function FunnelBuilder() {
         if (!window.confirm('Tem certeza que deseja excluir este funil?')) return;
         setSaving(true);
         try {
-            const { error } = await supabase.from('funnels').delete().eq('id', funnelId);
-            if (error) throw error;
+            // Optimistic
             setFunnels(prev => prev.filter(f => f.id !== funnelId));
             if (selectedFunnel?.id === funnelId) {
                 setSelectedFunnel(null);
                 setEditDays([]);
             }
-            showToast('Funil excluído!');
+            showToast('Funil excluído localmente!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'DELETE_FUNNEL',
+                payload: { id: funnelId }
+            });
         } catch (err) {
             console.error(err);
             showToast('Erro ao excluir funil.', 'error');

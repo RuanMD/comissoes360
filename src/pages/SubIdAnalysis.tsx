@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { supabase } from '../lib/supabase';
+import { syncService } from '../lib/syncService';
 import { DateFilter } from '../components/ui/DateFilter';
 import { useOrderFilters } from '../hooks/useOrderFilters';
 import { OrderFiltersPanel } from '../components/ui/OrderFiltersPanel';
@@ -180,27 +181,32 @@ export function SubIdAnalysis() {
 
         setSavingCreate(true);
         try {
-            const { data, error } = await supabase
-                .from('creative_tracks')
-                .insert({
-                    user_id: user.id,
-                    name: createName.trim(),
-                    affiliate_link: createLink.trim(),
-                    sub_id: creatingForSubId,
-                })
-                .select()
-                .single();
+            const newTrackId = Math.random().toString(36).substr(2, 9);
+            const fullPayload = {
+                user_id: user.id,
+                name: createName.trim(),
+                affiliate_link: createLink.trim(),
+                sub_id: creatingForSubId,
+                id: newTrackId,
+                created_at: new Date().toISOString()
+            };
 
-            if (error) throw error;
-
-            const newTrack: TrackInfo = { id: data.id, name: data.name, sub_id: data.sub_id };
+            // Optimistic
+            const newTrack: TrackInfo = { id: newTrackId, name: createName.trim(), sub_id: creatingForSubId };
             setAllTracks(prev => [...prev, newTrack]);
 
-            showToast(`Track "${createName.trim()}" criado! O banco será sincronizado na próxima importação.`);
+            showToast(`Track "${createName.trim()}" criado localmente!`);
 
             setCreatingForSubId(null);
             setCreateName('');
             setCreateLink('');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'CREATE_TRACK',
+                payload: fullPayload
+            });
+
         } catch (err) {
             console.error(err);
             showToast('Erro ao criar track.', 'error');

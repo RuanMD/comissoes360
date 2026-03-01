@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { startOfDay, endOfDay, subDays, isWithinInterval, format } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 
 export function parseShopeeDate(dateStr: string) {
     if (!dateStr) return null;
@@ -18,23 +19,69 @@ export function useMetrics() {
     const { commissionData, clickData, dateFilter, customRange } = useData();
     const [dbConversions, setDbConversions] = useState<any[]>([]);
     const [dbTracks, setDbTracks] = useState<any[]>([]);
+    const [lastSync, setLastSync] = useState<Date | null>(null);
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         async function fetchDbData() {
-            // Fetch conversions
-            const { data: convData, error: convError } = await supabase
-                .from('shopee_conversions')
-                .select('*');
-            if (!convError && convData) {
-                setDbConversions(convData);
-            }
+            try {
+                // Try to fetch from Supabase
+                const { data: convData, error: convError } = await supabase
+                    .from('shopee_conversions')
+                    .select('*');
 
-            // Fetch creative tracks with their entries
-            const { data: trackData, error: trackError } = await supabase
-                .from('creative_tracks')
-                .select('*, creative_track_entries(*)');
-            if (!trackError && trackData) {
-                setDbTracks(trackData);
+                const { data: trackData, error: trackError } = await supabase
+                    .from('creative_tracks')
+                    .select('*, creative_track_entries(*)');
+
+                if (!convError && convData) {
+                    setDbConversions(convData);
+                    // Update cache
+                    await db.orders.clear();
+                    await db.orders.bulkAdd(convData.map(c => ({
+                        order_id: c.order_id,
+                        purchase_time: c.purchase_time,
+                        actual_amount: c.actual_amount,
+                        commission: c.item_total_commission,
+                        status: c.order_status,
+                        data: c,
+                        updated_at: new Date().toISOString()
+                    })));
+                } else if (convError) {
+                    console.warn('Supabase conversions error, falling back to cache:', convError);
+                    const localOrders = await db.orders.toArray();
+                    setDbConversions(localOrders.map(lo => lo.data));
+                }
+
+                if (!trackError && trackData) {
+                    setDbTracks(trackData);
+                    // Update cache
+                    await db.tracks.clear();
+                    await db.tracks.bulkAdd(trackData);
+                    setLastSync(new Date());
+                } else if (trackError) {
+                    console.warn('Supabase tracks error, falling back to cache:', trackError);
+                    const localTracks = await db.tracks.toArray();
+                    setDbTracks(localTracks);
+                }
+
+            } catch (err) {
+                console.warn('Network error, using offline cache:', err);
+                const localOrders = await db.orders.toArray();
+                const localTracks = await db.tracks.toArray();
+                setDbConversions(localOrders.map(lo => lo.data));
+                setDbTracks(localTracks);
             }
         }
         fetchDbData();
@@ -516,9 +563,11 @@ export function useMetrics() {
                     channelBreakdown: Object.entries(detail.channelBreakdown).map(([channel, s]) => ({ channel, ...s })).sort((a, b) => b.clicks - a.clicks),
                     orders: detail.orders.sort((a, b) => b.commission - a.commission)
                 }
-            ]))
+            ])),
+            lastSync,
+            isOffline
         };
-    }, [unifiedCommission, filteredClicks, clickData, dbTracks, dateFilter, customRange]);
+    }, [unifiedCommission, filteredClicks, clickData, dbTracks, dateFilter, customRange, lastSync, isOffline]);
 
     return metrics;
 }

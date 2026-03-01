@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { syncService } from '../lib/syncService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { generateShopeeLink, fetchShopeeProduct, resolveShopeeUrl, fetchConversionReport } from '../lib/shopeeApi';
@@ -11,7 +12,7 @@ import {
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown, FileEdit
+    ChevronDown, ChevronRight, FileEdit
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -602,19 +603,27 @@ export function CreativeTrack() {
                 if (s.shopType) insertPayload.product_shop_type = JSON.stringify(s.shopType);
             }
 
-            const { data, error } = await supabase
-                .from('creative_tracks')
-                .insert({
-                    ...insertPayload,
-                    custom_fields: customFieldsObj
-                })
-                .select()
-                .single();
-            if (error) throw error;
-            setTracks(prev => [...prev, data]);
+            const newTrackId = Math.random().toString(36).substr(2, 9); // Temporary ID for local use
+            const fullPayload = {
+                ...insertPayload,
+                id: newTrackId,
+                custom_fields: customFieldsObj,
+                created_at: new Date().toISOString(),
+                status: 'rascunho'
+            };
+
+            // Optimistic update
+            setTracks(prev => [...prev, fullPayload as any]);
             resetModal();
-            showToast('Track criado com sucesso!');
-            handleSelectTrack(data);
+            showToast('Track criado! (Sincronização pendente se offline)');
+            handleSelectTrack(fullPayload as any);
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'CREATE_TRACK',
+                payload: fullPayload
+            });
+
         } catch (error) {
             console.error(error);
             showToast('Erro ao criar track.', 'error');
@@ -676,19 +685,24 @@ export function CreativeTrack() {
         if (!window.confirm(`Excluir "${track.name}" e todos os seus registros? Esta ação não pode ser desfeita.`)) return;
         setSaving(true);
         try {
-            const { error } = await supabase.from('creative_tracks').delete().eq('id', track.id);
-            if (error) throw error;
+            // Optimistic 
             const remaining = tracks.filter(t => t.id !== track.id);
             setTracks(remaining);
             if (selectedTrack?.id === track.id) {
-                if (remaining.length > 0) {
-                    handleSelectTrack(remaining[0]);
-                } else {
+                if (remaining.length > 0) handleSelectTrack(remaining[0]);
+                else {
                     setSelectedTrack(null);
                     setEntries([]);
                 }
             }
-            showToast('Track excluído!');
+
+            showToast('Track excluído localmente!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'DELETE_TRACK',
+                payload: { id: track.id }
+            });
         } catch (error) {
             console.error(error);
             showToast('Erro ao excluir track.', 'error');
@@ -702,20 +716,25 @@ export function CreativeTrack() {
         if (!selectedTrack || !editName.trim()) return;
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('creative_tracks')
-                .update({
-                    name: editName.trim(),
-                    affiliate_link: editLink.trim(),
-                    sub_id: editSubId.trim(),
-                })
-                .eq('id', selectedTrack.id);
-            if (error) throw error;
-            const updated = { ...selectedTrack, name: editName.trim(), affiliate_link: editLink.trim(), sub_id: editSubId.trim() };
+            const updates = {
+                name: editName.trim(),
+                affiliate_link: editLink.trim(),
+                sub_id: editSubId.trim(),
+            };
+
+            const updated = { ...selectedTrack, ...updates };
+
+            // Optimistic
             setSelectedTrack(updated);
             setTracks(prev => prev.map(t => t.id === updated.id ? updated : t));
             setEditingTrack(false);
-            showToast('Track atualizado!');
+            showToast('Track atualizado localmente!');
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'UPDATE_TRACK',
+                payload: { id: selectedTrack.id, updates }
+            });
         } catch (error) {
             console.error(error);
             showToast('Erro ao atualizar track.', 'error');
@@ -778,17 +797,21 @@ export function CreativeTrack() {
     const handleUpdateStatus = async (track: Track, newStatus: 'ativo' | 'desativado' | 'validado' | 'rascunho') => {
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('creative_tracks')
-                .update({ status: newStatus })
-                .eq('id', track.id);
-            if (error) throw error;
+            const updates = { status: newStatus };
             const updated = { ...track, status: newStatus };
+
+            // Optimistic
             if (selectedTrack?.id === track.id) {
                 setSelectedTrack(updated);
             }
             setTracks(prev => prev.map(t => t.id === track.id ? updated : t));
             showToast(`Status atualizado para ${newStatus}!`);
+
+            // Queue sync
+            await syncService.addToQueue({
+                type: 'UPDATE_TRACK',
+                payload: { id: track.id, updates }
+            });
         } catch (error) {
             console.error(error);
             showToast('Erro ao atualizar status.', 'error');
@@ -2342,19 +2365,38 @@ export function CreativeTrack() {
                     <h1 className="text-2xl font-bold text-white">Criativo Track</h1>
                     <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
                     <DateFilter />
                     <button
                         onClick={() => setShowNewForm(!showNewForm)}
                         className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 shadow-[0_0_15px_rgba(242,162,13,0.3)] flex items-center gap-2 text-sm"
                     >
-                        <Plus className="w-4 h-4" /> Novo Track
+                        <Plus className="w-4 h-4" /> <span className="sm:inline">Novo Track</span>
                     </button>
                 </div>
             </div>
 
             {/* New Track Modal */}
             {newTrackModal}
+
+            {/* Mobile: horizontal scroll tabs - MOVED HERE */}
+            <div className="flex md:hidden overflow-x-auto gap-2 pb-2 -mx-1 px-1 hide-scrollbar shrink-0">
+                {creativeTracks.map(track => {
+                    const isActive = selectedTrack?.id === track.id;
+                    return (
+                        <button
+                            key={track.id}
+                            onClick={() => handleSelectTrack(track)}
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${isActive
+                                ? 'bg-primary text-background-dark'
+                                : 'bg-surface-dark text-text-secondary border border-border-dark'
+                                }`}
+                        >
+                            {track.name}
+                        </button>
+                    );
+                })}
+            </div>
 
             {/* Two-column layout: Tracks list + Detail */}
             <div className="flex gap-4 min-h-0">
@@ -2396,36 +2438,17 @@ export function CreativeTrack() {
                     </div>
                 </div>
 
-                {/* Mobile: horizontal scroll tabs */}
-                <div className="flex md:hidden overflow-x-auto gap-2 pb-2 -mx-1 px-1 hide-scrollbar">
-                    {creativeTracks.map(track => {
-                        const isActive = selectedTrack?.id === track.id;
-                        return (
-                            <button
-                                key={track.id}
-                                onClick={() => handleSelectTrack(track)}
-                                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${isActive
-                                    ? 'bg-primary text-background-dark'
-                                    : 'bg-surface-dark text-text-secondary border border-border-dark'
-                                    }`}
-                            >
-                                {track.name}
-                            </button>
-                        );
-                    })}
-                </div>
-
                 {/* Right: Detail View */}
                 <div className="flex-1 min-w-0 flex flex-col gap-5">
                     {!selectedTrack ? (
                         <div className="flex-1 flex flex-col gap-5">
                             {/* General Overview Header */}
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
                                     <h2 className="text-xl font-bold text-white">Visão Geral</h2>
                                     <p className="text-text-secondary text-sm">Compilado de todos os criativos</p>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                     <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
                                         {creativeTracks.length} {creativeTracks.length === 1 ? 'criativo' : 'criativos'}
                                     </span>
@@ -2501,10 +2524,15 @@ export function CreativeTrack() {
                             {/* Track Ranking Table */}
                             {trackRanking.length > 0 && (
                                 <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
-                                    <div className="p-4 border-b border-border-dark">
+                                    <div className="p-4 border-b border-border-dark flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-white">Ranking de Criativos</h3>
+                                        <div className="text-[10px] text-text-secondary uppercase tracking-widest font-bold md:hidden">
+                                            Clique para Detalhes
+                                        </div>
                                     </div>
-                                    <div className="overflow-x-auto">
+
+                                    {/* Desktop Table View */}
+                                    <div className="hidden md:block overflow-x-auto">
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-border-dark text-text-secondary text-xs">
@@ -2551,6 +2579,94 @@ export function CreativeTrack() {
                                                 })}
                                             </tbody>
                                         </table>
+                                    </div>
+
+                                    {/* Mobile Card View */}
+                                    <div className="md:hidden flex flex-col gap-3 p-3 bg-background-dark/30">
+                                        {trackRanking.map((row) => {
+                                            const statusColor = row.track.status === 'ativo' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                                                row.track.status === 'validado' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                                                    row.track.status === 'rascunho' ? 'bg-white/10 text-white border-white/20' :
+                                                        'bg-red-500/20 text-red-400 border-red-500/30';
+
+                                            return (
+                                                <div
+                                                    key={row.track.id}
+                                                    onClick={() => handleSelectTrack(row.track)}
+                                                    className="bg-surface-dark border border-border-dark rounded-2xl p-4 shadow-lg active:scale-[0.98] transition-all flex flex-col gap-4"
+                                                >
+                                                    {/* Card Header: Title & Status */}
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex flex-col min-w-0 flex-1">
+                                                            <h4 className="text-white font-bold text-lg leading-tight truncate">
+                                                                {row.track.name}
+                                                            </h4>
+                                                            {row.track.sub_id && (
+                                                                <span className="text-[10px] text-text-secondary font-mono mt-1 px-1.5 py-0.5 bg-background-dark/50 rounded inline-block w-fit">
+                                                                    {row.track.sub_id}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-2">
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider ${statusColor}`}>
+                                                                {row.track.status}
+                                                            </span>
+                                                            <ChevronRight className="w-4 h-4 text-text-secondary/30" />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Card Body: Metrics Grid */}
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {/* Primary Group: Financials */}
+                                                        <div className="bg-background-dark/40 rounded-xl p-3 flex flex-col gap-1 border border-border-dark/50">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Lucro</span>
+                                                                <DollarSign className="w-3 h-3 text-text-secondary/50" />
+                                                            </div>
+                                                            <span className={`text-base font-black ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                                R$ {formatBRL(row.profit)}
+                                                            </span>
+                                                            <span className={`text-[10px] font-bold ${row.pct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                                                                {formatPct(row.pct)}% ROI
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Secondary Group: Volume */}
+                                                        <div className="bg-background-dark/40 rounded-xl p-3 flex flex-col gap-1 border border-border-dark/50">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Shopee</span>
+                                                                <ShoppingCart className="w-3 h-3 text-text-secondary/50" />
+                                                            </div>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <span className="text-base font-bold text-blue-400">{row.orders}</span>
+                                                                <span className="text-[10px] text-text-secondary font-medium">pedidos</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-primary">
+                                                                R$ {formatBRL(row.commission)} comissão
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Traffic Group */}
+                                                        <div className="col-span-2 bg-background-dark/20 rounded-xl px-3 py-2 flex items-center justify-between border border-border-dark/30">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold">Cliques Ads</span>
+                                                                    <span className="text-xs font-bold text-neutral-300">{row.adClicks.toLocaleString('pt-BR')}</span>
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold">Cliques Shopee</span>
+                                                                    <span className="text-xs font-bold text-neutral-300">{row.shopeeClicks.toLocaleString('pt-BR')}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col text-right">
+                                                                <span className="text-[9px] text-text-secondary uppercase font-bold">CPC Médio</span>
+                                                                <span className="text-xs font-mono font-bold text-amber-400">R$ {formatBRL(row.cpc)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -3785,8 +3901,8 @@ export function CreativeTrack() {
 
                     {/* Manual Entry Modal */}
                     {showManualEntry && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm">
-                            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm overflow-hidden">
+                            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
                                 <div className="flex items-center justify-between p-4 border-b border-border-dark">
                                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                                         <Plus className="w-5 h-5 text-primary" />
@@ -3796,8 +3912,8 @@ export function CreativeTrack() {
                                         <X className="w-5 h-5" />
                                     </button>
                                 </div>
-                                <div className="p-4 space-y-3">
-                                    <div className="grid grid-cols-2 gap-3">
+                                <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="flex flex-col gap-1">
                                             <label className="text-xs text-text-secondary">Data</label>
                                             <input type="date" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.date} onChange={e => setEntryForm({ ...entryForm, date: e.target.value })} />

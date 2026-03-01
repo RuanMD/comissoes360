@@ -76,6 +76,8 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
 
+    const [mobileStep, setMobileStep] = useState<'campaigns' | 'adsets' | 'ads' | 'preview'>('campaigns');
+
     useEffect(() => {
         if (previewAdId) {
             fetchPreview(previewAdId);
@@ -101,6 +103,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
             setError('');
             setPreviewAdId(null);
             setPreviewHtml(null);
+            setMobileStep('campaigns');
         }
     }, [isOpen, user]);
 
@@ -238,16 +241,20 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
         const next = new Set(selectedCampaigns);
         if (next.has(id)) next.delete(id); else next.add(id);
         setSelectedCampaigns(next);
-        if (next.size > 0) fetchAdSetsForCampaigns(next);
-        else { setAdSets([]); setAds([]); setSelectedAdSets(new Set()); setSelectedAds(new Set()); }
+        if (next.size > 0) {
+            fetchAdSetsForCampaigns(next);
+            setMobileStep('adsets');
+        } else { setAdSets([]); setAds([]); setSelectedAdSets(new Set()); setSelectedAds(new Set()); }
     };
 
     const toggleAdSet = (id: string) => {
         const next = new Set(selectedAdSets);
         if (next.has(id)) next.delete(id); else next.add(id);
         setSelectedAdSets(next);
-        if (next.size > 0) fetchAdsForAdSets(next);
-        else { setAds([]); setSelectedAds(new Set()); }
+        if (next.size > 0) {
+            fetchAdsForAdSets(next);
+            setMobileStep('ads');
+        } else { setAds([]); setSelectedAds(new Set()); }
     };
 
     const toggleAd = (id: string) => {
@@ -384,11 +391,25 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                         <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
                     )}
 
+                    {/* Step Tabs for Mobile */}
+                    <div className="md:hidden flex items-center bg-background-dark rounded-xl p-1 border border-border-dark mb-2">
+                        {(['campaigns', 'adsets', 'ads', 'preview'] as const).map((step) => (
+                            <button
+                                key={step}
+                                onClick={() => setMobileStep(step)}
+                                disabled={(step === 'adsets' && selectedCampaigns.size === 0) || (step === 'ads' && selectedAdSets.size === 0) || (step === 'preview' && !previewAdId)}
+                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-30 ${mobileStep === step ? 'bg-primary text-background-dark shadow-sm' : 'text-text-secondary'}`}
+                            >
+                                {step === 'campaigns' ? 'Camp' : step === 'adsets' ? 'Conj' : step === 'ads' ? 'Anún' : 'Prev'}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* 4-column cascading selector */}
                     {(campaigns.length > 0 || loadingCampaigns) && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             {/* Campaigns */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
+                            <div className={`bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] ${mobileStep !== 'campaigns' ? 'hidden md:flex' : 'flex'}`}>
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -425,7 +446,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                             </div>
 
                             {/* Ad Sets */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
+                            <div className={`bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] ${mobileStep !== 'adsets' ? 'hidden md:flex' : 'flex'}`}>
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -464,7 +485,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                             </div>
 
                             {/* Ads */}
-                            <div className="bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px]">
+                            <div className={`bg-background-dark rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] ${mobileStep !== 'ads' ? 'hidden md:flex' : 'flex'}`}>
                                 <div className="p-2 border-b border-border-dark shrink-0">
                                     <div className="flex items-center gap-2 bg-surface-dark rounded-lg px-2 py-1.5 border border-border-dark">
                                         <Search className="w-3.5 h-3.5 text-neutral-500" />
@@ -502,7 +523,10 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                                             </button>
 
                                             <button
-                                                onClick={() => setPreviewAdId(a.id)}
+                                                onClick={() => {
+                                                    setPreviewAdId(a.id);
+                                                    setMobileStep('preview');
+                                                }}
                                                 className={`p-1 rounded hover:bg-white/10 transition-colors ${previewAdId === a.id ? 'text-primary' : 'text-neutral-500 hover:text-white'}`}
                                                 title="Ver Preview"
                                             >
@@ -515,7 +539,7 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                             </div>
 
                             {/* Preview Column */}
-                            <div className="bg-background-dark/30 rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] shadow-inner backdrop-blur-[2px]">
+                            <div className={`bg-background-dark/30 rounded-xl border border-border-dark overflow-hidden flex flex-col h-[512px] max-h-[512px] shadow-inner backdrop-blur-[2px] ${mobileStep !== 'preview' ? 'hidden md:flex' : 'flex'}`}>
                                 <div className="p-2 border-b border-border-dark shrink-0 flex items-center justify-between bg-surface-dark/40">
                                     <h3 className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 leading-none">
                                         <ImageIcon className="w-3 h-3 text-primary" />

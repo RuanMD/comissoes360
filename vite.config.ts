@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import crypto from 'crypto'
 
 export default defineConfig(({ mode }) => {
@@ -8,6 +9,31 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.png', 'icons/*.png'],
+        manifest: {
+          name: 'Comissões 360',
+          short_name: 'C360',
+          description: 'Análise de Afiliados Shopee 360',
+          theme_color: '#0A0A0A',
+          background_color: '#0A0A0A',
+          display: 'standalone',
+          icons: [
+            {
+              src: 'icons/pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png'
+            },
+            {
+              src: 'icons/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
+            }
+          ]
+        }
+      }),
       {
         name: 'shopee-api-middleware',
         configureServer(server) {

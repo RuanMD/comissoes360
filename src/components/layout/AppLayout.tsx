@@ -2,9 +2,13 @@ import { ReactNode, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Upload, LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard, Target, Link } from 'lucide-react';
+import { LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard, Target, Link } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { useFeatureAccess, FeatureKey } from '../../hooks/useFeatureAccess';
+import { useMetrics } from '../../hooks/useMetrics';
+import { OfflineBanner } from './OfflineBanner';
+import { MobileNav } from './MobileNav';
+import { MobileMenu } from './MobileMenu';
 
 interface AppLayoutProps {
     children: ReactNode;
@@ -15,7 +19,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { user, signOut, isAdmin } = useAuth();
     const location = useLocation();
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { hasAccess } = useFeatureAccess();
+    const metrics = useMetrics();
 
     const navItems: { path: string; icon: any; label: string; featureKey: FeatureKey }[] = [
         { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', featureKey: 'dashboard' },
@@ -108,8 +114,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-background-dark relative">
+                <OfflineBanner isOffline={metrics.isOffline} lastSync={metrics.lastSync} />
 
-                {/* Mobile Header (replaces sidebar on small screens) */}
+                {/* Mobile Header */}
                 <div className="md:hidden flex items-center justify-between p-4 border-b border-border-dark bg-surface-dark">
                     <div className="flex items-center gap-3">
                         <button
@@ -120,54 +127,24 @@ export function AppLayout({ children }: AppLayoutProps) {
                         </button>
                         <div className="font-bold text-primary flex items-center gap-2">
                             <LayoutDashboard className="w-5 h-5" />
-                            <span className="truncate max-w-[120px]">Comissões 2.0</span>
+                            <span className="truncate max-w-[150px]">Comissões 360</span>
                         </div>
                     </div>
-
-                    <label className="flex items-center justify-center size-9 rounded-lg bg-primary text-background-dark shadow-lg">
-                        <Upload className="w-4 h-4" />
-                        <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                    </label>
-                </div>
-
-                {/* Mobile Nav Scroll (simplistic for Mobile-First PRD rules) */}
-                <div className="md:hidden overflow-x-auto flex items-center gap-2 p-3 bg-background-dark border-b border-border-dark hide-scrollbar">
-                    {navItems.map((item) => (
-                        <NavLink
-                            key={item.path}
-                            to={item.path}
-                            className={({ isActive }) =>
-                                `flex items-center gap-1.5 px-3 py-1.5 rounded-full whitespace-nowrap text-xs font-semibold ${isActive
-                                    ? 'bg-primary text-background-dark'
-                                    : 'bg-surface-highlight text-text-secondary border border-border-dark'
-                                }`
-                            }
-                        >
-                            {item.label}
-                        </NavLink>
-                    ))}
-                    {isAdmin && (
-                        <NavLink
-                            to="/admin"
-                            className={() => {
-                                const active = location.pathname.startsWith('/admin');
-                                return `flex items-center gap-1.5 px-3 py-1.5 rounded-full whitespace-nowrap text-xs font-semibold ${active
-                                    ? 'bg-[#f2a20d]/20 text-[#f2a20d] border border-[#f2a20d]/50'
-                                    : 'bg-surface-highlight text-[#f2a20d] border border-dashed border-[#f2a20d]/30'
-                                    }`;
-                            }}
-                        >
-                            Admin
-                        </NavLink>
-                    )}
                 </div>
 
                 {/* Page Content Scrollable Area */}
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth w-full max-w-full">
+                <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth w-full max-w-full pb-32 md:pb-8">
                     <div className="w-full max-w-7xl mx-auto min-w-0">
                         {children}
                     </div>
                 </main>
+
+                <MobileNav onOpenMore={() => setIsMobileMenuOpen(true)} />
+                <MobileMenu
+                    isOpen={isMobileMenuOpen}
+                    onClose={() => setIsMobileMenuOpen(false)}
+                    onFileUpload={handleFileUpload}
+                />
             </div>
 
             <ProfileModal
