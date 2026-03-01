@@ -2318,7 +2318,7 @@ export function CreativeTrack() {
             <div className="flex flex-col gap-6">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Criativo Track</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-white">Criativo Track</h1>
                         <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                     </div>
                     <button
@@ -2343,7 +2343,7 @@ export function CreativeTrack() {
             <div className="flex flex-col gap-6">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Criativo Track</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-white">Criativo Track</h1>
                         <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                     </div>
                 </div>
@@ -2362,7 +2362,7 @@ export function CreativeTrack() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Criativo Track</h1>
+                    <h1 className="text-xl sm:text-2xl font-bold text-white">Criativo Track</h1>
                     <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
@@ -2506,12 +2506,12 @@ export function CreativeTrack() {
                                         { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
                                         { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
                                     ].map((kpi, i) => (
-                                        <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-                                                <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                        <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
+                                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                                <kpi.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${kpi.color}`} />
+                                                <span className="text-[10px] sm:text-xs text-text-secondary">{kpi.label}</span>
                                             </div>
-                                            <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                            <span className={`text-base sm:text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -2593,12 +2593,12 @@ export function CreativeTrack() {
                                                 <div
                                                     key={row.track.id}
                                                     onClick={() => handleSelectTrack(row.track)}
-                                                    className="bg-surface-dark border border-border-dark rounded-2xl p-4 shadow-lg active:scale-[0.98] transition-all flex flex-col gap-4"
+                                                    className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 shadow-lg active:scale-[0.98] transition-all flex flex-col gap-3 sm:gap-4"
                                                 >
                                                     {/* Card Header: Title & Status */}
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex flex-col min-w-0 flex-1">
-                                                            <h4 className="text-white font-bold text-lg leading-tight truncate">
+                                                            <h4 className="text-white font-bold text-base sm:text-lg leading-tight truncate">
                                                                 {row.track.name}
                                                             </h4>
                                                             {row.track.sub_id && (
@@ -2616,14 +2616,14 @@ export function CreativeTrack() {
                                                     </div>
 
                                                     {/* Card Body: Metrics Grid */}
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                                         {/* Primary Group: Financials */}
-                                                        <div className="bg-background-dark/40 rounded-xl p-3 flex flex-col gap-1 border border-border-dark/50">
+                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50">
                                                             <div className="flex justify-between items-center">
-                                                                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Lucro</span>
+                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider">Lucro</span>
                                                                 <DollarSign className="w-3 h-3 text-text-secondary/50" />
                                                             </div>
-                                                            <span className={`text-base font-black ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                            <span className={`text-sm sm:text-base font-black ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                                                 R$ {formatBRL(row.profit)}
                                                             </span>
                                                             <span className={`text-[10px] font-bold ${row.pct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
@@ -2632,13 +2632,13 @@ export function CreativeTrack() {
                                                         </div>
 
                                                         {/* Secondary Group: Volume */}
-                                                        <div className="bg-background-dark/40 rounded-xl p-3 flex flex-col gap-1 border border-border-dark/50">
+                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50">
                                                             <div className="flex justify-between items-center">
-                                                                <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Shopee</span>
+                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider">Shopee</span>
                                                                 <ShoppingCart className="w-3 h-3 text-text-secondary/50" />
                                                             </div>
                                                             <div className="flex items-baseline gap-1">
-                                                                <span className="text-base font-bold text-blue-400">{row.orders}</span>
+                                                                <span className="text-sm sm:text-base font-bold text-blue-400">{row.orders}</span>
                                                                 <span className="text-[10px] text-text-secondary font-medium">pedidos</span>
                                                             </div>
                                                             <span className="text-[10px] font-bold text-primary">
@@ -2680,14 +2680,14 @@ export function CreativeTrack() {
                                         <div className="flex flex-col gap-1">
                                             {editingTrack ? (
                                                 <input
-                                                    className="bg-background-dark border border-primary rounded-lg p-2 text-white text-xl font-bold outline-none"
+                                                    className="bg-background-dark border border-primary rounded-lg p-2 text-white text-lg sm:text-xl font-bold outline-none w-full"
                                                     value={editName}
                                                     onChange={e => setEditName(e.target.value)}
                                                     autoFocus
                                                 />
                                             ) : (
                                                 <div className="flex items-center gap-2 group">
-                                                    <h2 className={`text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
+                                                    <h2 className={`text-lg sm:text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
                                                         {selectedTrack.name}
                                                     </h2>
                                                     <div className="flex items-center gap-1">

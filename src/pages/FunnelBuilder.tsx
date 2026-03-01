@@ -455,12 +455,12 @@ export function FunnelBuilder() {
     }
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-                        <Target className="w-6 h-6 text-primary" />
+                        <Target className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                         Funil Builder
                     </h1>
                     <p className="text-sm text-text-secondary mt-1">Crie funis com regras diárias de métricas</p>
@@ -498,12 +498,12 @@ export function FunnelBuilder() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
                 {/* Funnel List */}
                 <div className="lg:col-span-4 flex flex-col gap-3">
                     {funnels.length === 0 && !showNewForm && (
-                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-8 text-center">
-                            <Target className="w-10 h-10 text-text-secondary mx-auto mb-3" />
+                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-5 sm:p-8 text-center">
+                            <Target className="w-8 h-8 sm:w-10 sm:h-10 text-text-secondary mx-auto mb-3" />
                             <p className="text-text-secondary text-sm">Nenhum funil criado ainda.</p>
                             <button
                                 onClick={() => setShowNewForm(true)}
@@ -544,8 +544,8 @@ export function FunnelBuilder() {
                 {/* Funnel Editor */}
                 <div className="lg:col-span-8">
                     {!selectedFunnel ? (
-                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-12 text-center">
-                            <GripVertical className="w-8 h-8 text-text-secondary mx-auto mb-3" />
+                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-6 sm:p-12 text-center">
+                            <GripVertical className="w-6 h-6 sm:w-8 sm:h-8 text-text-secondary mx-auto mb-3" />
                             <p className="text-text-secondary text-sm">Selecione ou crie um funil para editar</p>
                         </div>
                     ) : (

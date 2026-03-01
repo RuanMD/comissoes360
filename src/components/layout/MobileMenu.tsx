@@ -44,31 +44,31 @@ export function MobileMenu({ isOpen, onClose, onFileUpload }: MobileMenuProps) {
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-dark border-t border-border-dark rounded-t-3xl p-6 z-[70] max-h-[85vh] overflow-y-auto"
+                        className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-dark border-t border-border-dark rounded-t-3xl p-4 sm:p-6 z-[70] max-h-[85vh] overflow-y-auto"
                     >
-                        <div className="w-12 h-1.5 bg-border-dark rounded-full mx-auto mb-6" />
+                        <div className="w-12 h-1.5 bg-border-dark rounded-full mx-auto mb-4" />
 
-                        <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-xl font-bold">Mais Opções</h2>
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-lg font-bold">Mais Opções</h2>
                             <button onClick={onClose} className="p-2 bg-surface-highlight rounded-full">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3 mb-8">
-                            <label className="flex items-center gap-3 p-4 bg-primary text-background-dark rounded-2xl active:scale-95 transition-all font-bold cursor-pointer w-full box-border">
+                        <div className="grid grid-cols-1 gap-2 sm:gap-3 mb-5">
+                            <label className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-primary text-background-dark rounded-2xl active:scale-95 transition-all font-bold cursor-pointer w-full box-border text-sm sm:text-base">
                                 <Upload className="w-5 h-5" />
                                 <span>Importar Vendas (CSV)</span>
                                 <input type="file" accept=".csv" onChange={(e) => { onFileUpload(e); onClose(); }} className="hidden" />
                             </label>
 
-                            <div className="grid grid-cols-2 gap-3 mt-2">
+                            <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2">
                                 {visibleOthers.map((item) => (
                                     <NavLink
                                         key={item.path}
                                         to={item.path}
                                         onClick={onClose}
-                                        className="flex items-center gap-3 p-4 bg-surface-highlight/40 border border-border-dark rounded-2xl active:scale-95 transition-all"
+                                        className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-surface-highlight/40 border border-border-dark rounded-2xl active:scale-95 transition-all"
                                     >
                                         <item.icon className="w-5 h-5 text-primary" />
                                         <span className="text-sm font-semibold">{item.label}</span>
@@ -78,7 +78,7 @@ export function MobileMenu({ isOpen, onClose, onFileUpload }: MobileMenuProps) {
                                     <NavLink
                                         to="/admin"
                                         onClick={onClose}
-                                        className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-2xl active:scale-95 transition-all"
+                                        className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-primary/10 border border-primary/20 rounded-2xl active:scale-95 transition-all"
                                     >
                                         <Settings className="w-5 h-5 text-primary" />
                                         <span className="text-sm font-semibold text-primary">Admin</span>
@@ -87,10 +87,10 @@ export function MobileMenu({ isOpen, onClose, onFileUpload }: MobileMenuProps) {
                             </div>
                         </div>
 
-                        <div className="border-t border-border-dark pt-6 flex flex-col gap-3 pb-8">
+                        <div className="border-t border-border-dark pt-4 flex flex-col gap-2 sm:gap-3" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
                             <button
                                 onClick={() => { onClose(); signOut(); }}
-                                className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 font-bold active:scale-95 transition-all w-full box-border"
+                                className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 font-bold active:scale-95 transition-all w-full box-border text-sm sm:text-base"
                             >
                                 <LogOut className="w-5 h-5" />
                                 <span>Sair da Conta</span>

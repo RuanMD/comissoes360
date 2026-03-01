@@ -69,54 +69,54 @@ export function TemporalAnalysis() {
     if (metrics.isEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-center">
-                <div className="w-20 h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-6 border border-border-dark shadow-2xl">
-                    <CalendarDays className="w-10 h-10 text-primary/50" />
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-4 sm:mb-6 border border-border-dark shadow-2xl">
+                    <CalendarDays className="w-7 h-7 sm:w-10 sm:h-10 text-primary/50" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
                 <p className="text-text-secondary max-w-sm">Importe um relatório de Comissões para gerar a análise temporal de vendas.</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col gap-6">
-            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 border-b border-border-dark pb-4 sm:pb-6">
                 <div className="flex flex-col">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">Análise Temporal</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Análise Temporal</h2>
                     <p className="text-text-secondary text-sm">Distribuição de vendas por horários e dias (Visualização de Teste)</p>
                 </div>
                 <DateFilter />
             </header>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4 group hover:border-primary/50 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4 group hover:border-primary/50 transition-colors">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                         <Clock className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Horário de Pico (Aprox)</p>
-                        <p className="font-bold text-xl">{peakHourInfo}</p>
+                        <p className="font-bold text-lg sm:text-xl">{peakHourInfo}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4 group hover:border-primary/50 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6]">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4 group hover:border-primary/50 transition-colors">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6]">
                         <BarChart3 className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Dia mais Forte da Semana</p>
-                        <p className="font-bold text-xl">{strongestDayInfo}</p>
+                        <p className="font-bold text-lg sm:text-xl">{strongestDayInfo}</p>
                     </div>
                 </div>
             </div>
 
-            <div className="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark min-w-0">
-                <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col p-4 sm:p-6 rounded-2xl bg-surface-dark border border-border-dark min-w-0">
+                <div className="flex justify-between items-center mb-4 sm:mb-6">
                     <div>
-                        <h3 className="text-lg font-bold text-white">Vendas por Hora (Amostragem)</h3>
+                        <h3 className="text-base sm:text-lg font-bold text-white">Vendas por Hora (Amostragem)</h3>
                     </div>
                 </div>
-                <div className="relative h-[400px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8 overflow-hidden">
+                <div className="relative h-[280px] sm:h-[400px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8 overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={hourlyData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#393328" vertical={false} />

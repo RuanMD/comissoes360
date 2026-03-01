@@ -33,11 +33,11 @@ export function ForgotPassword() {
                 <span className="text-xs font-semibold tracking-wider text-neutral-300">RECUPERAÇÃO</span>
             </div>
 
-            <div className="w-full max-w-md p-8 sm:p-10 rounded-2xl border border-white/5 bg-[#18181A] shadow-2xl relative overflow-hidden">
+            <div className="w-full max-w-md p-4 sm:p-6 md:p-10 rounded-2xl border border-white/5 bg-[#18181A] shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-32 bg-[#f2a20d]/5 blur-[64px] rounded-full" />
 
-                <div className="relative z-10 text-center mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-3">Esqueceu a senha?</h1>
+                <div className="relative z-10 text-center mb-6 sm:mb-8">
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 sm:mb-3">Esqueceu a senha?</h1>
                     <p className="text-sm text-neutral-400">
                         Insira seu e-mail para receber as instruções de recuperação.
                     </p>

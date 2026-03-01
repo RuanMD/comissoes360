@@ -9,10 +9,10 @@ export function DirectsVsIndirects() {
     if (metrics.isEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-center">
-                <div className="w-20 h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-6 border border-border-dark shadow-2xl">
-                    <ShieldCheck className="w-10 h-10 text-primary/50" />
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-4 sm:mb-6 border border-border-dark shadow-2xl">
+                    <ShieldCheck className="w-7 h-7 sm:w-10 sm:h-10 text-primary/50" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
                 <p className="text-text-secondary max-w-sm">Importe um relatório de Comissões para visualizar esta análise.</p>
             </div>
         );
@@ -21,10 +21,10 @@ export function DirectsVsIndirects() {
     const COLORS = ['#f2a20d', '#3b82f6'];
 
     return (
-        <div className="flex flex-col gap-6">
-            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 border-b border-border-dark pb-4 sm:pb-6">
                 <div className="flex flex-col">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">Diretas vs Indiretas</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Diretas vs Indiretas</h2>
                     <p className="text-text-secondary text-sm">Distribuição de vendas diretas x carrinho cruzado (cross-selling)</p>
                 </div>
                 <DateFilter />
@@ -32,9 +32,9 @@ export function DirectsVsIndirects() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Visual Mock Chart */}
-                <div className="flex flex-col p-6 rounded-2xl bg-surface-dark border border-border-dark min-w-0 min-h-[400px]">
-                    <h3 className="text-lg font-bold text-white mb-2">Comportamento do Comprador</h3>
-                    <p className="text-sm text-text-secondary mb-6">Muitas compras de afiliados provêm de itens que o usuário não clicou originalmente, sendo atribuídas pela janela de 7 dias de cookies.</p>
+                <div className="flex flex-col p-4 sm:p-6 rounded-2xl bg-surface-dark border border-border-dark min-w-0 min-h-[300px] sm:min-h-[400px]">
+                    <h3 className="text-base sm:text-lg font-bold text-white mb-2">Comportamento do Comprador</h3>
+                    <p className="text-xs sm:text-sm text-text-secondary mb-4 sm:mb-6">Muitas compras de afiliados provêm de itens que o usuário não clicou originalmente, sendo atribuídas pela janela de 7 dias de cookies.</p>
 
                     <div className="flex-1 flex items-center justify-center w-full min-h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">

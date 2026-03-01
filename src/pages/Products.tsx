@@ -12,20 +12,20 @@ export function Products() {
     if (metrics.isEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-center">
-                <div className="w-20 h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-6 border border-border-dark shadow-2xl">
-                    <Package className="w-10 h-10 text-primary/50" />
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-4 sm:mb-6 border border-border-dark shadow-2xl">
+                    <Package className="w-7 h-7 sm:w-10 sm:h-10 text-primary/50" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
                 <p className="text-text-secondary max-w-sm">Importe um relatório de Comissões para extrair as métricas de produto.</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col gap-6">
-            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 border-b border-border-dark pb-4 sm:pb-6">
                 <div className="flex flex-col">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">Ranking de Produtos</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Ranking de Produtos</h2>
                     <p className="text-text-secondary text-sm">Visualização de performance no nível do item</p>
                 </div>
                 <DateFilter />
@@ -33,61 +33,61 @@ export function Products() {
 
             {/* Status KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                         <CheckCircle className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Pedidos Concluídos</p>
-                        <p className="font-bold text-xl text-emerald-400">{filterState.filteredMetrics.statusCounts?.completed || 0}</p>
+                        <p className="font-bold text-lg sm:text-xl text-emerald-400">{filterState.filteredMetrics.statusCounts?.completed || 0}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
                         <Clock className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Pedidos Pendentes</p>
-                        <p className="font-bold text-xl text-amber-400">{filterState.filteredMetrics.statusCounts?.pending || 0}</p>
+                        <p className="font-bold text-lg sm:text-xl text-amber-400">{filterState.filteredMetrics.statusCounts?.pending || 0}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
                         <XCircle className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Pedidos Cancelados</p>
-                        <p className="font-bold text-xl text-red-400">{filterState.filteredMetrics.statusCounts?.cancelled || 0}</p>
+                        <p className="font-bold text-lg sm:text-xl text-red-400">{filterState.filteredMetrics.statusCounts?.cancelled || 0}</p>
                     </div>
                 </div>
             </div>
 
             {/* Overview KPIs specific to Products context */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                         <Package className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Produtos Diferentes Vendidos</p>
-                        <p className="font-bold text-xl">{filterState.filteredMetrics.uniqueProductsCount}</p>
+                        <p className="font-bold text-lg sm:text-xl">{filterState.filteredMetrics.uniqueProductsCount}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6]">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6]">
                         <Hash className="w-5 h-5" />
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Total de Unidades/Pedidos</p>
-                        <p className="font-bold text-xl">{filterState.filteredMetrics.totalUnits}</p>
+                        <p className="font-bold text-lg sm:text-xl">{filterState.filteredMetrics.totalUnits}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-surface-dark border border-border-dark rounded-xl p-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <div className="flex items-center gap-3 sm:gap-4 bg-surface-dark border border-border-dark rounded-xl p-3 sm:p-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                         <DollarSign className="w-5 h-5" />
                     </div>
                     <div>

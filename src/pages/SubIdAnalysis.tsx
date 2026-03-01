@@ -237,10 +237,10 @@ export function SubIdAnalysis() {
     if (metrics.isEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-center">
-                <div className="w-20 h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-6 border border-border-dark shadow-2xl">
-                    <Hash className="w-10 h-10 text-primary/50" />
+                <div className="w-14 h-14 sm:w-20 sm:h-20 bg-surface-dark rounded-2xl flex items-center justify-center mb-4 sm:mb-6 border border-border-dark shadow-2xl">
+                    <Hash className="w-7 h-7 sm:w-10 sm:h-10 text-primary/50" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Sem Dados Disponíveis</h2>
                 <p className="text-text-secondary max-w-sm">Importe os relatórios de Cliques e Comissões para visualizar esta análise.</p>
             </div>
         );
@@ -249,10 +249,10 @@ export function SubIdAnalysis() {
     const showTrackColumn = commissionData.length > 0 || clickData.length > 0;
 
     return (
-        <div className="flex flex-col gap-6">
-            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
+            <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 border-b border-border-dark pb-4 sm:pb-6">
                 <div className="flex flex-col">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">Análise por Sub_ID</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Análise por Sub_ID</h2>
                     <p className="text-text-secondary text-sm">Cruzamento de Cliques e Comissões</p>
                 </div>
                 <DateFilter />
