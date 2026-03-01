@@ -2080,37 +2080,62 @@ export function CreativeTrack() {
 
     // ========== GLOBAL KPIs (all tracks + unmatched) ==========
     const globalKpis = useMemo(() => {
-        if (filteredAllEntries.length === 0 && filteredUnmatchedConversions.length === 0) return null;
+        // Filter all conversions (including matched and unmatched) by date
+        const now = new Date();
+        let start: Date = new Date(0);
+        let end: Date = endOfDay(now);
+        switch (dateFilter) {
+            case 'today': start = startOfDay(now); break;
+            case 'yesterday': start = startOfDay(subDays(now, 1)); end = endOfDay(subDays(now, 1)); break;
+            case 'anteontem': start = startOfDay(subDays(now, 2)); end = endOfDay(subDays(now, 2)); break;
+            case '7days': start = startOfDay(subDays(now, 7)); break;
+            case '30days': start = startOfDay(subDays(now, 30)); break;
+            case 'custom':
+                if (customRange?.start) start = startOfDay(new Date(customRange.start));
+                if (customRange?.end) end = endOfDay(new Date(customRange.end));
+                break;
+        }
 
-        // Tracked entries (from creative_track_entries)
-        const trackedCommission = filteredAllEntries.reduce((s, e) => s + Number(e.commission_value), 0);
+        const filteredConversionsForKpis = allUserConversions.filter(c => {
+            if (!c.purchase_time) return false;
+            const dateObj = new Date(c.purchase_time);
+            if (isNaN(dateObj.getTime())) return false;
+            if (dateFilter === 'all') return true;
+            return isWithinInterval(dateObj, { start, end });
+        });
+
+        if (filteredAllEntries.length === 0 && filteredConversionsForKpis.length === 0) return null;
+
+        // Total Commission from all RAW conversions (matches Products page logic)
+        const totalCommission = filteredConversionsForKpis.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+
+        // Investment, Ad Clicks, Shopee Clicks from aggregate table (entries)
         const totalInvestment = filteredAllEntries.reduce((s, e) => s + Number(e.investment), 0);
-        const trackedOrders = filteredAllEntries.reduce((s, e) => s + Number(e.orders), 0);
         const totalShopeeClicks = filteredAllEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
         const totalAdClicks = filteredAllEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
 
-        // Unmatched conversions (from shopee_conversions where track_id is null)
-        // Count unique orders by conversion_id
-        const unmatchedOrderIds = new Set(filteredUnmatchedConversions.map(c => c.conversion_id));
-        const unmatchedOrders = unmatchedOrderIds.size;
-        const unmatchedCommission = filteredUnmatchedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        // Unique orders by conversion_id (or order_id) from raw conversions
+        const uniqueOrderIds = new Set(filteredConversionsForKpis.map(c => c.order_id || c.conversion_id));
+        const totalOrders = uniqueOrderIds.size;
 
-        const totalCommission = trackedCommission + unmatchedCommission;
-        const totalOrders = trackedOrders + unmatchedOrders;
         const totalProfit = totalCommission - totalInvestment;
         const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
+
         const uniqueDates = new Set([
             ...filteredAllEntries.map(e => e.date),
-            ...filteredUnmatchedConversions.map(c => c.purchase_time ? format(new Date(c.purchase_time), 'yyyy-MM-dd') : '').filter(Boolean),
+            ...filteredConversionsForKpis.map(c => c.purchase_time ? format(new Date(c.purchase_time), 'yyyy-MM-dd') : '').filter(Boolean),
         ]);
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
-        const directSales = filteredAllEntries.reduce((s, e) => s + (e.is_direct ? Number(e.orders) : 0), 0) +
-            filteredUnmatchedConversions.filter(c => c.is_direct).length;
+
+        // Sales attribution Breakdown
+        // Direct sales: conversions that explicitly have track_id or is_direct (or however your schema identifies it)
+        // For simplicity and consistency with individual track logic, we'll check is_direct or if it has a valid track_id
+        const directSales = filteredConversionsForKpis.filter(c => c.is_direct).length;
         const indirectSales = totalOrders - directSales;
 
         return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc, directSales, indirectSales };
-    }, [filteredAllEntries, filteredUnmatchedConversions]);
+    }, [filteredAllEntries, allUserConversions, dateFilter, customRange]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
