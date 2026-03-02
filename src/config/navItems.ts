@@ -24,6 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const DEFAULT_NAV_ORDER: FeatureKey[] = NAV_ITEMS.map(i => i.featureKey);
 
 const NAV_ORDER_STORAGE_KEY = 'shopee_analisar_nav_order';
+const NAV_LABELS_STORAGE_KEY = 'shopee_analisar_nav_labels';
 
 export function loadNavOrderFromStorage(): FeatureKey[] | null {
     try {
@@ -35,4 +36,16 @@ export function loadNavOrderFromStorage(): FeatureKey[] | null {
 
 export function saveNavOrderToStorage(order: FeatureKey[]): void {
     localStorage.setItem(NAV_ORDER_STORAGE_KEY, JSON.stringify(order));
+}
+
+export function loadNavLabelsFromStorage(): Record<string, string> | null {
+    try {
+        const stored = localStorage.getItem(NAV_LABELS_STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return null;
+}
+
+export function saveNavLabelsToStorage(labels: Record<string, string>): void {
+    localStorage.setItem(NAV_LABELS_STORAGE_KEY, JSON.stringify(labels));
 }

@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /forgot-password
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /relatorio
+Disallow: /funil
+Disallow: /sub-id
+Disallow: /canais
+Disallow: /produtos
+Disallow: /temporal
+Disallow: /diretas-vs-indiretas
+Disallow: /criativo-track
+Disallow: /gerador-links
+
+Sitemap: https://comissoeslab.com.br/sitemap.xml

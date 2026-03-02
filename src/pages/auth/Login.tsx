@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
 import { Mail, Lock, ArrowRight, Loader2, PlaySquare } from 'lucide-react';
 
@@ -40,6 +41,11 @@ export function Login() {
 
     return (
         <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 min-h-[calc(100vh-80px)]">
+            <Helmet>
+                <title>Login | Comissões Lab</title>
+                <meta name="description" content="Acesse sua conta no Comissões Lab para gerenciar suas vendas e comissões da Shopee." />
+                <meta name="robots" content="noindex, follow" />
+            </Helmet>
             {/* Top Badge - Hidden on small mobile to save space */}
             <div className="hidden sm:flex mb-8 items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md">
                 <PlaySquare className="w-4 h-4 text-[#f2a20d]" />

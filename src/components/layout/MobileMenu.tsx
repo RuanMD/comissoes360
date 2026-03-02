@@ -3,9 +3,12 @@ import {
     X, LogOut, Settings, BarChart3, TrendingUp,
     Package, Moon, Link, Upload, RefreshCw
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { motion, AnimatePresence } from 'framer-motion';
+import { loadNavLabelsFromStorage } from '../../config/navItems';
+import { supabase } from '../../lib/supabase';
 
 interface MobileMenuProps {
     isOpen: boolean;
@@ -15,8 +18,30 @@ interface MobileMenuProps {
 }
 
 export function MobileMenu({ isOpen, onClose, onFileUpload, onRefresh }: MobileMenuProps) {
-    const { signOut, isAdmin } = useAuth();
+    const { signOut, isAdmin, user } = useAuth();
     const { hasAccess } = useFeatureAccess();
+    const [navLabels, setNavLabels] = useState<Record<string, string>>(() => loadNavLabelsFromStorage() ?? {});
+
+    useEffect(() => {
+        if (!user) return;
+        (async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const prefs = data?.user_preferences as { nav_labels?: Record<string, string> } | null;
+            if (prefs?.nav_labels) {
+                setNavLabels(prefs.nav_labels);
+            }
+        })();
+    }, [user]);
+
+    // Listen for nav labels changes from admin panel
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const labels = (e as CustomEvent<Record<string, string>>).detail;
+            setNavLabels(labels);
+        };
+        window.addEventListener('nav-labels-changed', handler);
+        return () => window.removeEventListener('nav-labels-changed', handler);
+    }, []);
 
     const otherItems = [
         { path: '/relatorio', icon: TrendingUp, label: 'Relatório', featureKey: 'relatorio' },
@@ -82,7 +107,7 @@ export function MobileMenu({ isOpen, onClose, onFileUpload, onRefresh }: MobileM
                                         className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-surface-highlight/40 border border-border-dark rounded-2xl active:scale-95 transition-all"
                                     >
                                         <item.icon className="w-5 h-5 text-primary" />
-                                        <span className="text-sm font-semibold">{item.label}</span>
+                                        <span className="text-sm font-semibold">{navLabels[item.featureKey] || item.label}</span>
                                     </NavLink>
                                 ))}
                                 {isAdmin && (

@@ -9,7 +9,7 @@ import { useMetrics } from '../../hooks/useMetrics';
 import { OfflineBanner } from './OfflineBanner';
 import { MobileNav } from './MobileNav';
 import { MobileMenu } from './MobileMenu';
-import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage } from '../../config/navItems';
+import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage, loadNavLabelsFromStorage } from '../../config/navItems';
 import type { FeatureKey } from '../../hooks/useFeatureAccess';
 import { supabase } from '../../lib/supabase';
 
@@ -26,26 +26,38 @@ export function AppLayout({ children }: AppLayoutProps) {
     const { hasAccess } = useFeatureAccess();
     const metrics = useMetrics();
     const [navOrder, setNavOrder] = useState<FeatureKey[]>(() => loadNavOrderFromStorage() ?? DEFAULT_NAV_ORDER);
+    const [navLabels, setNavLabels] = useState<Record<string, string>>(() => loadNavLabelsFromStorage() ?? {});
 
     useEffect(() => {
         if (!user) return;
         (async () => {
             const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
-            const prefs = data?.user_preferences as { nav_order?: FeatureKey[] } | null;
+            const prefs = data?.user_preferences as { nav_order?: FeatureKey[], nav_labels?: Record<string, string> } | null;
             if (prefs?.nav_order?.length) {
                 setNavOrder(prefs.nav_order);
+            }
+            if (prefs?.nav_labels) {
+                setNavLabels(prefs.nav_labels);
             }
         })();
     }, [user]);
 
-    // Listen for nav order changes from admin panel
+    // Listen for nav order/labels changes from admin panel
     useEffect(() => {
-        const handler = (e: Event) => {
+        const orderHandler = (e: Event) => {
             const order = (e as CustomEvent<FeatureKey[]>).detail;
             setNavOrder(order);
         };
-        window.addEventListener('nav-order-changed', handler);
-        return () => window.removeEventListener('nav-order-changed', handler);
+        const labelsHandler = (e: Event) => {
+            const labels = (e as CustomEvent<Record<string, string>>).detail;
+            setNavLabels(labels);
+        };
+        window.addEventListener('nav-order-changed', orderHandler);
+        window.addEventListener('nav-labels-changed', labelsHandler);
+        return () => {
+            window.removeEventListener('nav-order-changed', orderHandler);
+            window.removeEventListener('nav-labels-changed', labelsHandler);
+        };
     }, []);
 
     const visibleNavItems = NAV_ITEMS
@@ -104,7 +116,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             >
                                 <item.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isCurrent(item.path) ? 'text-background-dark' : ''}`} />
                                 <span className={`text-sm ${isCurrent(item.path) ? 'font-bold' : 'font-medium'}`}>
-                                    {item.label}
+                                    {navLabels[item.featureKey] || item.label}
                                 </span>
                             </NavLink>
                         ))}

@@ -2,6 +2,7 @@ import {
     BarChart3, Clock, LineChart, Banknote, FileX2, EyeOff, LayoutDashboard, Zap, Users, ChevronDown, CheckCircle
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { supabase } from '../lib/supabase';
 import { SubscriptionModal } from '../components/SubscriptionModal';
 
@@ -112,6 +113,15 @@ export function LandingPage() {
 
     return (
         <div className="w-full overflow-x-hidden">
+            <Helmet>
+                <title>Comissões Lab | Ferramenta de Análise para Afiliados Shopee</title>
+                <meta name="description" content="A ferramenta definitiva para afiliados Shopee. Descubra quais SubIDs dão lucro, analise vendas por hora e tracking de canais em tempo real." />
+                <link rel="canonical" href="https://comissoeslab.com.br/" />
+                <meta property="og:title" content="Comissões Lab | Análise Avançada de Afiliados" />
+                <meta property="og:description" content="Saiba exatamente de onde vêm suas vendas na Shopee com rastreamento por SubID e Canais." />
+                <meta property="og:type" content="website" />
+                <meta property="og:url" content="https://comissoeslab.com.br/" />
+            </Helmet>
 
             {/* 1ª Dobra - Hero */}
             <section className="relative pt-20 pb-24 lg:pt-32 lg:pb-40 px-4 w-full flex justify-center items-center min-h-[90vh]">

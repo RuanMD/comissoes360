@@ -254,7 +254,9 @@ export function useMetrics() {
         let totalNetCommission = 0;
         let totalOrderValue = 0;
         let totalOrders = unifiedCommission.length;
-        let totalClicks = filteredClicks.length;
+        let totalClicks = 0; // Will be calculated from shopee_clicks
+        let totalAdClicks = 0;
+        let totalInvestment = 0;
 
         const dailyOrders: Record<string, number> = {};
         const productCounts: Record<string, { count: number, commission: number }> = {};
@@ -284,13 +286,13 @@ export function useMetrics() {
             commission: number
         }> = [];
 
-        const subIdStats: Record<string, { clicks: number, orders: number, commission: number, channels: Set<string> }> = {};
+        const subIdStats: Record<string, { clicks: number, adClicks: number, investment: number, orders: number, commission: number, channels: Set<string> }> = {};
         const subIdDetails: Record<string, {
             products: Record<string, { count: number, commission: number }>,
-            channelBreakdown: Record<string, { clicks: number, orders: number, commission: number }>,
+            channelBreakdown: Record<string, { clicks: number, adClicks: number, investment: number, orders: number, commission: number }>,
             orders: Array<{ orderId: string, product: string, commission: number, status: string, date: string }>
         }> = {};
-        const channelStats: Record<string, { clicks: number, orders: number, commission: number }> = {};
+        const channelStats: Record<string, { clicks: number, adClicks: number, investment: number, orders: number, commission: number }> = {};
 
         const clickSubIds = new Set<string>();
         const csvClickDatesBySubId: Record<string, Set<string>> = {};
@@ -333,15 +335,15 @@ export function useMetrics() {
                 csvClickDatesBySubId[canonical].add(dateKey);
             }
 
-            if (!subIdStats[canonical]) subIdStats[canonical] = { clicks: 0, orders: 0, commission: 0, channels: new Set() };
+            if (!subIdStats[canonical]) subIdStats[canonical] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
             subIdStats[canonical].clicks += 1;
             if (ref) subIdStats[canonical].channels.add(ref);
 
             if (!subIdDetails[canonical]) subIdDetails[canonical] = { products: {}, channelBreakdown: {}, orders: [] };
-            if (!subIdDetails[canonical].channelBreakdown[ref]) subIdDetails[canonical].channelBreakdown[ref] = { clicks: 0, orders: 0, commission: 0 };
+            if (!subIdDetails[canonical].channelBreakdown[ref]) subIdDetails[canonical].channelBreakdown[ref] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
             subIdDetails[canonical].channelBreakdown[ref].clicks += 1;
 
-            if (!channelStats[ref]) channelStats[ref] = { clicks: 0, orders: 0, commission: 0 };
+            if (!channelStats[ref]) channelStats[ref] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
             channelStats[ref].clicks += 1;
         });
 
@@ -385,16 +387,20 @@ export function useMetrics() {
 
                         clickSubIds.add(subId);
                         totalClicks += entry.shopee_clicks;
+                        totalAdClicks += (entry.ad_clicks || 0);
+                        totalInvestment += (entry.investment || 0);
 
-                        if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, orders: 0, commission: 0, channels: new Set() };
+                        if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
                         subIdStats[subId].clicks += entry.shopee_clicks;
+                        subIdStats[subId].adClicks += (entry.ad_clicks || 0);
+                        subIdStats[subId].investment += (entry.investment || 0);
                         subIdStats[subId].channels.add(channel);
 
                         if (!subIdDetails[subId]) subIdDetails[subId] = { products: {}, channelBreakdown: {}, orders: [] };
                         if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, orders: 0, commission: 0 };
                         subIdDetails[subId].channelBreakdown[channel].clicks += entry.shopee_clicks;
 
-                        if (!channelStats[channel]) channelStats[channel] = { clicks: 0, orders: 0, commission: 0 };
+                        if (!channelStats[channel]) channelStats[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
                         channelStats[channel].clicks += entry.shopee_clicks;
                     }
                 }
@@ -445,7 +451,7 @@ export function useMetrics() {
                 if (possibleMatch) canonical = possibleMatch;
             }
 
-            if (!subIdStats[canonical]) subIdStats[canonical] = { clicks: 0, orders: 0, commission: 0, channels: new Set() };
+            if (!subIdStats[canonical]) subIdStats[canonical] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
             subIdStats[canonical].orders += 1;
             subIdStats[canonical].commission += netComm;
 
@@ -481,11 +487,11 @@ export function useMetrics() {
                 assignedChannel = subIdToChannel.get(canonical) || 'Desconhecido';
             }
 
-            if (!channelStats[assignedChannel]) channelStats[assignedChannel] = { clicks: 0, orders: 0, commission: 0 };
+            if (!channelStats[assignedChannel]) channelStats[assignedChannel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
             channelStats[assignedChannel].orders += 1;
             channelStats[assignedChannel].commission += netComm;
 
-            if (!subIdDetails[canonical].channelBreakdown[assignedChannel]) subIdDetails[canonical].channelBreakdown[assignedChannel] = { clicks: 0, orders: 0, commission: 0 };
+            if (!subIdDetails[canonical].channelBreakdown[assignedChannel]) subIdDetails[canonical].channelBreakdown[assignedChannel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
             subIdDetails[canonical].channelBreakdown[assignedChannel].orders += 1;
             subIdDetails[canonical].channelBreakdown[assignedChannel].commission += netComm;
 
@@ -574,17 +580,26 @@ export function useMetrics() {
         });
 
         const epc = totalClicks > 0 ? totalNetCommission / totalClicks : 0;
+        const cpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
+        const roas = totalInvestment > 0 ? totalNetCommission / totalInvestment : 0;
+        const cpa = totalOrders > 0 ? totalInvestment / totalOrders : 0;
 
         const funnelBySubId = Object.entries(funnelSubIdMap)
-            .map(([subId, s]) => ({
-                subId,
-                clicks: s.clicks,
-                orders: s.orders,
-                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-                revenue: s.revenue,
-                commission: s.commission,
-                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
-            }))
+            .map(([subId, s]) => {
+                const stats = subIdStats[subId] || { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
+                return {
+                    subId,
+                    adClicks: stats.adClicks || 0,
+                    clicks: s.clicks,
+                    orders: s.orders,
+                    investment: stats.investment || 0,
+                    conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                    revenue: s.revenue,
+                    commission: s.commission,
+                    epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+                    cpc: (stats.adClicks || 0) > 0 ? (stats.investment || 0) / (stats.adClicks || 0) : 0,
+                };
+            })
             .sort((a, b) => b.commission - a.commission);
 
         const funnelByChannel = Object.entries(funnelChannelMap)
@@ -601,13 +616,14 @@ export function useMetrics() {
 
         return {
             isEmpty: commissionData.length === 0 && clickData.length === 0 && dbConversions.length === 0 && dbTracks.length === 0,
-            totalOrders, totalNetCommission, totalOrderValue, totalClicks,
-            epc,
+            totalOrders, totalNetCommission, totalOrderValue, totalClicks, totalAdClicks, totalInvestment,
+            epc, cpc, roas, cpa,
             funnelBySubId,
             funnelByChannel,
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             allOrders, productRanking, allProducts, categoriesRanking, channelsRanking,
             conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+            adClickToShopeeRate: totalAdClicks > 0 ? ((totalClicks / totalAdClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
             directsVsIndirects: [
                 { name: 'Diretas', value: directsCount, fill: '#f2a20d' },
                 { name: 'Indiretas', value: indirectsCount, fill: '#3b82f6' }

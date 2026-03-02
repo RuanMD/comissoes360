@@ -21,8 +21,9 @@ export function FunnelAnalysis() {
 
 
     const funnelSteps = [
-        { label: 'Cliques Totais', value: metrics.totalClicks, color: '#3b82f6' },
-        { label: 'Pedidos Gerados', value: metrics.totalOrders, color: '#f2a20d' },
+        { label: 'Cliques Anúncio', value: metrics.totalAdClicks || 0, color: '#6366f1' },
+        { label: 'Cliques Shopee', value: metrics.totalClicks || 0, color: '#3b82f6' },
+        { label: 'Pedidos Gerados', value: metrics.totalOrders || 0, color: '#f2a20d' },
     ];
     const maxFunnelValue = Math.max(...funnelSteps.map(s => s.value), 1);
 
@@ -67,49 +68,72 @@ export function FunnelAnalysis() {
                             </div>
                         );
                     })}
-                    {/* Commission total as final step */}
                     <div className="flex items-center gap-4 mt-2 pt-3 border-t border-border-dark">
                         <div className="w-40 text-sm text-primary font-medium shrink-0">Comissão Acumulada</div>
-                        <div className="text-2xl font-bold text-primary">
-                            R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <div className="flex flex-col">
+                            <div className="text-2xl font-bold text-primary">
+                                R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </div>
+                            {metrics.totalInvestment > 0 && (
+                                <div className="text-xs text-text-secondary">
+                                    ROAS: <span className={metrics.roas >= 1 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                                        {metrics.roas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}x
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
+                    <div className="flex items-center gap-2 mb-2">
+                        <MousePointerClick className="w-4 h-4 text-[#6366f1]" />
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Cliques Ads</p>
+                    </div>
+                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalAdClicks || 0}</p>
+                </div>
+
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
                     <div className="flex items-center gap-2 mb-2">
                         <MousePointerClick className="w-4 h-4 text-[#3b82f6]" />
-                        <p className="text-text-secondary text-sm font-medium">Cliques</p>
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Cliques Shopee</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">{metrics.totalClicks}</p>
+                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalClicks}</p>
                 </div>
 
-                <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark">
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
                     <div className="flex items-center gap-2 mb-2">
                         <ShoppingBag className="w-4 h-4 text-primary" />
-                        <p className="text-text-secondary text-sm font-medium">Pedidos</p>
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Pedidos</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">{metrics.totalOrders}</p>
+                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalOrders}</p>
                 </div>
 
-                <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark">
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
                     <div className="flex items-center gap-2 mb-2">
-                        <Filter className="w-4 h-4 text-[#22c55e]" />
-                        <p className="text-text-secondary text-sm font-medium">Conversão</p>
+                        <DollarSign className="w-4 h-4 text-red-400" />
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Investimento</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">{metrics.conversionRate}%</p>
+                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.totalInvestment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
 
-                <div className="flex flex-col p-5 rounded-2xl bg-surface-dark border border-border-dark">
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
                     <div className="flex items-center gap-2 mb-2">
                         <DollarSign className="w-4 h-4 text-[#22c55e]" />
-                        <p className="text-text-secondary text-sm font-medium">EPC</p>
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">CPC Médio</p>
                     </div>
-                    <p className="text-white text-3xl font-bold tracking-tight">R$ {metrics.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-text-secondary text-xs mt-1">Ganho por clique</p>
+                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.cpc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+
+                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
+                    <div className="flex items-center gap-2 mb-2">
+                        <DollarSign className="w-4 h-4 text-[#22c55e]" />
+                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">EPC</p>
+                    </div>
+                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
             </div>
 
@@ -140,12 +164,13 @@ export function FunnelAnalysis() {
                             <thead>
                                 <tr className="bg-background-dark/50 border-b border-border-dark">
                                     <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap">Sub_ID</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Ads</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Shopee</th>
                                     <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Pedidos</th>
                                     <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Conversão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Receita</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Investimento</th>
                                     <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Comissão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">EPC</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">ROAS</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border-dark">
@@ -160,6 +185,7 @@ export function FunnelAnalysis() {
                                                 </span>
                                             )}
                                         </td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{(item as any).adClicks || 0}</td>
                                         <td className="p-4 text-sm text-white text-right font-mono">{item.clicks}</td>
                                         <td className="p-4 text-sm text-white text-right font-mono">{item.orders}</td>
                                         <td className="p-4 text-sm text-right">
@@ -174,13 +200,13 @@ export function FunnelAnalysis() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-sm text-white text-right font-mono">
-                                            R$ {item.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            R$ {(item as any).investment?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
                                         </td>
                                         <td className="p-4 text-sm text-primary font-bold text-right font-mono">
                                             R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </td>
-                                        <td className="p-4 text-sm text-[#22c55e] text-right font-mono">
-                                            R$ {item.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        <td className={`p-4 text-sm text-right font-mono font-bold ${((item as any).investment > 0 ? item.commission / (item as any).investment : 0) >= 1 ? 'text-green-500' : 'text-red-400'}`}>
+                                            {((item as any).investment > 0 ? item.commission / (item as any).investment : 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x
                                         </td>
                                     </tr>
                                 ))}

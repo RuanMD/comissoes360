@@ -20,7 +20,7 @@ import {
     arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage, saveNavOrderToStorage } from '../../config/navItems';
+import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage, saveNavOrderToStorage, loadNavLabelsFromStorage, saveNavLabelsToStorage } from '../../config/navItems';
 import type { FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface Stats {
@@ -53,7 +53,7 @@ function getPlanName(plans: RecentLead['plans']): string {
 
 const navItemMap = Object.fromEntries(NAV_ITEMS.map(item => [item.featureKey, item]));
 
-function SortableNavItem({ id }: { id: string }) {
+function SortableNavItem({ id, label, onLabelChange }: { id: string, label: string, onLabelChange: (id: string, newLabel: string) => void }) {
     const {
         attributes,
         listeners,
@@ -79,13 +79,19 @@ function SortableNavItem({ id }: { id: string }) {
         <div
             ref={setNodeRef}
             style={style}
-            {...attributes}
-            {...listeners}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-highlight/30 border border-border-dark cursor-grab active:cursor-grabbing select-none hover:border-primary/30 transition-colors"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-highlight/30 border border-border-dark select-none hover:border-primary/30 transition-colors group"
         >
-            <GripVertical className="w-4 h-4 text-text-secondary/50 shrink-0" />
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 -ml-1 hover:bg-surface-highlight rounded">
+                <GripVertical className="w-4 h-4 text-text-secondary/50 shrink-0" />
+            </div>
             <Icon className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-sm text-white font-medium">{item.label}</span>
+            <input
+                type="text"
+                value={label}
+                onChange={(e) => onLabelChange(id, e.target.value)}
+                className="bg-transparent border-none focus:ring-0 text-sm text-white font-medium w-full p-0 h-auto"
+                placeholder={item.label}
+            />
         </div>
     );
 }
@@ -97,6 +103,7 @@ export function AdminOverview() {
     const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
     const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
     const [navOrder, setNavOrder] = useState<FeatureKey[]>(() => loadNavOrderFromStorage() ?? DEFAULT_NAV_ORDER);
+    const [navLabels, setNavLabels] = useState<Record<string, string>>(() => loadNavLabelsFromStorage() ?? {});
     const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
@@ -112,24 +119,29 @@ export function AdminOverview() {
         if (!user) return;
         (async () => {
             const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
-            const prefs = data?.user_preferences as { nav_order?: FeatureKey[] } | null;
+            const prefs = data?.user_preferences as { nav_order?: FeatureKey[], nav_labels?: Record<string, string> } | null;
             if (prefs?.nav_order?.length) {
                 setNavOrder(prefs.nav_order);
                 saveNavOrderToStorage(prefs.nav_order);
             }
+            if (prefs?.nav_labels) {
+                setNavLabels(prefs.nav_labels);
+                saveNavLabelsToStorage(prefs.nav_labels);
+                window.dispatchEvent(new CustomEvent('nav-labels-changed', { detail: prefs.nav_labels }));
+            }
         })();
     }, [user]);
 
-    const saveNavOrderToSupabase = (order: FeatureKey[]) => {
+    const savePreferencesToSupabase = (order: FeatureKey[], labels: Record<string, string>) => {
         if (!user) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
             const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
             const currentPrefs = (data?.user_preferences as Record<string, unknown>) ?? {};
             await supabase.from('users').update({
-                user_preferences: { ...currentPrefs, nav_order: order },
+                user_preferences: { ...currentPrefs, nav_order: order, nav_labels: labels },
             }).eq('id', user.id);
-        }, 500);
+        }, 800);
     };
 
     const handleNavDragEnd = (event: DragEndEvent) => {
@@ -140,18 +152,29 @@ export function AdminOverview() {
                 const newIndex = items.indexOf(over.id as FeatureKey);
                 const newOrder = arrayMove(items, oldIndex, newIndex);
                 saveNavOrderToStorage(newOrder);
-                saveNavOrderToSupabase(newOrder);
+                savePreferencesToSupabase(newOrder, navLabels);
                 window.dispatchEvent(new CustomEvent('nav-order-changed', { detail: newOrder }));
                 return newOrder;
             });
         }
     };
 
-    const handleResetOrder = () => {
+    const handleLabelChange = (id: string, newLabel: string) => {
+        const newLabels = { ...navLabels, [id]: newLabel };
+        setNavLabels(newLabels);
+        saveNavLabelsToStorage(newLabels);
+        savePreferencesToSupabase(navOrder, newLabels);
+        window.dispatchEvent(new CustomEvent('nav-labels-changed', { detail: newLabels }));
+    };
+
+    const handleResetPreferences = () => {
         setNavOrder(DEFAULT_NAV_ORDER);
+        setNavLabels({});
         saveNavOrderToStorage(DEFAULT_NAV_ORDER);
-        saveNavOrderToSupabase(DEFAULT_NAV_ORDER);
+        saveNavLabelsToStorage({});
+        savePreferencesToSupabase(DEFAULT_NAV_ORDER, {});
         window.dispatchEvent(new CustomEvent('nav-order-changed', { detail: DEFAULT_NAV_ORDER }));
+        window.dispatchEvent(new CustomEvent('nav-labels-changed', { detail: {} }));
     };
 
     const fetchOverview = async () => {
@@ -249,13 +272,12 @@ export function AdminOverview() {
                 ))}
             </div>
 
-            {/* Nav Order */}
             <div className="bg-surface-dark border border-border-dark rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white">Ordenar Menu Lateral</h3>
-                    {!isDefaultOrder && (
+                    <h3 className="text-lg font-bold text-white">Customizar Menu Lateral</h3>
+                    {(!isDefaultOrder || Object.keys(navLabels).length > 0) && (
                         <button
-                            onClick={handleResetOrder}
+                            onClick={handleResetPreferences}
                             className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-primary transition-colors px-3 py-1.5 rounded-lg border border-border-dark hover:border-primary/30"
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
@@ -263,12 +285,17 @@ export function AdminOverview() {
                         </button>
                     )}
                 </div>
-                <p className="text-xs text-text-secondary mb-4">Arraste para reordenar as abas do menu lateral. A aba "Painel Admin" permanece sempre no final.</p>
+                <p className="text-xs text-text-secondary mb-4">Reordene as abas e edite os nomes para personalizar sua navegação. Clique no nome para editar.</p>
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleNavDragEnd}>
                     <SortableContext items={navOrder} strategy={verticalListSortingStrategy}>
                         <div className="flex flex-col gap-2">
                             {navOrder.map((key) => (
-                                <SortableNavItem key={key} id={key} />
+                                <SortableNavItem
+                                    key={key}
+                                    id={key}
+                                    label={navLabels[key] ?? navItemMap[key]?.label ?? ''}
+                                    onLabelChange={handleLabelChange}
+                                />
                             ))}
                         </div>
                     </SortableContext>
@@ -290,11 +317,10 @@ export function AdminOverview() {
                                         <span className="text-sm text-white truncate">{user.email}</span>
                                         <span className="text-xs text-text-secondary">{formatDate(user.created_at)}</span>
                                     </div>
-                                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${
-                                        user.subscription_status === 'active'
-                                            ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                                            : 'bg-red-500/10 text-red-400 border border-red-500/30'
-                                    }`}>
+                                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${user.subscription_status === 'active'
+                                        ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                                        : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                        }`}>
                                         {user.subscription_status === 'active' ? 'Ativo' : 'Expirado'}
                                     </span>
                                 </div>
@@ -325,6 +351,6 @@ export function AdminOverview() {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
