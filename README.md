@@ -1,6 +1,6 @@
 # comissoes360
 
-Projeto para gerenciamento de comissões 360.
+Projeto para gerenciamento de Comissões Lab.
 
 ## Como usar o script de upload
 

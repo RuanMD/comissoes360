@@ -72,7 +72,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             </div>
                             <div className="flex flex-col overflow-hidden max-w-[120px]">
                                 <h1 className="text-white text-sm font-bold leading-tight truncate group-hover:text-primary transition-colors">
-                                    {userMetaName || (user?.email ? user.email.split('@')[0] : 'Comissões 360')}
+                                    {userMetaName || (user?.email ? user.email.split('@')[0] : 'Comissões Lab')}
                                 </h1>
                                 <p className="text-text-secondary text-xs font-normal leading-normal truncate">Dashboard 2.0</p>
                             </div>
@@ -145,7 +145,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         </button>
                         <div className="font-bold text-primary flex items-center gap-2">
                             <LayoutDashboard className="w-5 h-5" />
-                            <span className="truncate max-w-[150px]">Comissões 360</span>
+                            <span className="truncate max-w-[150px]">Comissões Lab</span>
                         </div>
                     </div>
                 </div>

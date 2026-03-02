@@ -10,7 +10,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false
 CREATE TABLE IF NOT EXISTS public.app_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   whatsapp_number TEXT DEFAULT '5511999999999',
-  whatsapp_message TEXT DEFAULT 'Olá, gostaria de saber mais sobre o Comissões 360',
+  whatsapp_message TEXT DEFAULT 'Olá, gostaria de saber mais sobre o Comissões Lab',
   hero_image_url TEXT, -- Imagem de demonstração da LP
   show_name_field BOOLEAN DEFAULT true, -- Controla se o campo de nome aparece no modal
   show_phone_field BOOLEAN DEFAULT true, -- Controla se o telefone aparece

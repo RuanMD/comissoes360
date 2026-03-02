@@ -407,7 +407,7 @@ export function CreativeTrack() {
     const [editingTrack, setEditingTrack] = useState(false);
     const [editName, setEditName] = useState('');
     const [editLink, setEditLink] = useState('');
-    const [editSubId, setEditSubId] = useState('');
+    const [editSubIds, setEditSubIds] = useState<string[]>(['']);
     const [trackLinkCopied, setTrackLinkCopied] = useState(false);
 
     const handleCopyTrackLink = (link: string) => {
@@ -498,15 +498,46 @@ export function CreativeTrack() {
         return saved ? JSON.parse(saved) : DEFAULT_TRACK_KPI_ORDER;
     });
 
+    type RankingSortCol = 'name' | 'status' | 'adClicks' | 'shopeeClicks' | 'cpc' | 'orders' | 'commission' | 'investment' | 'profit' | 'pct';
+    const [rankingSortCol, setRankingSortCol] = useState<RankingSortCol>(() => {
+        try { const s = localStorage.getItem('shopee_analisar_ranking_sort_col'); return (s as RankingSortCol) || 'profit'; } catch { return 'profit'; }
+    });
+    const [rankingSortDir, setRankingSortDir] = useState<'asc' | 'desc'>(() => {
+        try { const s = localStorage.getItem('shopee_analisar_ranking_sort_dir'); return (s as 'asc' | 'desc') || 'desc'; } catch { return 'desc'; }
+    });
+
+    const handleRankingSort = (col: RankingSortCol) => {
+        const newDir = rankingSortCol === col ? (rankingSortDir === 'desc' ? 'asc' : 'desc') : 'desc';
+        setRankingSortCol(col);
+        setRankingSortDir(newDir);
+        localStorage.setItem('shopee_analisar_ranking_sort_col', col);
+        localStorage.setItem('shopee_analisar_ranking_sort_dir', newDir);
+        saveRankingSortToSupabase(col, newDir);
+    };
+
     const prefsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const savePrefsToSupabase = useCallback((globalOrder: string[], trackOrder: string[]) => {
         if (!user) return;
         if (prefsDebounceRef.current) clearTimeout(prefsDebounceRef.current);
         prefsDebounceRef.current = setTimeout(async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const current = (data?.user_preferences as Record<string, unknown>) ?? {};
             await supabase
                 .from('users')
-                .update({ user_preferences: { global_kpi_order: globalOrder, track_kpi_order: trackOrder } })
+                .update({ user_preferences: { ...current, global_kpi_order: globalOrder, track_kpi_order: trackOrder } })
+                .eq('id', user.id);
+        }, 500);
+    }, [user]);
+
+    const saveRankingSortToSupabase = useCallback((col: string, dir: string) => {
+        if (!user) return;
+        setTimeout(async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const current = (data?.user_preferences as Record<string, unknown>) ?? {};
+            await supabase
+                .from('users')
+                .update({ user_preferences: { ...current, ranking_sort: { column: col, dir } } })
                 .eq('id', user.id);
         }, 500);
     }, [user]);
@@ -520,7 +551,7 @@ export function CreativeTrack() {
                 .select('user_preferences')
                 .eq('id', user.id)
                 .single();
-            const prefs = data?.user_preferences as { global_kpi_order?: string[]; track_kpi_order?: string[] } | null;
+            const prefs = data?.user_preferences as { global_kpi_order?: string[]; track_kpi_order?: string[]; ranking_sort?: { column?: string; dir?: string } } | null;
             if (prefs?.global_kpi_order?.length) {
                 setGlobalKpiOrder(prefs.global_kpi_order);
                 localStorage.setItem('shopee_analisar_global_kpi_order', JSON.stringify(prefs.global_kpi_order));
@@ -528,6 +559,12 @@ export function CreativeTrack() {
             if (prefs?.track_kpi_order?.length) {
                 setTrackKpiOrder(prefs.track_kpi_order);
                 localStorage.setItem('shopee_analisar_track_kpi_order', JSON.stringify(prefs.track_kpi_order));
+            }
+            if (prefs?.ranking_sort?.column) {
+                setRankingSortCol(prefs.ranking_sort.column as RankingSortCol);
+                setRankingSortDir((prefs.ranking_sort.dir as 'asc' | 'desc') || 'desc');
+                localStorage.setItem('shopee_analisar_ranking_sort_col', prefs.ranking_sort.column);
+                localStorage.setItem('shopee_analisar_ranking_sort_dir', prefs.ranking_sort.dir || 'desc');
             }
         })();
     }, [user]);
@@ -697,7 +734,7 @@ export function CreativeTrack() {
                         shopeeSecret: secret,
                     });
                     affiliateLink = shortLink;
-                    if (activeSubIds.length > 0) subId = activeSubIds.join(', ');
+                    if (activeSubIds.length > 0) subId = activeSubIds.join('-');
 
                     // 3. Fetch product info
                     const ids = extractShopeeIds(modalOriginUrl);
@@ -927,7 +964,7 @@ export function CreativeTrack() {
             const updates = {
                 name: editName.trim(),
                 affiliate_link: editLink.trim(),
-                sub_id: editSubId.trim(),
+                sub_id: editSubIds.map(s => s.trim()).filter(Boolean).join('-'),
             };
 
             const updated = { ...selectedTrack, ...updates };
@@ -1268,7 +1305,7 @@ export function CreativeTrack() {
                 const insightsRes = await fetch(
                     `https://graph.facebook.com/v21.0/${linkedAd.ad_id}/insights?` +
                     `access_token=${encodeURIComponent(fbToken)}` +
-                    `&fields=clicks,cpc,spend,impressions,video_thruplay_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p95_watched_actions` +
+                    `&fields=inline_link_clicks,cost_per_inline_link_click,spend,impressions,video_thruplay_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p95_watched_actions` +
                     `&time_range={"since":"${since}","until":"${until}"}` +
                     `&time_increment=1` +
                     `&limit=500`
@@ -1284,8 +1321,8 @@ export function CreativeTrack() {
                     track_id: selectedTrack.id,
                     ad_id: linkedAd.ad_id,
                     date: day.date_start,
-                    clicks: parseInt(day.clicks) || 0,
-                    cpc: parseFloat(day.cpc) || 0,
+                    clicks: parseInt(day.inline_link_clicks) || 0,
+                    cpc: parseFloat(day.cost_per_inline_link_click) || 0,
                     spend: parseFloat(day.spend) || 0,
                     impressions: parseInt(day.impressions) || 0,
                     video_thruplay: parseInt(day.video_thruplay_watched_actions?.[0]?.value) || 0,
@@ -1456,9 +1493,11 @@ export function CreativeTrack() {
             for (const node of nodes) {
                 for (const order of (node.orders || [])) {
                     for (const item of (order.items || [])) {
-                        // Match by itemId OR utmContent
+                        // Match by itemId OR utmContent (normalize separators for comparison)
                         const matchByItem = selectedTrack.product_item_id && item.itemId && Number(item.itemId) === Number(selectedTrack.product_item_id);
-                        const matchByUtm = selectedTrack.sub_id && node.utmContent && node.utmContent.includes(selectedTrack.sub_id);
+                        const normTrackSubId = selectedTrack.sub_id ? selectedTrack.sub_id.replace(/[-,\s]+/g, '').toLowerCase() : '';
+                        const normUtm = node.utmContent ? node.utmContent.replace(/[-,\s]+/g, '').toLowerCase() : '';
+                        const matchByUtm = normTrackSubId && normUtm && normUtm.includes(normTrackSubId);
                         if (!matchByItem && !matchByUtm) continue;
 
                         rows.push({
@@ -1724,11 +1763,14 @@ export function CreativeTrack() {
                         for (const order of node.orders) {
                             if (!order.items) continue;
                             for (const item of order.items) {
-                                // Match by product_item_id OR sub_id in utmContent
-                                const matchedTrack = tracks.find(t =>
-                                    (t.product_item_id && item.itemId && Number(item.itemId) === Number(t.product_item_id)) ||
-                                    (t.sub_id && node.utmContent && node.utmContent.includes(t.sub_id))
-                                );
+                                // Match by product_item_id OR sub_id in utmContent (normalize separators)
+                                const normUtmContent = node.utmContent ? node.utmContent.replace(/[-,\s]+/g, '').toLowerCase() : '';
+                                const matchedTrack = tracks.find(t => {
+                                    if (t.product_item_id && item.itemId && Number(item.itemId) === Number(t.product_item_id)) return true;
+                                    if (!t.sub_id || !normUtmContent) return false;
+                                    const normTSub = t.sub_id.replace(/[-,\s]+/g, '').toLowerCase();
+                                    return normUtmContent.includes(normTSub);
+                                });
 
                                 const conversionId = node.conversionId || `${node.checkoutId || 'unknown'}-${item.itemId}`;
                                 const trackId = matchedTrack?.id || null;
@@ -1864,7 +1906,7 @@ export function CreativeTrack() {
                             await Promise.all(batch.map(async (linkedAd) => {
                                 try {
                                     const insightsRes = await fetch(
-                                        `https://graph.facebook.com/v21.0/${linkedAd.ad_id}/insights?access_token=${encodeURIComponent(fbToken)}&fields=clicks,cpc,spend,impressions&time_range={"since":"${thirtyDaysAgo}","until":"${today}"}&time_increment=1&limit=500`
+                                        `https://graph.facebook.com/v21.0/${linkedAd.ad_id}/insights?access_token=${encodeURIComponent(fbToken)}&fields=inline_link_clicks,cost_per_inline_link_click,spend,impressions&time_range={"since":"${thirtyDaysAgo}","until":"${today}"}&time_increment=1&limit=500`
                                     );
                                     const insightsData = await insightsRes.json();
                                     if (!insightsData.data || insightsData.data.length === 0) return;
@@ -1873,8 +1915,8 @@ export function CreativeTrack() {
                                         track_id: linkedAd.track_id,
                                         ad_id: linkedAd.ad_id,
                                         date: day.date_start,
-                                        clicks: parseInt(day.clicks) || 0,
-                                        cpc: parseFloat(day.cpc) || 0,
+                                        clicks: parseInt(day.inline_link_clicks) || 0,
+                                        cpc: parseFloat(day.cost_per_inline_link_click) || 0,
                                         spend: parseFloat(day.spend) || 0,
                                         impressions: parseInt(day.impressions) || 0,
                                     }));
@@ -2385,7 +2427,14 @@ export function CreativeTrack() {
             const cpc = adClicks > 0 ? investment / adClicks : 0;
             return { track, orders, commission, investment, profit, pct, adClicks, shopeeClicks, cpc, isUnmatched: false };
         }).filter(r => r.orders > 0 || r.investment > 0 || r.commission > 0 || r.adClicks > 0)
-            .sort((a, b) => b.profit - a.profit) as { track: Track; orders: number; commission: number; investment: number; profit: number; pct: number; adClicks: number; shopeeClicks: number; cpc: number; isUnmatched: boolean }[] : [];
+            .sort((a, b) => {
+                const dir = rankingSortDir === 'asc' ? 1 : -1;
+                if (rankingSortCol === 'name') return dir * a.track.name.localeCompare(b.track.name, 'pt-BR');
+                if (rankingSortCol === 'status') return dir * (a.track.status || '').localeCompare(b.track.status || '', 'pt-BR');
+                const valA = (a as any)[rankingSortCol] ?? 0;
+                const valB = (b as any)[rankingSortCol] ?? 0;
+                return dir * (valA - valB);
+            }) as { track: Track; orders: number; commission: number; investment: number; profit: number; pct: number; adClicks: number; shopeeClicks: number; cpc: number; isUnmatched: boolean }[] : [];
 
         // Add "Sem Track" row for unmatched conversions
         if (hasUnmatched) {
@@ -2416,7 +2465,7 @@ export function CreativeTrack() {
         }
 
         return ranked;
-    }, [tracks, filteredAllEntries, filteredUnmatchedConversions]);
+    }, [tracks, filteredAllEntries, filteredUnmatchedConversions, rankingSortCol, rankingSortDir]);
 
     const entryProfit = (parseFloat(entryForm.commission_value) || 0) - (parseFloat(entryForm.investment) || 0);
     const entryProfitPct = (parseFloat(entryForm.investment) || 0) > 0
@@ -2931,16 +2980,29 @@ export function CreativeTrack() {
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-border-dark text-text-secondary text-xs">
-                                                    <th className="text-left p-3">Criativo</th>
-                                                    <th className="text-center p-3">Status</th>
-                                                    <th className="text-right p-3">Cliq. Anúncio</th>
-                                                    <th className="text-right p-3">Cliq. Shopee</th>
-                                                    <th className="text-right p-3">CPC</th>
-                                                    <th className="text-right p-3">Pedidos</th>
-                                                    <th className="text-right p-3">Comissão</th>
-                                                    <th className="text-right p-3">Investimento</th>
-                                                    <th className="text-right p-3">Lucro</th>
-                                                    <th className="text-right p-3">%</th>
+                                                    {([
+                                                        { key: 'name', label: 'Criativo', align: 'text-left' },
+                                                        { key: 'status', label: 'Status', align: 'text-center' },
+                                                        { key: 'adClicks', label: 'Cliq. Anúncio', align: 'text-right' },
+                                                        { key: 'shopeeClicks', label: 'Cliq. Shopee', align: 'text-right' },
+                                                        { key: 'cpc', label: 'CPC', align: 'text-right' },
+                                                        { key: 'orders', label: 'Pedidos', align: 'text-right' },
+                                                        { key: 'commission', label: 'Comissão', align: 'text-right' },
+                                                        { key: 'investment', label: 'Investimento', align: 'text-right' },
+                                                        { key: 'profit', label: 'Lucro', align: 'text-right' },
+                                                        { key: 'pct', label: '%', align: 'text-right' },
+                                                    ] as { key: RankingSortCol; label: string; align: string }[]).map(col => (
+                                                        <th
+                                                            key={col.key}
+                                                            className={`${col.align} p-3 cursor-pointer select-none hover:text-white transition-colors whitespace-nowrap`}
+                                                            onClick={() => handleRankingSort(col.key)}
+                                                        >
+                                                            {col.label}
+                                                            {rankingSortCol === col.key && (
+                                                                <span className="ml-1 text-primary">{rankingSortDir === 'desc' ? '▼' : '▲'}</span>
+                                                            )}
+                                                        </th>
+                                                    ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -3112,7 +3174,9 @@ export function CreativeTrack() {
                                                                 setEditingTrack(true);
                                                                 setEditName(selectedTrack.name);
                                                                 setEditLink(selectedTrack.affiliate_link || '');
-                                                                setEditSubId(selectedTrack.sub_id || '');
+                                                                setEditSubIds(selectedTrack.sub_id
+                                                                    ? selectedTrack.sub_id.split(/[-,]/).map((s: string) => s.trim()).filter(Boolean)
+                                                                    : ['']);
                                                             }}
                                                             className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
                                                             title="Editar Criativo"
@@ -3377,9 +3441,49 @@ export function CreativeTrack() {
                                             <label className="text-xs text-text-secondary">Link de Afiliado</label>
                                             <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editLink} onChange={e => setEditLink(e.target.value)} placeholder="https://..." />
                                         </div>
-                                        <div className="flex flex-col gap-1">
-                                            <label className="text-xs text-text-secondary">Sub_ID</label>
-                                            <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editSubId} onChange={e => setEditSubId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} placeholder="Ex: MOP" />
+                                        <div className="flex flex-col gap-1 sm:col-span-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-text-secondary">Sub IDs (separados por -)</label>
+                                                {editSubIds.length < 5 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditSubIds([...editSubIds, ''])}
+                                                        className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> Adicionar Sub ID
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {editSubIds.map((sid, idx) => (
+                                                    <div key={idx} className="flex items-center gap-1">
+                                                        {idx > 0 && <span className="text-text-secondary text-sm font-bold">-</span>}
+                                                        <input
+                                                            className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm w-40"
+                                                            value={sid}
+                                                            onChange={e => {
+                                                                const updated = [...editSubIds];
+                                                                updated[idx] = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                                                                setEditSubIds(updated);
+                                                            }}
+                                                            placeholder={`Sub ID ${idx + 1}`}
+                                                        />
+                                                        {editSubIds.length > 1 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditSubIds(editSubIds.filter((_, i) => i !== idx))}
+                                                                className="text-neutral-500 hover:text-red-400 transition-colors p-0.5"
+                                                            >
+                                                                <X className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="flex items-start gap-1.5 mt-1 text-amber-400/80 bg-amber-500/5 border border-amber-500/10 rounded-lg px-2.5 py-2">
+                                                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                                <span className="text-[11px] leading-relaxed">Alterar os Sub IDs pode desvincular conversões já sincronizadas com a Shopee e/ou Meta Ads. Recomenda-se gerar um novo link após a alteração.</span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

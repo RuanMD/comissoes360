@@ -1,6 +1,6 @@
 # **📄 PRD — Landing Page \+ Sistema de Login por E-mail (SaaS de Comissões)**
 
-**Produto:** Comissões 360  
+**Produto:** Comissões Lab  
  **Versão:** 1.0  
  **Data:** 26/02/2026  
  **Modelo de negócio:** Assinatura mensal  

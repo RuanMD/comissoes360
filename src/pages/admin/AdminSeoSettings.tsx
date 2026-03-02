@@ -17,7 +17,7 @@ export function AdminSeoSettings() {
     const [uploading, setUploading] = useState<'favicon' | 'banner' | null>(null);
     const [settings, setSettings] = useState<SeoSettings>({
         id: 1,
-        title: 'Shopee Analytics',
+        title: 'Comissões Lab',
         description: 'Maximize seus lucros com análises inteligentes.',
         favicon_url: '/vite.svg',
         banner_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
@@ -129,7 +129,7 @@ export function AdminSeoSettings() {
                                 className="w-full bg-background-dark border border-border-dark rounded-xl p-3 text-sm text-white outline-none focus:border-primary transition-colors"
                                 value={settings.title}
                                 onChange={(e) => setSettings({ ...settings, title: e.target.value })}
-                                placeholder="Ex: Comissões 360"
+                                placeholder="Ex: Comissões Lab"
                             />
                             <span className="text-xs text-text-secondary">Aparece na aba do navegador e no título em negrito da mensagem.</span>
                         </div>

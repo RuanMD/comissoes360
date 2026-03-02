@@ -1,0 +1,7 @@
+[    1891ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://yiyfmdbhzvwsfkpberve.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[    1893ms] [ERROR] AuthApiError: Invalid Refresh Token: Refresh Token Not Found
+    at handleError2 (http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:7229:9)
+    at async _handleRequest2 (http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:7270:5)
+    at async _request (http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:7254:16)
+    at async http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:10351:16
+    at async http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:7040:26 @ http://localhost:5173/node_modules/.vite/deps/@supabase_supabase-js.js?v=5f68b26f:10429

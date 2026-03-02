@@ -6,18 +6,16 @@
 -- 1. Cria a tabela de Configurações
 CREATE TABLE IF NOT EXISTS public.site_settings (
     id INT PRIMARY KEY DEFAULT 1,
-    title TEXT NOT NULL DEFAULT 'Comissões 360',
-    description TEXT NOT NULL DEFAULT 'Maximize seus lucros com análises inteligentes.',
-    favicon_url TEXT,
-    banner_url TEXT,
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    -- Garante que só haverá a linha de ID = 1
-    CONSTRAINT single_row CHECK (id = 1)
+    title TEXT NOT NULL DEFAULT 'Comissões Lab',
+    description TEXT DEFAULT 'Plataforma líder em gestão de afiliados e relatórios.',
+    favicon_url TEXT DEFAULT '/favicon.png',
+    banner_url TEXT DEFAULT 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Insere os valores padrão (se a tabela estiver vazia)
-INSERT INTO public.site_settings (id, title, description)
-VALUES (1, 'Comissões 360', 'Plataforma líder em gestão de afiliados e relatórios.')
+-- Insert initial settings
+INSERT INTO site_settings (id, title, description)
+VALUES (1, 'Comissões Lab', 'Plataforma líder em gestão de afiliados e relatórios.')
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. Configura RLS (Apenas Leitura Pública, Gravação só para Administradores)

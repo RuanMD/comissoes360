@@ -249,7 +249,7 @@
 
 # **🏷 Nome do Produto**
 
-**Comissões 360**
+**Comissões Lab**
 
 ---
 

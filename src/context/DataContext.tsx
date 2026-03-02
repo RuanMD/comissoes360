@@ -38,6 +38,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [hasStartedAnalysis, setHasStartedAnalysis] = useState<boolean>(false);
     const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
 
+    // Normaliza sub_id removendo separadores (vírgula, espaço, hífen) para matching robusto
+    const normalizeSubId = (s: string) => s.replace(/[-,\s]+/g, '').toLowerCase();
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -122,8 +125,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 const newTracksToCreate: any[] = [];
 
                 for (const subId of neededSubIds) {
+                    const normSubId = normalizeSubId(subId);
                     const exists = currentTracks.find(t =>
-                        t.sub_id && (subId === t.sub_id || subId.includes(t.sub_id) || t.sub_id.includes(subId))
+                        t.sub_id && normalizeSubId(t.sub_id) === normSubId
                     );
 
                     if (!exists) {
@@ -155,8 +159,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 const getMatch = (raw: string) => {
                     const canonical = (raw || '').split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    const normCanonical = normalizeSubId(canonical);
                     const track = updatedTracks.find(t =>
-                        t.sub_id && (canonical === t.sub_id || canonical.includes(t.sub_id) || t.sub_id.includes(canonical))
+                        t.sub_id && normalizeSubId(t.sub_id) === normCanonical
                     );
                     return track ? track.id : null;
                 };

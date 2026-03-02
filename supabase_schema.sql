@@ -1,5 +1,5 @@
 -- =====================================================================================
--- SCHEMA SUPABASE PARA O COMISSÕES 360
+-- SCHEMA SUPABASE PARA O Comissões Lab
 -- Copie e cole este código no SQL Editor do seu Supabase e clique em "Run"
 -- =====================================================================================
 

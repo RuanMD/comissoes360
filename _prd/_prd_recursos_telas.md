@@ -1,6 +1,6 @@
 # **📄 PRD — Design de Telas (UI/UX)**
 
-**Produto:** Comissões 360  
+**Produto:** Comissões Lab  
  **Versão:** 1.0  
  **Data:** 25/02/2026
 

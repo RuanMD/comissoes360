@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3 } from 'lucide-react';
+import { FlaskConical } from 'lucide-react';
 
 interface PublicLayoutProps {
     children: ReactNode;
@@ -16,9 +16,9 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             <header className="fixed top-0 w-full z-50 bg-[#121212]/90 backdrop-blur-md border-b border-white/5">
                 <div className="w-full max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-2">
-                        <BarChart3 className="w-8 h-8 text-[#f2a20d]" />
+                        <FlaskConical className="w-8 h-8 text-[#f2a20d]" />
                         <span className="text-xl font-bold bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">
-                            Comissões 360
+                            Comissões Lab
                         </span>
                     </Link>
 
@@ -51,10 +51,10 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             <footer className="border-t border-white/5 bg-[#0a0a0a] py-8">
                 <div className="w-full max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-sm text-neutral-500">
                     <div className="flex items-center gap-2 mb-4 md:mb-0">
-                        <BarChart3 className="w-5 h-5 text-[#f2a20d]" />
-                        <span>Comissões 360</span>
+                        <FlaskConical className="w-5 h-5 text-[#f2a20d]" />
+                        <span>Comissões Lab</span>
                     </div>
-                    <p>© 2026 Comissões 360. Todos os direitos reservados.</p>
+                    <p>© 2026 Comissões Lab. Todos os direitos reservados.</p>
                 </div>
             </footer>
         </div>
