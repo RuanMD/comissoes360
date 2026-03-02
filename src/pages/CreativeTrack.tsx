@@ -28,8 +28,8 @@ import {
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown, ChevronRight, FileEdit, ShoppingBag, Archive, ArchiveRestore,
-    Clock, XCircle
+    ChevronDown, ChevronRight, FileEdit, Archive, ArchiveRestore,
+    Clock, XCircle, MousePointer2
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -219,7 +219,7 @@ interface ShopeeConversion {
     synced_at: string;
 }
 
-function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string }; compact?: boolean }) {
+function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string; subtitle?: string }; compact?: boolean }) {
     const {
         attributes,
         listeners,
@@ -245,15 +245,17 @@ function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: strin
             style={style}
             {...attributes}
             {...listeners}
-            className={`bg-surface-dark border border-border-dark rounded-2xl flex flex-col cursor-grab active:cursor-grabbing select-none ${
-                compact ? 'p-3 sm:p-4 gap-1.5 sm:gap-2' : 'p-4 gap-2'
-            }`}
+            className={`bg-surface-dark border border-border-dark rounded-2xl flex flex-col cursor-grab active:cursor-grabbing select-none ${compact ? 'p-3 sm:p-4 gap-1.5 sm:gap-2' : 'p-4 gap-2'
+                }`}
         >
             <div className={`flex items-center ${compact ? 'gap-1.5 sm:gap-2' : 'gap-2'}`}>
                 <Icon className={`${compact ? 'w-3.5 h-3.5 sm:w-4 sm:h-4' : 'w-4 h-4'} ${kpi.color}`} />
                 <span className={`${compact ? 'text-[10px] sm:text-xs' : 'text-xs'} text-text-secondary`}>{kpi.label}</span>
             </div>
             <span className={`${compact ? 'text-sm sm:text-lg' : 'text-lg'} font-bold ${kpi.color}`}>{kpi.value}</span>
+            {kpi.subtitle && (
+                <span className="text-[10px] text-text-secondary leading-tight">{kpi.subtitle}</span>
+            )}
         </div>
     );
 }
@@ -480,7 +482,7 @@ export function CreativeTrack() {
     // ========== FETCH TRACKS ==========
     const DEFAULT_GLOBAL_KPI_ORDER = [
         'profit', 'orders', 'completed', 'pending', 'cancelled', 'avgOrders',
-        'commission', 'investment', 'profitPct', 'directVsIndirect', 'shopeeClicks', 'adClicks', 'cpc'
+        'commission', 'investment', 'profitPct', 'trackedTotal', 'untrackedTotal', 'shopeeClicks', 'adClicks', 'cpc'
     ];
 
     const DEFAULT_TRACK_KPI_ORDER = [
@@ -2285,8 +2287,33 @@ export function CreativeTrack() {
         const avgOrdersPerDay = filteredEntries.length > 0 ? totalOrders / filteredEntries.length : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
 
+        // Sales attribution Breakdown (Specific Track)
+        const trackedConvs = filteredConversions.filter(c => !!c.track_id);
+        const untrackedConvs = filteredConversions.filter(c => !c.track_id);
+        const trackedOrders = new Set(trackedConvs.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedOrders = totalOrders - trackedOrders;
+
+        // Direct/Indirect breakdown for tracked conversions (specific track)
+        const trackedDirectConvs = trackedConvs.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct');
+        const trackedIndirectConvs = trackedConvs.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type);
+        const trackedDirectOrders = new Set(trackedDirectConvs.map(c => c.order_id || c.conversion_id)).size;
+        const trackedIndirectOrders = new Set(trackedIndirectConvs.map(c => c.order_id || c.conversion_id)).size;
+        const trackedDirectValue = trackedDirectConvs.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const trackedIndirectValue = trackedIndirectConvs.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+
+        // Direct/Indirect breakdown for untracked conversions (specific track)
+        const untrackedDirectConvs = untrackedConvs.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct');
+        const untrackedIndirectConvs = untrackedConvs.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type);
+        const untrackedDirectOrders = new Set(untrackedDirectConvs.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedIndirectOrders = new Set(untrackedIndirectConvs.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedDirectValue = untrackedDirectConvs.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const untrackedIndirectValue = untrackedIndirectConvs.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+
         return {
             totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc,
+            trackedSales: trackedOrders, untrackedSales: untrackedOrders,
+            trackedDirectOrders, trackedIndirectOrders, trackedDirectValue, trackedIndirectValue,
+            untrackedDirectOrders, untrackedIndirectOrders, untrackedDirectValue, untrackedIndirectValue,
             completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
         };
     }, [filteredEntries, filteredConversions]);
@@ -2382,10 +2409,26 @@ export function CreativeTrack() {
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
 
         // Sales attribution Breakdown
-        // Direct sales: conversions that explicitly have track_id or is_direct (or however your schema identifies it)
-        // For simplicity and consistency with individual track logic, we'll check is_direct or if it has a valid track_id
-        const directSales = filteredConversionsForKpis.filter(c => c.is_direct).length;
-        const indirectSales = totalOrders - directSales;
+        const trackedConversions = filteredConversionsForKpis.filter(c => !!c.track_id);
+        const untrackedConversions = filteredConversionsForKpis.filter(c => !c.track_id);
+        const trackedOrders = new Set(trackedConversions.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedOrders = totalOrders - trackedOrders;
+
+        // Direct/Indirect breakdown for tracked conversions
+        const trackedDirectConversions = trackedConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct');
+        const trackedIndirectConversions = trackedConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type);
+        const trackedDirectOrders = new Set(trackedDirectConversions.map(c => c.order_id || c.conversion_id)).size;
+        const trackedIndirectOrders = new Set(trackedIndirectConversions.map(c => c.order_id || c.conversion_id)).size;
+        const trackedDirectValue = trackedDirectConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const trackedIndirectValue = trackedIndirectConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+
+        // Direct/Indirect breakdown for untracked conversions
+        const untrackedDirectConversions = untrackedConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct');
+        const untrackedIndirectConversions = untrackedConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type);
+        const untrackedDirectOrders = new Set(untrackedDirectConversions.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedIndirectOrders = new Set(untrackedIndirectConversions.map(c => c.order_id || c.conversion_id)).size;
+        const untrackedDirectValue = untrackedDirectConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const untrackedIndirectValue = untrackedIndirectConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
 
         // Status-based breakdown (Global)
         const completedConversions = filteredConversionsForKpis.filter(c => ['PAID', 'COMPLETED', 'SETTLED'].includes(c.conversion_status || ''));
@@ -2404,7 +2447,10 @@ export function CreativeTrack() {
         }, 0);
 
         return {
-            totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc, directSales, indirectSales,
+            totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc,
+            trackedSales: trackedOrders, untrackedSales: untrackedOrders,
+            trackedDirectOrders, trackedIndirectOrders, trackedDirectValue, trackedIndirectValue,
+            untrackedDirectOrders, untrackedIndirectOrders, untrackedDirectValue, untrackedIndirectValue,
             completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
         };
     }, [filteredAllEntries, allUserConversions, dateFilter, customRange]);
@@ -2947,7 +2993,8 @@ export function CreativeTrack() {
                                                     commission: { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
                                                     investment: { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
                                                     profitPct: { label: 'Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                                    directVsIndirect: { label: 'Vendas Dir x Ind', value: `${globalKpis.directSales} / ${globalKpis.indirectSales}`, icon: ShoppingBag, color: 'text-indigo-400' },
+                                                    trackedTotal: { label: 'Pedidos com Track', value: (globalKpis.trackedSales ?? 0).toString(), icon: Target, color: 'text-blue-400', subtitle: `${globalKpis.trackedDirectOrders}D · ${globalKpis.trackedIndirectOrders}I — R$ ${formatBRL(globalKpis.trackedDirectValue + globalKpis.trackedIndirectValue)}` },
+                                                    untrackedTotal: { label: 'Pedidos sem Track', value: (globalKpis.untrackedSales ?? 0).toString(), icon: MousePointer2, color: 'text-neutral-400', subtitle: `${globalKpis.untrackedDirectOrders}D · ${globalKpis.untrackedIndirectOrders}I — R$ ${formatBRL(globalKpis.untrackedDirectValue + globalKpis.untrackedIndirectValue)}` },
                                                     shopeeClicks: { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
                                                     adClicks: { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
                                                     cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },

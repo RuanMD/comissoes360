@@ -228,7 +228,9 @@ export function useMetrics() {
             'Comissão do vendedor(R$)': item.item_seller_commission?.toString() || '0',
             'Nome do Item': item.item_name,
             'Categoria Global L1': item.global_category_lv1,
-            'Sub_id1': item.utm_content || (dbTracks.find(t => t.id === item.track_id)?.sub_id) || '',
+            'Sub_id1': (!item.utm_content || !item.utm_content.replace(/-/g, '').trim())
+                ? 'Sem Sub_id'
+                : item.utm_content || (dbTracks.find(t => t.id === item.track_id)?.sub_id) || '',
             'Tempo dos Cliques': item.click_time ? format(new Date(item.click_time), 'yyyy-MM-dd HH:mm:ss') : '',
             'Horário do pedido': item.purchase_time ? format(new Date(item.purchase_time), 'yyyy-MM-dd HH:mm:ss') : '',
             'Canal': item.referrer || 'Desconhecido',
@@ -316,7 +318,7 @@ export function useMetrics() {
 
         filteredClicks.forEach(click => {
             const rawSubId = click['Sub_id'] || '';
-            const canonical = rawSubId.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+            const canonical = (rawSubId.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : rawSubId.split('-').filter(Boolean).join('-');
             clickSubIds.add(canonical);
             const ref = click['Referenciador'] || 'Desconhecido';
             if (ref && ref !== 'Desconhecido') {
@@ -432,6 +434,7 @@ export function useMetrics() {
 
             const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
             let canonical = parts.join('-') || 'Sem Sub_id';
+            if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
 
             // Prioritize track_id link from database if available
             if (item._isFromDb && item._trackId) {
@@ -536,7 +539,7 @@ export function useMetrics() {
         // Initialize funnel maps from all clicks
         filteredClicks.forEach(click => {
             const rawSubId = click['Sub_id'] || '';
-            const subId = rawSubId.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+            const subId = (rawSubId.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : rawSubId.split('-').filter(Boolean).join('-');
             const channel = click['Referenciador'] || 'Desconhecido';
 
             if (!funnelSubIdMap[subId]) funnelSubIdMap[subId] = { clicks: 0, orders: 0, revenue: 0, commission: 0 };
@@ -550,6 +553,7 @@ export function useMetrics() {
         unifiedCommission.forEach(item => {
             const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
             let subId = parts.join('-') || 'Sem Sub_id';
+            if (subId.trim() === '' || !subId.replace(/-/g, '').trim()) subId = 'Sem Sub_id';
             if (subId !== 'Sem Sub_id' && !funnelSubIdMap[subId]) {
                 const match = Object.keys(funnelSubIdMap).find(k => k.includes(subId) || subId.includes(k));
                 if (match) subId = match;

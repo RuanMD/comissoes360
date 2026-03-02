@@ -76,11 +76,12 @@ export function SubIdAnalysis() {
 
         commissionData.forEach(item => {
             const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-            const canonical = parts.join('-');
+            let canonical = parts.join('-');
+            if (!canonical || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
 
-            if (canonical && canonical !== csvSubId) {
+            if (canonical !== csvSubId && canonical !== 'Sem Sub_id') {
                 if (!(csvSubId.includes(canonical) || canonical.includes(csvSubId))) return;
-            } else if (!canonical) {
+            } else if (canonical === 'Sem Sub_id' && csvSubId !== 'Sem Sub_id') {
                 return;
             }
 

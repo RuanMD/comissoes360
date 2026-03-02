@@ -104,7 +104,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 clickData.forEach(click => {
                     const raw = click['Sub_id'] || '';
-                    const canonical = raw.split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    const canonical = (raw.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : raw.split('-').filter(Boolean).join('-');
                     neededSubIds.add(canonical);
                     if (click['Referenciador'] && click['Referenciador'] !== 'Desconhecido') {
                         subIdToChannelMap.set(canonical, click['Referenciador']);
@@ -113,7 +113,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 commissionData.forEach(item => {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                    const canonical = parts.join('-') || 'Sem Sub_id';
+                    const canonical = (parts.join('-') || '').trim() === '' || !parts.join('-').replace(/-/g, '').trim() ? 'Sem Sub_id' : parts.join('-');
                     neededSubIds.add(canonical);
                     if (item['Canal'] && item['Canal'] !== 'Desconhecido') {
                         subIdToChannelMap.set(canonical, item['Canal']);
@@ -158,7 +158,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 const channelUpdates: Record<string, string> = {};
 
                 const getMatch = (raw: string) => {
-                    const canonical = (raw || '').split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    let canonical = (raw || '').split('-').filter(Boolean).join('-') || 'Sem Sub_id';
+                    if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
                     const normCanonical = normalizeSubId(canonical);
                     const track = updatedTracks.find(t =>
                         t.sub_id && normalizeSubId(t.sub_id) === normCanonical
@@ -187,7 +188,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 commissionData.forEach(item => {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                    const canonical = parts.join('-') || 'Sem Sub_id';
+                    let canonical = parts.join('-') || 'Sem Sub_id';
+                    if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
                     const trackId = getMatch(canonical);
                     if (!trackId) return;
 
@@ -209,7 +211,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 const conversionRows: any[] = [];
                 commissionData.forEach(item => {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                    const canonical = parts.join('-') || 'Sem Sub_id';
+                    let canonical = parts.join('-') || 'Sem Sub_id';
+                    if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
                     const trackId = getMatch(canonical);
 
                     const dateObj = parseShopeeDate(item['Horário do pedido']);
