@@ -1,4 +1,20 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    TouchSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    rectSortingStrategy,
+    useSortable,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../lib/supabase';
 import { syncService } from '../lib/syncService';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +28,8 @@ import {
     Link as LinkIcon, AlertCircle, CheckCircle2, Copy,
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
-    ChevronDown, ChevronRight, FileEdit, ShoppingBag, Archive, ArchiveRestore
+    ChevronDown, ChevronRight, FileEdit, ShoppingBag, Archive, ArchiveRestore,
+    Clock, XCircle
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -192,12 +209,53 @@ interface ShopeeConversion {
     refund_amount: number | null;
     image_url: string | null;
     item_total_commission: number;
+    item_seller_commission_rate: number | null;
+    item_shopee_commission_rate: number | null;
     attribution_type: string | null;
     fraud_status: string | null;
     global_category_lv1: string | null;
     is_validated: boolean;
     is_direct?: boolean;
     synced_at: string;
+}
+
+function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string }; compact?: boolean }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id });
+
+    const style: React.CSSProperties = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 'auto',
+        position: 'relative' as const,
+    };
+
+    const Icon = kpi.icon;
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            className={`bg-surface-dark border border-border-dark rounded-2xl flex flex-col cursor-grab active:cursor-grabbing select-none ${
+                compact ? 'p-3 sm:p-4 gap-1.5 sm:gap-2' : 'p-4 gap-2'
+            }`}
+        >
+            <div className={`flex items-center ${compact ? 'gap-1.5 sm:gap-2' : 'gap-2'}`}>
+                <Icon className={`${compact ? 'w-3.5 h-3.5 sm:w-4 sm:h-4' : 'w-4 h-4'} ${kpi.color}`} />
+                <span className={`${compact ? 'text-[10px] sm:text-xs' : 'text-xs'} text-text-secondary`}>{kpi.label}</span>
+            </div>
+            <span className={`${compact ? 'text-sm sm:text-lg' : 'text-lg'} font-bold ${kpi.color}`}>{kpi.value}</span>
+        </div>
+    );
 }
 
 export function CreativeTrack() {
@@ -420,6 +478,98 @@ export function CreativeTrack() {
     const [syncingValidated, setSyncingValidated] = useState(false);
 
     // ========== FETCH TRACKS ==========
+    const DEFAULT_GLOBAL_KPI_ORDER = [
+        'profit', 'orders', 'completed', 'pending', 'cancelled', 'avgOrders',
+        'commission', 'investment', 'profitPct', 'directVsIndirect', 'shopeeClicks', 'adClicks', 'cpc'
+    ];
+
+    const DEFAULT_TRACK_KPI_ORDER = [
+        'profit', 'orders', 'completed', 'pending', 'cancelled', 'avgOrders',
+        'commission', 'investment', 'profitPct', 'shopeeClicks', 'adClicks', 'cpc'
+    ];
+
+    const [globalKpiOrder, setGlobalKpiOrder] = useState<string[]>(() => {
+        const saved = localStorage.getItem('shopee_analisar_global_kpi_order');
+        return saved ? JSON.parse(saved) : DEFAULT_GLOBAL_KPI_ORDER;
+    });
+
+    const [trackKpiOrder, setTrackKpiOrder] = useState<string[]>(() => {
+        const saved = localStorage.getItem('shopee_analisar_track_kpi_order');
+        return saved ? JSON.parse(saved) : DEFAULT_TRACK_KPI_ORDER;
+    });
+
+    const prefsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const savePrefsToSupabase = useCallback((globalOrder: string[], trackOrder: string[]) => {
+        if (!user) return;
+        if (prefsDebounceRef.current) clearTimeout(prefsDebounceRef.current);
+        prefsDebounceRef.current = setTimeout(async () => {
+            await supabase
+                .from('users')
+                .update({ user_preferences: { global_kpi_order: globalOrder, track_kpi_order: trackOrder } })
+                .eq('id', user.id);
+        }, 500);
+    }, [user]);
+
+    // Load preferences from Supabase on mount
+    useEffect(() => {
+        if (!user) return;
+        (async () => {
+            const { data } = await supabase
+                .from('users')
+                .select('user_preferences')
+                .eq('id', user.id)
+                .single();
+            const prefs = data?.user_preferences as { global_kpi_order?: string[]; track_kpi_order?: string[] } | null;
+            if (prefs?.global_kpi_order?.length) {
+                setGlobalKpiOrder(prefs.global_kpi_order);
+                localStorage.setItem('shopee_analisar_global_kpi_order', JSON.stringify(prefs.global_kpi_order));
+            }
+            if (prefs?.track_kpi_order?.length) {
+                setTrackKpiOrder(prefs.track_kpi_order);
+                localStorage.setItem('shopee_analisar_track_kpi_order', JSON.stringify(prefs.track_kpi_order));
+            }
+        })();
+    }, [user]);
+
+    const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+    const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } });
+    const dndSensors = useSensors(pointerSensor, touchSensor);
+
+    const handleGlobalKpiDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setGlobalKpiOrder((items) => {
+                const oldIndex = items.indexOf(active.id as string);
+                const newIndex = items.indexOf(over.id as string);
+                const newOrder = arrayMove(items, oldIndex, newIndex);
+                savePrefsToSupabase(newOrder, trackKpiOrder);
+                return newOrder;
+            });
+        }
+    };
+
+    const handleTrackKpiDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setTrackKpiOrder((items) => {
+                const oldIndex = items.indexOf(active.id as string);
+                const newIndex = items.indexOf(over.id as string);
+                const newOrder = arrayMove(items, oldIndex, newIndex);
+                savePrefsToSupabase(globalKpiOrder, newOrder);
+                return newOrder;
+            });
+        }
+    };
+
+    useEffect(() => {
+        localStorage.setItem('shopee_analisar_global_kpi_order', JSON.stringify(globalKpiOrder));
+    }, [globalKpiOrder]);
+
+    useEffect(() => {
+        localStorage.setItem('shopee_analisar_track_kpi_order', JSON.stringify(trackKpiOrder));
+    }, [trackKpiOrder]);
+
     useEffect(() => {
         if (user) {
             fetchTracks();
@@ -2072,12 +2222,32 @@ export function CreativeTrack() {
         const totalShopeeClicks = filteredEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
         const totalAdClicks = filteredEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
         const totalProfit = totalCommission - totalInvestment;
+
+        // Status-based KPIs for specific track
+        const completedConversions = filteredConversions.filter(c => ['PAID', 'COMPLETED', 'SETTLED'].includes(c.conversion_status || ''));
+        const pendingConversions = filteredConversions.filter(c => c.conversion_status === 'PENDING');
+        const cancelledConversions = filteredConversions.filter(c => c.conversion_status === 'CANCELLED');
+
+        const completedOrders = new Set(completedConversions.map(c => c.order_id || c.conversion_id)).size;
+        const pendingOrders = new Set(pendingConversions.map(c => c.order_id || c.conversion_id)).size;
+        const cancelledOrders = new Set(cancelledConversions.map(c => c.order_id || c.conversion_id)).size;
+
+        const completedValue = completedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const pendingValue = pendingConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const cancelledValue = cancelledConversions.reduce((s, c) => {
+            const potentialComm = Number(c.refund_amount || 0) * ((Number(c.item_seller_commission_rate || 0) + Number(c.item_shopee_commission_rate || 0)) / 100);
+            return s + (Number(c.item_total_commission) || potentialComm);
+        }, 0);
+
         const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
         const avgOrdersPerDay = filteredEntries.length > 0 ? totalOrders / filteredEntries.length : 0;
         const profitPct = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
 
-        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc };
-    }, [filteredEntries]);
+        return {
+            totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc,
+            completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
+        };
+    }, [filteredEntries, filteredConversions]);
 
     // ========== VIDEO KPIs ==========
     const videoKpis = useMemo(() => {
@@ -2175,7 +2345,26 @@ export function CreativeTrack() {
         const directSales = filteredConversionsForKpis.filter(c => c.is_direct).length;
         const indirectSales = totalOrders - directSales;
 
-        return { totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc, directSales, indirectSales };
+        // Status-based breakdown (Global)
+        const completedConversions = filteredConversionsForKpis.filter(c => ['PAID', 'COMPLETED', 'SETTLED'].includes(c.conversion_status || ''));
+        const pendingConversions = filteredConversionsForKpis.filter(c => c.conversion_status === 'PENDING');
+        const cancelledConversions = filteredConversionsForKpis.filter(c => c.conversion_status === 'CANCELLED');
+
+        const completedOrders = new Set(completedConversions.map(c => c.order_id || c.conversion_id)).size;
+        const pendingOrders = new Set(pendingConversions.map(c => c.order_id || c.conversion_id)).size;
+        const cancelledOrders = new Set(cancelledConversions.map(c => c.order_id || c.conversion_id)).size;
+
+        const completedValue = completedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const pendingValue = pendingConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
+        const cancelledValue = cancelledConversions.reduce((s, c) => {
+            const potentialComm = Number(c.refund_amount || 0) * ((Number(c.item_seller_commission_rate || 0) + Number(c.item_shopee_commission_rate || 0)) / 100);
+            return s + (Number(c.item_total_commission) || potentialComm);
+        }, 0);
+
+        return {
+            totalProfit, totalOrders, avgOrdersPerDay, totalCommission, totalInvestment, profitPct, totalShopeeClicks, totalAdClicks, totalCpc, directSales, indirectSales,
+            completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
+        };
     }, [filteredAllEntries, allUserConversions, dateFilter, customRange]);
 
     // ========== TRACK RANKING ==========
@@ -2695,28 +2884,32 @@ export function CreativeTrack() {
 
                             {/* Global KPIs */}
                             {globalKpis ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {[
-                                        { label: 'Lucro Total', value: `R$ ${formatBRL(globalKpis.totalProfit)}`, icon: DollarSign, color: globalKpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
-                                        { label: 'Pedidos Totais', value: globalKpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
-                                        { label: 'Média Pedidos/Dia', value: globalKpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
-                                        { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
-                                        { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
-                                        { label: '% Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                        { label: 'Vendas Dir x Ind', value: `${globalKpis.directSales} / ${globalKpis.indirectSales}`, icon: ShoppingBag, color: 'text-indigo-400' },
-                                        { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
-                                        { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
-                                        { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
-                                    ].map((kpi, i) => (
-                                        <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
-                                            <div className="flex items-center gap-1.5 sm:gap-2">
-                                                <kpi.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${kpi.color}`} />
-                                                <span className="text-[10px] sm:text-xs text-text-secondary">{kpi.label}</span>
-                                            </div>
-                                            <span className={`text-base sm:text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleGlobalKpiDragEnd}>
+                                    <SortableContext items={globalKpiOrder} strategy={rectSortingStrategy}>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {globalKpiOrder.map((id) => {
+                                                const kpiMap: Record<string, any> = {
+                                                    profit: { label: 'Lucro Total', value: `R$ ${formatBRL(globalKpis.totalProfit)}`, icon: DollarSign, color: globalKpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                    orders: { label: 'Pedidos Totais', value: globalKpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+                                                    completed: { label: 'Pedidos Concluídos', value: `${globalKpis.completedOrders} (R$ ${formatBRL(globalKpis.completedValue)})`, icon: CheckCircle2, color: 'text-green-400' },
+                                                    pending: { label: 'Pedidos Pendentes', value: `${globalKpis.pendingOrders} (R$ ${formatBRL(globalKpis.pendingValue)})`, icon: Clock, color: 'text-yellow-400' },
+                                                    cancelled: { label: 'Pedidos Cancelados', value: `${globalKpis.cancelledOrders} (R$ ${formatBRL(globalKpis.cancelledValue)})`, icon: XCircle, color: 'text-red-400' },
+                                                    avgOrders: { label: 'Média Pedidos/Dia', value: globalKpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+                                                    commission: { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
+                                                    investment: { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+                                                    profitPct: { label: 'Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                    directVsIndirect: { label: 'Vendas Dir x Ind', value: `${globalKpis.directSales} / ${globalKpis.indirectSales}`, icon: ShoppingBag, color: 'text-indigo-400' },
+                                                    shopeeClicks: { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
+                                                    adClicks: { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                                    cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
+                                                };
+                                                const kpi = kpiMap[id];
+                                                if (!kpi) return null;
+                                                return <SortableKpiCard key={id} id={id} kpi={kpi} compact />;
+                                            })}
                                         </div>
-                                    ))}
-                                </div>
+                                    </SortableContext>
+                                </DndContext>
                             ) : (
                                 <div className="text-center py-8 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
                                     Nenhum registro encontrado. Sincronize ou crie registros em cada track.
@@ -3662,27 +3855,31 @@ export function CreativeTrack() {
                                         <Loader2 className="w-6 h-6 animate-spin text-primary" />
                                     </div>
                                 ) : kpis ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {[
-                                            { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
-                                            { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
-                                            { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
-                                            { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
-                                            { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
-                                            { label: '% Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                            { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
-                                            { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
-                                            { label: 'CPC Médio', value: `R$ ${formatBRL(kpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
-                                        ].map((kpi, i) => (
-                                            <div key={i} className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-                                                    <span className="text-xs text-text-secondary">{kpi.label}</span>
-                                                </div>
-                                                <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTrackKpiDragEnd}>
+                                        <SortableContext items={trackKpiOrder} strategy={rectSortingStrategy}>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                {trackKpiOrder.map((id) => {
+                                                    const kpiMap: Record<string, any> = {
+                                                        profit: { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                        orders: { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+                                                        completed: { label: 'Pedidos Concluídos', value: `${kpis.completedOrders} (R$ ${formatBRL(kpis.completedValue)})`, icon: CheckCircle2, color: 'text-green-400' },
+                                                        pending: { label: 'Pedidos Pendentes', value: `${kpis.pendingOrders} (R$ ${formatBRL(kpis.pendingValue)})`, icon: Clock, color: 'text-yellow-400' },
+                                                        cancelled: { label: 'Pedidos Cancelados', value: `${kpis.cancelledOrders} (R$ ${formatBRL(kpis.cancelledValue)})`, icon: XCircle, color: 'text-red-400' },
+                                                        avgOrders: { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+                                                        commission: { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
+                                                        investment: { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+                                                        profitPct: { label: 'Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                        shopeeClicks: { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
+                                                        adClicks: { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                                        cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(kpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
+                                                    };
+                                                    const kpi = kpiMap[id];
+                                                    if (!kpi) return null;
+                                                    return <SortableKpiCard key={id} id={id} kpi={kpi} />;
+                                                })}
                                             </div>
-                                        ))}
-                                    </div>
+                                        </SortableContext>
+                                    </DndContext>
                                 ) : (
                                     <div className="text-center py-6 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
                                         Nenhum registro ainda. Adicione o primeiro abaixo.

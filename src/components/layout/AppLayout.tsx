@@ -1,14 +1,17 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, LogOut, Settings, Clapperboard, Target, Link } from 'lucide-react';
+import { LayoutDashboard, LogOut, Settings } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
-import { useFeatureAccess, FeatureKey } from '../../hooks/useFeatureAccess';
+import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useMetrics } from '../../hooks/useMetrics';
 import { OfflineBanner } from './OfflineBanner';
 import { MobileNav } from './MobileNav';
 import { MobileMenu } from './MobileMenu';
+import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage } from '../../config/navItems';
+import type { FeatureKey } from '../../hooks/useFeatureAccess';
+import { supabase } from '../../lib/supabase';
 
 interface AppLayoutProps {
     children: ReactNode;
@@ -22,21 +25,36 @@ export function AppLayout({ children }: AppLayoutProps) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { hasAccess } = useFeatureAccess();
     const metrics = useMetrics();
+    const [navOrder, setNavOrder] = useState<FeatureKey[]>(() => loadNavOrderFromStorage() ?? DEFAULT_NAV_ORDER);
 
-    const navItems: { path: string; icon: any; label: string; featureKey: FeatureKey }[] = [
-        { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', featureKey: 'dashboard' },
-        { path: '/relatorio', icon: Filter, label: 'Relatório', featureKey: 'relatorio' },
-        { path: '/funil', icon: Target, label: 'Funil', featureKey: 'funil_builder' },
-        { path: '/sub-id', icon: Database, label: 'Origens (Sub_ID)', featureKey: 'sub_id' },
-        { path: '/canais', icon: TrendingUp, label: 'Canais', featureKey: 'canais' },
-        { path: '/produtos', icon: Package, label: 'Produtos', featureKey: 'produtos' },
-        { path: '/temporal', icon: BarChart3, label: 'Temporal', featureKey: 'temporal' },
-        { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas', featureKey: 'diretas_indiretas' },
-        { path: '/criativo-track', icon: Clapperboard, label: 'Criativo Track', featureKey: 'criativo_track' },
-        { path: '/gerador-links', icon: Link, label: 'Gerador de Links', featureKey: 'gerador_links' },
-    ];
+    useEffect(() => {
+        if (!user) return;
+        (async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const prefs = data?.user_preferences as { nav_order?: FeatureKey[] } | null;
+            if (prefs?.nav_order?.length) {
+                setNavOrder(prefs.nav_order);
+            }
+        })();
+    }, [user]);
 
-    const visibleNavItems = navItems.filter(item => hasAccess(item.featureKey));
+    // Listen for nav order changes from admin panel
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const order = (e as CustomEvent<FeatureKey[]>).detail;
+            setNavOrder(order);
+        };
+        window.addEventListener('nav-order-changed', handler);
+        return () => window.removeEventListener('nav-order-changed', handler);
+    }, []);
+
+    const visibleNavItems = NAV_ITEMS
+        .filter(item => hasAccess(item.featureKey))
+        .sort((a, b) => {
+            const ai = navOrder.indexOf(a.featureKey);
+            const bi = navOrder.indexOf(b.featureKey);
+            return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
 
     const isCurrent = (path: string) => location.pathname === path;
     const userMetaName = user?.user_metadata?.full_name;

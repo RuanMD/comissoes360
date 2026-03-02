@@ -1,8 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Loader2, Users, CheckCircle, XCircle, UserPlus, CreditCard } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Loader2, Users, CheckCircle, XCircle, UserPlus, CreditCard, GripVertical, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    TouchSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { NAV_ITEMS, DEFAULT_NAV_ORDER, loadNavOrderFromStorage, saveNavOrderToStorage } from '../../config/navItems';
+import type { FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface Stats {
     totalUsers: number;
@@ -32,15 +51,108 @@ function getPlanName(plans: RecentLead['plans']): string {
     return plans.name || 'Sem plano';
 }
 
+const navItemMap = Object.fromEntries(NAV_ITEMS.map(item => [item.featureKey, item]));
+
+function SortableNavItem({ id }: { id: string }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id });
+
+    const style: React.CSSProperties = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 'auto',
+        position: 'relative' as const,
+    };
+
+    const item = navItemMap[id];
+    if (!item) return null;
+    const Icon = item.icon;
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-highlight/30 border border-border-dark cursor-grab active:cursor-grabbing select-none hover:border-primary/30 transition-colors"
+        >
+            <GripVertical className="w-4 h-4 text-text-secondary/50 shrink-0" />
+            <Icon className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm text-white font-medium">{item.label}</span>
+        </div>
+    );
+}
+
 export function AdminOverview() {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<Stats>({ totalUsers: 0, activeUsers: 0, expiredUsers: 0, totalLeads: 0, leadsThisMonth: 0, activePlans: 0 });
     const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
     const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
+    const [navOrder, setNavOrder] = useState<FeatureKey[]>(() => loadNavOrderFromStorage() ?? DEFAULT_NAV_ORDER);
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+    const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+    const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } });
+    const dndSensors = useSensors(pointerSensor, touchSensor);
 
     useEffect(() => {
         fetchOverview();
     }, []);
+
+    // Load nav order from Supabase on mount
+    useEffect(() => {
+        if (!user) return;
+        (async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const prefs = data?.user_preferences as { nav_order?: FeatureKey[] } | null;
+            if (prefs?.nav_order?.length) {
+                setNavOrder(prefs.nav_order);
+                saveNavOrderToStorage(prefs.nav_order);
+            }
+        })();
+    }, [user]);
+
+    const saveNavOrderToSupabase = (order: FeatureKey[]) => {
+        if (!user) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(async () => {
+            const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+            const currentPrefs = (data?.user_preferences as Record<string, unknown>) ?? {};
+            await supabase.from('users').update({
+                user_preferences: { ...currentPrefs, nav_order: order },
+            }).eq('id', user.id);
+        }, 500);
+    };
+
+    const handleNavDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setNavOrder((items) => {
+                const oldIndex = items.indexOf(active.id as FeatureKey);
+                const newIndex = items.indexOf(over.id as FeatureKey);
+                const newOrder = arrayMove(items, oldIndex, newIndex);
+                saveNavOrderToStorage(newOrder);
+                saveNavOrderToSupabase(newOrder);
+                window.dispatchEvent(new CustomEvent('nav-order-changed', { detail: newOrder }));
+                return newOrder;
+            });
+        }
+    };
+
+    const handleResetOrder = () => {
+        setNavOrder(DEFAULT_NAV_ORDER);
+        saveNavOrderToStorage(DEFAULT_NAV_ORDER);
+        saveNavOrderToSupabase(DEFAULT_NAV_ORDER);
+        window.dispatchEvent(new CustomEvent('nav-order-changed', { detail: DEFAULT_NAV_ORDER }));
+    };
 
     const fetchOverview = async () => {
         setLoading(true);
@@ -117,6 +229,8 @@ export function AdminOverview() {
         { label: 'Planos Ativos', value: stats.activePlans, icon: CreditCard, color: 'text-purple-400', bg: 'bg-purple-400/10' },
     ];
 
+    const isDefaultOrder = JSON.stringify(navOrder) === JSON.stringify(DEFAULT_NAV_ORDER);
+
     return (
         <div className="flex flex-col gap-6">
             {/* Stat Cards */}
@@ -133,6 +247,32 @@ export function AdminOverview() {
                         {card.subtitle && <span className="text-xs text-text-secondary">{card.subtitle}</span>}
                     </div>
                 ))}
+            </div>
+
+            {/* Nav Order */}
+            <div className="bg-surface-dark border border-border-dark rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">Ordenar Menu Lateral</h3>
+                    {!isDefaultOrder && (
+                        <button
+                            onClick={handleResetOrder}
+                            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-primary transition-colors px-3 py-1.5 rounded-lg border border-border-dark hover:border-primary/30"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Restaurar Padrão
+                        </button>
+                    )}
+                </div>
+                <p className="text-xs text-text-secondary mb-4">Arraste para reordenar as abas do menu lateral. A aba "Painel Admin" permanece sempre no final.</p>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleNavDragEnd}>
+                    <SortableContext items={navOrder} strategy={verticalListSortingStrategy}>
+                        <div className="flex flex-col gap-2">
+                            {navOrder.map((key) => (
+                                <SortableNavItem key={key} id={key} />
+                            ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
             </div>
 
             {/* Recent Activity */}
