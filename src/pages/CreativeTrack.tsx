@@ -219,7 +219,7 @@ interface ShopeeConversion {
     synced_at: string;
 }
 
-function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string; subtitle?: string }; compact?: boolean }) {
+function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string }; compact?: boolean }) {
     const {
         attributes,
         listeners,
@@ -253,9 +253,6 @@ function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: strin
                 <span className={`${compact ? 'text-[10px] sm:text-xs' : 'text-xs'} text-text-secondary`}>{kpi.label}</span>
             </div>
             <span className={`${compact ? 'text-sm sm:text-lg' : 'text-lg'} font-bold ${kpi.color}`}>{kpi.value}</span>
-            {kpi.subtitle && (
-                <span className="text-[10px] text-text-secondary leading-tight">{kpi.subtitle}</span>
-            )}
         </div>
     );
 }
@@ -482,7 +479,7 @@ export function CreativeTrack() {
     // ========== FETCH TRACKS ==========
     const DEFAULT_GLOBAL_KPI_ORDER = [
         'profit', 'orders', 'completed', 'pending', 'cancelled', 'avgOrders',
-        'commission', 'investment', 'profitPct', 'trackedTotal', 'untrackedTotal', 'shopeeClicks', 'adClicks', 'cpc'
+        'commission', 'investment', 'profitPct', 'shopeeClicks', 'adClicks', 'cpc'
     ];
 
     const DEFAULT_TRACK_KPI_ORDER = [
@@ -2993,8 +2990,6 @@ export function CreativeTrack() {
                                                     commission: { label: 'Total Comissões', value: `R$ ${formatBRL(globalKpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
                                                     investment: { label: 'Total Investimento', value: `R$ ${formatBRL(globalKpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
                                                     profitPct: { label: 'Lucro Médio', value: `${formatPct(globalKpis.profitPct)}%`, icon: Percent, color: globalKpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                                    trackedTotal: { label: 'Pedidos com Track', value: (globalKpis.trackedSales ?? 0).toString(), icon: Target, color: 'text-blue-400', subtitle: `${globalKpis.trackedDirectOrders}D · ${globalKpis.trackedIndirectOrders}I — R$ ${formatBRL(globalKpis.trackedDirectValue + globalKpis.trackedIndirectValue)}` },
-                                                    untrackedTotal: { label: 'Pedidos sem Track', value: (globalKpis.untrackedSales ?? 0).toString(), icon: MousePointer2, color: 'text-neutral-400', subtitle: `${globalKpis.untrackedDirectOrders}D · ${globalKpis.untrackedIndirectOrders}I — R$ ${formatBRL(globalKpis.untrackedDirectValue + globalKpis.untrackedIndirectValue)}` },
                                                     shopeeClicks: { label: 'Cliques Shopee', value: globalKpis.totalShopeeClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
                                                     adClicks: { label: 'Cliques Anúncio', value: globalKpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
                                                     cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(globalKpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
@@ -3009,6 +3004,43 @@ export function CreativeTrack() {
                             ) : (
                                 <div className="text-center py-8 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
                                     Nenhum registro encontrado. Sincronize ou crie registros em cada track.
+                                </div>
+                            )}
+
+                            {/* Pedidos com Track / sem Track - Diretas vs Indiretas */}
+                            {globalKpis && (globalKpis.trackedSales > 0 || globalKpis.untrackedSales > 0) && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* Pedidos com Track */}
+                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
+                                            <span className="text-[10px] sm:text-xs text-text-secondary">Pedidos com Track</span>
+                                        </div>
+                                        <span className="text-sm sm:text-lg font-bold text-blue-400">{globalKpis.trackedSales ?? 0}</span>
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className="text-green-400 font-semibold">{globalKpis.trackedDirectOrders}D</span>
+                                            <span className="text-text-secondary">·</span>
+                                            <span className="text-amber-400 font-semibold">{globalKpis.trackedIndirectOrders}I</span>
+                                            <span className="text-text-secondary">—</span>
+                                            <span className="text-text-secondary">R$ {formatBRL(globalKpis.trackedDirectValue + globalKpis.trackedIndirectValue)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Pedidos sem Track */}
+                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                            <MousePointer2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
+                                            <span className="text-[10px] sm:text-xs text-text-secondary">Pedidos sem Track</span>
+                                        </div>
+                                        <span className="text-sm sm:text-lg font-bold text-neutral-400">{globalKpis.untrackedSales ?? 0}</span>
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                            <span className="text-green-400 font-semibold">{globalKpis.untrackedDirectOrders}D</span>
+                                            <span className="text-text-secondary">·</span>
+                                            <span className="text-amber-400 font-semibold">{globalKpis.untrackedIndirectOrders}I</span>
+                                            <span className="text-text-secondary">—</span>
+                                            <span className="text-text-secondary">R$ {formatBRL(globalKpis.untrackedDirectValue + globalKpis.untrackedIndirectValue)}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
