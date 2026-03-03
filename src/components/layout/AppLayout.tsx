@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, FlaskConical } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useMetrics } from '../../hooks/useMetrics';
@@ -77,15 +77,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="hidden md:flex flex-col w-72 bg-surface-dark border-r border-border-dark h-full justify-between p-4">
                 <div className="flex flex-col gap-6">
                     {/* Brand Logo Section */}
-                    <div className="px-2 py-4 flex flex-col items-center gap-1 border-b border-border-dark/50 mb-2">
-                        <div className="relative group">
-                            {/* Subtle backglow unique to the logo */}
-                            <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full scale-150 group-hover:bg-primary/20 transition-all duration-700" />
-                            <img
-                                src="/logo/full.png"
-                                alt="Comissões Lab"
-                                className="relative z-10 w-full max-w-[180px] h-auto object-contain transition-transform duration-500 hover:scale-105"
-                            />
+                    <div className="px-2 py-4 border-b border-border-dark/50 mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center border border-primary/20">
+                                <FlaskConical className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-bold text-white leading-tight">Comissões Lab</h1>
+                                <p className="text-[10px] text-text-secondary uppercase tracking-wider font-semibold">Dashboard 2.0</p>
+                            </div>
                         </div>
                     </div>
 
@@ -169,7 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
                         </button>
                         <div className="flex items-center gap-2">
-                            <img src="/logo/icon.png" alt="Comissões Lab" className="w-8 h-8 object-contain" />
+                            <FlaskConical className="w-6 h-6 text-primary" />
                             <span className="truncate max-w-[150px] font-bold text-white tracking-tight">Comissões Lab</span>
                         </div>
                     </div>

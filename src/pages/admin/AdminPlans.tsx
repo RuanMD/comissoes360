@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../components/ui/ToastContext';
 import { Loader2, Plus, Trash2, Save, Copy, GripVertical } from 'lucide-react';
-import { Reorder } from 'framer-motion';
+import { Reorder, useDragControls } from 'framer-motion';
 import { ALL_FEATURE_KEYS, FEATURE_LABELS, FeatureKey } from '../../hooks/useFeatureAccess';
+
+interface PlanFeature {
+    id: string;
+    text: string;
+}
 
 interface Plan {
     id: string;
@@ -12,11 +17,55 @@ interface Plan {
     price: number;
     period: string;
     checkout_url: string;
-    features: string[];
+    features: string[]; // No banco ainda salvamos como string[]
+    _features?: PlanFeature[]; // Localmente usamos objetos com ID para reorder estável
     is_popular: boolean;
     is_active: boolean;
     feature_keys: string[];
 }
+
+interface ReorderItemProps {
+    planId: string;
+    feature: PlanFeature;
+    onUpdate: (planId: string, featureId: string, newText: string) => void;
+    onRemove: (planId: string, featureId: string) => void;
+}
+
+const ReorderItem = ({ planId, feature, onUpdate, onRemove }: ReorderItemProps) => {
+    const controls = useDragControls();
+
+    return (
+        <Reorder.Item
+            value={feature}
+            dragListener={false}
+            dragControls={controls}
+            className="flex justify-between items-center bg-surface-dark px-3 py-2 rounded-lg text-sm text-neutral-300 border border-border-dark group"
+        >
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div
+                    onPointerDown={(e) => controls.start(e)}
+                    className="cursor-grab active:cursor-grabbing p-1 -ml-1 hover:bg-white/5 rounded transition-colors touch-none"
+                >
+                    <GripVertical className="w-5 h-5 text-neutral-500 flex-shrink-0" />
+                </div>
+                <input
+                    type="text"
+                    value={feature.text}
+                    onChange={(e) => onUpdate(planId, feature.id, e.target.value)}
+                    className="bg-transparent border-none outline-none text-white w-full focus:ring-0"
+                    placeholder="Descrição do item..."
+                />
+            </div>
+            <button
+                onClick={() => onRemove(planId, feature.id)}
+                className="text-red-400 hover:text-red-500 p-1 hover:bg-red-400/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+            >
+                <Trash2 className="w-4 h-4" />
+            </button>
+        </Reorder.Item>
+    );
+};
+
 
 export function AdminPlans() {
     const [loading, setLoading] = useState(true);
@@ -37,7 +86,13 @@ export function AdminPlans() {
                 .select('*')
                 .order('created_at', { ascending: true });
             if (error) throw error;
-            if (data) setPlans(data);
+            if (data) {
+                const plansWithIds = data.map((p: Plan) => ({
+                    ...p,
+                    _features: (p.features || []).map(f => ({ id: Math.random().toString(36).substring(7), text: f }))
+                }));
+                setPlans(plansWithIds);
+            }
         } catch (error) {
             console.error('Erro ao puxar planos', error);
             showToast('Erro ao carregar planos.', 'error');
@@ -57,7 +112,7 @@ export function AdminPlans() {
                     price: plan.price,
                     period: plan.period,
                     checkout_url: plan.checkout_url,
-                    features: plan.features,
+                    features: plan._features ? plan._features.map(f => f.text) : plan.features,
                     is_popular: plan.is_popular,
                     is_active: plan.is_active,
                     feature_keys: plan.feature_keys || [],
@@ -65,7 +120,6 @@ export function AdminPlans() {
                 .eq('id', plan.id);
             if (error) throw error;
             showToast('Plano salvo com sucesso!');
-            fetchPlans();
         } catch (error) {
             console.error(error);
             showToast('Erro ao salvar o plano.', 'error');
@@ -94,7 +148,11 @@ export function AdminPlans() {
                 .single();
             if (error) throw error;
             if (data) {
-                setPlans(prev => [...prev, data]);
+                const newPlan = {
+                    ...data,
+                    _features: []
+                };
+                setPlans(prev => [...prev, newPlan]);
                 showToast('Novo plano adicionado!');
             }
         } catch (error) {
@@ -125,7 +183,11 @@ export function AdminPlans() {
                 .single();
             if (error) throw error;
             if (data) {
-                setPlans(prev => [...prev, data]);
+                const newPlan = {
+                    ...data,
+                    _features: (data.features || []).map((f: string) => ({ id: Math.random().toString(36).substring(7), text: f }))
+                };
+                setPlans(prev => [...prev, newPlan]);
                 showToast('Plano duplicado com sucesso!');
             }
         } catch (error) {
@@ -153,26 +215,43 @@ export function AdminPlans() {
     };
 
     const handleAddFeature = (planId: string) => {
-        const feat = newFeature[planId];
-        if (!feat || feat.trim() === '') return;
-        setPlans(plans.map(p =>
-            p.id === planId ? { ...p, features: [...p.features, feat] } : p
-        ));
+        const featText = newFeature[planId];
+        if (!featText || featText.trim() === '') return;
+
+        setPlans(plans.map(p => {
+            if (p.id === planId) {
+                const newFeat: PlanFeature = { id: Math.random().toString(36).substring(7), text: featText };
+                const updated_features = [...(p._features || []), newFeat];
+                return { ...p, _features: updated_features };
+            }
+            return p;
+        }));
         setNewFeature({ ...newFeature, [planId]: '' });
     };
 
-    const handleReorderFeatures = (planId: string, newFeatures: string[]) => {
+    const handleReorderFeatures = (planId: string, newFeatures: PlanFeature[]) => {
         setPlans(plans.map(p =>
-            p.id === planId ? { ...p, features: newFeatures } : p
+            p.id === planId ? { ...p, _features: newFeatures } : p
         ));
     };
 
-    const handleRemoveFeature = (planId: string, featureIndex: number) => {
+    const handleUpdateFeatureText = (planId: string, featureId: string, newText: string) => {
         setPlans(plans.map(p => {
             if (p.id === planId) {
-                const newFeatures = [...p.features];
-                newFeatures.splice(featureIndex, 1);
-                return { ...p, features: newFeatures };
+                const updated_features = (p._features || []).map(f =>
+                    f.id === featureId ? { ...f, text: newText } : f
+                );
+                return { ...p, _features: updated_features };
+            }
+            return p;
+        }));
+    };
+
+    const handleRemoveFeature = (planId: string, featureId: string) => {
+        setPlans(plans.map(p => {
+            if (p.id === planId) {
+                const updated_features = (p._features || []).filter(f => f.id !== featureId);
+                return { ...p, _features: updated_features };
             }
             return p;
         }));
@@ -307,29 +386,20 @@ export function AdminPlans() {
                         <h4 className="text-sm font-bold text-white mb-4">Itens inclusos neste plano</h4>
                         <Reorder.Group
                             axis="y"
-                            values={plan.features}
+                            values={plan._features || []}
                             onReorder={(newFeatures) => handleReorderFeatures(plan.id, newFeatures)}
                             className="flex flex-col gap-2 mb-4"
                         >
-                            {plan.features.map((feature, fIdx) => (
-                                <Reorder.Item
-                                    key={`${feature}-${fIdx}`}
-                                    value={feature}
-                                    className="flex justify-between items-center bg-surface-dark px-3 py-2 rounded-lg text-sm text-neutral-300 border border-border-dark cursor-grab active:cursor-grabbing"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <GripVertical className="w-4 h-4 text-neutral-500 flex-shrink-0" />
-                                        <span>{feature}</span>
-                                    </div>
-                                    <button
-                                        onClick={() => handleRemoveFeature(plan.id, fIdx)}
-                                        className="text-red-400 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </Reorder.Item>
+                            {(plan._features || []).map((feature) => (
+                                <ReorderItem
+                                    key={feature.id}
+                                    planId={plan.id}
+                                    feature={feature}
+                                    onUpdate={handleUpdateFeatureText}
+                                    onRemove={handleRemoveFeature}
+                                />
                             ))}
-                            {plan.features.length === 0 && <p className="text-xs text-text-secondary">Nenhum item adicionado.</p>}
+                            {(plan._features || []).length === 0 && <p className="text-xs text-text-secondary">Nenhum item adicionado.</p>}
                         </Reorder.Group>
 
                         <div className="flex gap-2">

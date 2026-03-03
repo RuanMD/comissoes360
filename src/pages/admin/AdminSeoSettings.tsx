@@ -19,7 +19,7 @@ export function AdminSeoSettings() {
         id: 1,
         title: 'Comissões Lab',
         description: 'Maximize seus lucros com análises inteligentes.',
-        favicon_url: '/vite.svg',
+        favicon_url: '/favicon.png',
         banner_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
     });
 
@@ -157,8 +157,8 @@ export function AdminSeoSettings() {
                                     }
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-white mb-1">Ícone Local (Favicon)</p>
-                                    <p className="text-xs text-text-secondary">Ícone pequenininho. Formato PNG 1:1.</p>
+                                    <p className="text-sm font-medium text-white mb-1">Ícone Local (Favicon / App Icon)</p>
+                                    <p className="text-xs text-text-secondary">Ícone do navegador e atalho celular (PWA). Formato PNG 1:1.</p>
                                 </div>
                             </div>
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
-import { Mail, Lock, ArrowRight, Loader2, PlaySquare } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, FlaskConical } from 'lucide-react';
 
 export function Login() {
     const { signInWithPassword } = useAuth();
@@ -46,11 +46,7 @@ export function Login() {
                 <meta name="description" content="Acesse sua conta no Comissões Lab para gerenciar suas vendas e comissões da Shopee." />
                 <meta name="robots" content="noindex, follow" />
             </Helmet>
-            {/* Top Badge - Hidden on small mobile to save space */}
-            <div className="hidden sm:flex mb-8 items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md">
-                <PlaySquare className="w-4 h-4 text-[#f2a20d]" />
-                <span className="text-xs font-semibold tracking-wider text-neutral-300">SAAS PRODUCT</span>
-            </div>
+
 
             {/* Login Card */}
             <div className="w-full max-w-md p-4 sm:p-6 md:p-10 rounded-2xl border border-white/5 bg-[#18181A] shadow-2xl relative overflow-hidden">
@@ -58,12 +54,10 @@ export function Login() {
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-48 bg-[#f2a20d]/5 blur-[80px] rounded-full" />
 
                 <div className="relative z-10 flex flex-col items-center mb-8">
-                    <img
-                        src="/logo/full.png"
-                        alt="Comissões Lab"
-                        className="w-full max-w-[240px] h-auto object-contain mb-8 animate-in fade-in slide-in-from-top-4 duration-1000"
-                    />
-                    <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Acesse sua conta</h1>
+                    <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 mb-6 group-hover:scale-105 transition-transform duration-500 shadow-[0_0_30px_rgba(242,162,13,0.1)]">
+                        <FlaskConical className="w-10 h-10 text-primary" />
+                    </div>
+                    <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">Comissões Lab</h1>
                     <p className="text-xs sm:text-sm text-neutral-400">
                         Insira seu e-mail e senha para acessar.
                     </p>

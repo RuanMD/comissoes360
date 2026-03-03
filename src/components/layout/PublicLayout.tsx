@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { FlaskConical } from 'lucide-react';
 
 interface PublicLayoutProps {
     children: ReactNode;
@@ -14,11 +15,11 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             {/* Header da Landing Page / Public */}
             <header className="fixed top-0 w-full z-50 bg-[#121212]/90 backdrop-blur-md border-b border-white/5">
                 <div className="w-full max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-3 group">
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-primary/10 blur-xl rounded-full scale-125 group-hover:bg-primary/20 transition-all duration-500" />
-                            <img src="/logo/full.png" alt="Comissões Lab" className="relative z-10 h-10 w-auto object-contain" />
-                        </div>
+                    <Link to="/" className="flex items-center gap-2 group">
+                        <FlaskConical className="w-8 h-8 text-primary transition-transform group-hover:scale-110" />
+                        <span className="text-xl font-bold bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">
+                            Comissões <span className="text-primary">Lab</span>
+                        </span>
                     </Link>
 
                     <nav aria-label="Navegação principal" className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-400">
@@ -49,8 +50,8 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             {/* Footer Público Simples */}
             <footer className="border-t border-white/5 bg-[#0a0a0a] py-8">
                 <div className="w-full max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-sm text-neutral-500">
-                    <div className="flex items-center gap-3 mb-4 md:mb-0">
-                        <img src="/logo/icon.png" alt="Comissões Lab" className="w-6 h-6 grayscale opacity-50 hover:grayscale-0 hover:opacity-100 transition-all" />
+                    <div className="flex items-center gap-2 mb-4 md:mb-0">
+                        <FlaskConical className="w-5 h-5 text-neutral-600" />
                         <span className="font-medium">Comissões Lab</span>
                     </div>
                     <div className="flex items-center gap-4 mb-4 md:mb-0">

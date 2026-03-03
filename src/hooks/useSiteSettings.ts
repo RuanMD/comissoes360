@@ -61,6 +61,27 @@ export function useSiteSettings() {
                     }
                     meta.content = content;
                 }
+
+                // PWA & Mobile Icons Dynamic Update
+                if (data.favicon_url) {
+                    let appleIcon = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+                    if (!appleIcon) {
+                        appleIcon = document.createElement('link');
+                        appleIcon.rel = 'apple-touch-icon';
+                        document.head.appendChild(appleIcon);
+                    }
+                    appleIcon.href = data.favicon_url;
+                }
+
+                if (data.title) {
+                    let mobileTitle = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+                    if (!mobileTitle) {
+                        mobileTitle = document.createElement('meta');
+                        mobileTitle.name = 'apple-mobile-web-app-title';
+                        document.head.appendChild(mobileTitle);
+                    }
+                    mobileTitle.content = data.title;
+                }
             } catch (err) {
                 console.error('Erro ao carregar configurações do site:', err);
             }
