@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['favicon.png', 'icons/*.png'],
         manifest: {
           name: 'Comissões Lab',
-          short_name: 'C360',
+          short_name: 'Comissões Lab',
           description: 'Análise de Afiliados Shopee 360',
           theme_color: '#0A0A0A',
           background_color: '#0A0A0A',

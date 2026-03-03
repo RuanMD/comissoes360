@@ -9,6 +9,7 @@ interface SeoSettings {
     description: string;
     favicon_url: string;
     banner_url: string;
+    short_name?: string;
 }
 
 export function AdminSeoSettings() {
@@ -21,6 +22,7 @@ export function AdminSeoSettings() {
         description: 'Maximize seus lucros com análises inteligentes.',
         favicon_url: '/favicon.png',
         banner_url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
+        short_name: 'Comissões Lab',
     });
 
     const { showToast } = useToast();
@@ -57,6 +59,7 @@ export function AdminSeoSettings() {
                     description: settings.description,
                     favicon_url: settings.favicon_url,
                     banner_url: settings.banner_url,
+                    short_name: settings.short_name,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', 1);
@@ -132,6 +135,16 @@ export function AdminSeoSettings() {
                                 placeholder="Ex: Comissões Lab"
                             />
                             <span className="text-xs text-text-secondary">Aparece na aba do navegador e no título em negrito da mensagem.</span>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-text-secondary">Nome Curto (PWA / Mobile)</label>
+                            <input
+                                className="w-full bg-background-dark border border-border-dark rounded-xl p-3 text-sm text-white outline-none focus:border-primary transition-colors"
+                                value={settings.short_name || ''}
+                                onChange={(e) => setSettings({ ...settings, short_name: e.target.value })}
+                                placeholder="Ex: Comissões Lab"
+                            />
+                            <span className="text-xs text-text-secondary">Nome que aparece abaixo do ícone na tela inicial do celular.</span>
                         </div>
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-medium text-text-secondary">Descrição Curta</label>
