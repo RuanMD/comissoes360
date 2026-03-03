@@ -42,7 +42,7 @@
             "destination": "/api/$1"
         },
         {
-            "source": "/((?!api/|sitemap\\.xml|robots\\.txt|favicon\\.ico).*)",
+            "source": "/((?!api/|sitemap\\.xml|robots\\.txt|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff2|woff|ttf)).*)",
             "destination": "/api/index.js"
         }
     ]
