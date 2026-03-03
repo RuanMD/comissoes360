@@ -43,7 +43,8 @@ export function useMetrics() {
 
                 const { data: trackData, error: trackError } = await supabase
                     .from('creative_tracks')
-                    .select('*, creative_track_entries(*)');
+                    .select('*, creative_track_entries(*)')
+                    .eq('is_archived', false);
 
                 if (!convError && convData) {
                     setDbConversions(convData);
@@ -103,7 +104,7 @@ export function useMetrics() {
                 console.log('App focused, refreshing metrics...');
                 try {
                     const { data: convData, error: convError } = await supabase.from('shopee_conversions').select('*');
-                    const { data: trackData, error: trackError } = await supabase.from('creative_tracks').select('*, creative_track_entries(*)');
+                    const { data: trackData, error: trackError } = await supabase.from('creative_tracks').select('*, creative_track_entries(*)').eq('is_archived', false);
 
                     if (!convError && convData) {
                         setDbConversions(convData);

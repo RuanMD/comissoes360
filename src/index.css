@@ -4,14 +4,22 @@
 
 :root {
   color-scheme: dark;
+  --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* PWA standalone safe areas */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 8px);
-  }
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Margin variants if needed */
+.mt-safe {
+  margin-top: env(safe-area-inset-top, 0px);
 }
 
 body {

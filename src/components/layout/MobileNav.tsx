@@ -52,7 +52,7 @@ export function MobileNav({ onOpenMore }: MobileNavProps) {
     const visibleItems = mainItems.filter(item => hasAccess(item.featureKey as any));
 
     return (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-dark/95 backdrop-blur-lg border-t border-border-dark flex items-center justify-around pt-2 px-1 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.5)]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-dark/95 backdrop-blur-lg border-t border-border-dark flex items-center justify-around pt-2 px-1 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] pb-safe">
             {visibleItems.map((item) => (
                 <NavLink
                     key={item.path}

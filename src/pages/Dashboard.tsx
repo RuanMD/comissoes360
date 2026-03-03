@@ -5,7 +5,7 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
-    Upload, BarChart3, CheckCircle2, RefreshCw
+    Upload, BarChart3, CheckCircle2, RefreshCw, ExternalLink, FileText, MousePointer2, DownloadCloud
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
@@ -81,6 +81,64 @@ export function Dashboard() {
                     </label>
                 </div>
 
+                {/* Shopee Quick Access Links */}
+                <div className="w-full mb-8 sm:mb-12">
+                    <div className="flex items-center gap-2 mb-4 px-1">
+                        <div className="w-1.5 h-6 bg-primary rounded-full"></div>
+                        <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider">Acesso Rápido Shopee</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <a
+                            href="https://affiliate.shopee.com.br/report/conversion_report"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-surface-dark border border-border-dark p-4 rounded-xl flex items-center gap-4 hover:border-primary/40 hover:bg-surface-highlight/30 transition-all group"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm font-bold truncate">Relatório de Vendas</h4>
+                                <p className="text-text-secondary text-[10px] truncate uppercase tracking-tighter font-medium">Conversões</p>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-neutral-600 group-hover:text-primary transition-colors" />
+                        </a>
+
+                        <a
+                            href="https://affiliate.shopee.com.br/report/click_report"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-surface-dark border border-border-dark p-4 rounded-xl flex items-center gap-4 hover:border-[#3b82f6]/40 hover:bg-surface-highlight/30 transition-all group"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6] group-hover:scale-110 transition-transform">
+                                <MousePointer2 className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm font-bold truncate">Relatório de Cliques</h4>
+                                <p className="text-text-secondary text-[10px] truncate uppercase tracking-tighter font-medium">Tráfego</p>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-neutral-600 group-hover:text-[#3b82f6] transition-colors" />
+                        </a>
+
+                        <a
+                            href="https://affiliate.shopee.com.br/export_management"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-surface-dark border border-border-dark p-4 rounded-xl flex items-center gap-4 hover:border-amber-500/40 hover:bg-surface-highlight/30 transition-all group"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                                <DownloadCloud className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm font-bold truncate">Gestão de Exportação</h4>
+                                <p className="text-text-secondary text-[10px] truncate uppercase tracking-tighter font-medium">Arquivos CSV</p>
+                            </div>
+                            <ExternalLink className="w-3.5 h-3.5 text-neutral-600 group-hover:text-amber-500 transition-colors" />
+                        </a>
+                    </div>
+                </div>
+
                 <button
                     onClick={() => {
                         if (commissionData.length > 0 || clickData.length > 0) {
@@ -98,7 +156,7 @@ export function Dashboard() {
     }
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6">
+        <div className="flex flex-col gap-4 sm:gap-6 pt-safe">
             <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-border-dark pb-4 sm:pb-6">
                 <div className="flex flex-col">
                     <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Dashboard Geral</h2>

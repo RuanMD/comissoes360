@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { generateShopeeLink } from '../../lib/shopeeApi';
-import { X, User as UserIcon, Mail, Lock, Key, AlertCircle, Save, Eye, EyeOff, Trash2, ShieldCheck, Loader2, ShoppingBag } from 'lucide-react';
+import { X, User as UserIcon, Mail, Lock, Key, AlertCircle, Save, Eye, EyeOff, Trash2, ShieldCheck, Loader2, ShoppingBag, LogOut } from 'lucide-react';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -12,7 +12,7 @@ interface ProfileModalProps {
 type TabType = 'profile' | 'email' | 'password' | 'api' | 'shopee';
 
 export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
-    const { user, signInWithPassword } = useAuth();
+    const { user, signInWithPassword, signOut } = useAuth();
     const [activeTab, setActiveTab] = useState<TabType>('profile');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -378,7 +378,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm">
-            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
+            <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh] pt-safe">
 
                 {/* Sidebar com tabs */}
                 <div className="w-full md:w-64 bg-surface-highlight/20 border-b md:border-b-0 md:border-r border-border-dark p-4 shrink-0 overflow-y-auto">
@@ -392,16 +392,30 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-highlight/50 border border-border-dark mb-6">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                            {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-surface-highlight/50 border border-border-dark mb-6">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
+                                {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
+                            </div>
+                            <div className="flex flex-col overflow-hidden">
+                                <h3 className="text-white text-sm font-bold truncate">
+                                    {userMetaName || (user?.email ? user.email.split('@')[0] : 'Usuário')}
+                                </h3>
+                                <p className="text-text-secondary text-xs truncate">Administrador</p>
+                            </div>
                         </div>
-                        <div className="flex flex-col overflow-hidden">
-                            <h3 className="text-white text-sm font-bold truncate">
-                                {userMetaName || (user?.email ? user.email.split('@')[0] : 'Usuário')}
-                            </h3>
-                            <p className="text-text-secondary text-xs truncate">Administrador</p>
-                        </div>
+                        <button
+                            onClick={() => {
+                                if (window.confirm('Deseja realmente sair?')) {
+                                    signOut();
+                                    onClose();
+                                }
+                            }}
+                            className="p-2 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                            title="Sair da conta"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
                     </div>
 
                     <nav className="flex flex-row md:flex-col gap-2 overflow-x-auto hide-scrollbar">
@@ -425,6 +439,8 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                                 </button>
                             );
                         })}
+
+                        <div className="md:mt-auto pt-2 md:pt-4 border-t border-border-dark md:border-t-0" />
                     </nav>
                 </div>
 

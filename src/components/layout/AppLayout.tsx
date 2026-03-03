@@ -160,7 +160,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <OfflineBanner isOffline={metrics.isOffline} lastSync={metrics.lastSync} />
 
                 {/* Mobile Header - Compact Version */}
-                <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-border-dark bg-surface-dark">
+                <div className="md:hidden flex items-center justify-between px-3 py-2 border-b border-border-dark bg-surface-dark pt-safe">
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setIsProfileModalOpen(true)}
