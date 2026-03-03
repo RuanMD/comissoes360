@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Allow: /login
 Allow: /forgot-password
+Allow: /privacidade
 Disallow: /admin/
 Disallow: /dashboard
 Disallow: /relatorio
@@ -14,4 +15,4 @@ Disallow: /diretas-vs-indiretas
 Disallow: /criativo-track
 Disallow: /gerador-links
 
-Sitemap: https://comissoeslab.com.br/sitemap.xml
+Sitemap: https://www.comissoeslab.com.br/sitemap.xml

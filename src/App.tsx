@@ -33,6 +33,7 @@ import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
 import { CheckoutRedirect } from './pages/auth/CheckoutRedirect';
 import { LandingPage } from './pages/LandingPage';
+import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { useSiteSettings } from './hooks/useSiteSettings';
 
 function SiteHead() {
@@ -53,6 +54,11 @@ export default function App() {
                                 <Route path="/" element={<LandingPage />} />
                                 <Route path="/login" element={<Login />} />
                                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                            </Route>
+
+                            {/* Rota pública acessível por todos (logado ou não) */}
+                            <Route element={<PublicLayout><Outlet /></PublicLayout>}>
+                                <Route path="/privacidade" element={<PrivacyPolicy />} />
                             </Route>
 
                             {/* Rota Específica para Falha de Assinatura */}

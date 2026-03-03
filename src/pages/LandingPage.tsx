@@ -116,11 +116,19 @@ export function LandingPage() {
             <Helmet>
                 <title>Comissões Lab | Ferramenta de Análise para Afiliados Shopee</title>
                 <meta name="description" content="A ferramenta definitiva para afiliados Shopee. Descubra quais SubIDs dão lucro, analise vendas por hora e tracking de canais em tempo real." />
-                <link rel="canonical" href="https://comissoeslab.com.br/" />
-                <meta property="og:title" content="Comissões Lab | Análise Avançada de Afiliados" />
-                <meta property="og:description" content="Saiba exatamente de onde vêm suas vendas na Shopee com rastreamento por SubID e Canais." />
+                <link rel="canonical" href="https://www.comissoeslab.com.br/" />
+                <meta name="robots" content="index, follow" />
                 <meta property="og:type" content="website" />
-                <meta property="og:url" content="https://comissoeslab.com.br/" />
+                <meta property="og:title" content="Comissões Lab | Ferramenta de Análise para Afiliados Shopee" />
+                <meta property="og:description" content="Saiba exatamente de onde vêm suas vendas na Shopee com rastreamento por SubID e Canais." />
+                <meta property="og:url" content="https://www.comissoeslab.com.br/" />
+                <meta property="og:image" content="https://www.comissoeslab.com.br/icons/pwa-512x512.png" />
+                <meta property="og:locale" content="pt_BR" />
+                <meta property="og:site_name" content="Comissões Lab" />
+                <meta name="twitter:card" content="summary_large_image" />
+                <meta name="twitter:title" content="Comissões Lab | Ferramenta de Análise para Afiliados Shopee" />
+                <meta name="twitter:description" content="Saiba exatamente de onde vêm suas vendas na Shopee com rastreamento por SubID e Canais." />
+                <meta name="twitter:image" content="https://www.comissoeslab.com.br/icons/pwa-512x512.png" />
             </Helmet>
 
             {/* 1ª Dobra - Hero */}

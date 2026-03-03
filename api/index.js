@@ -1,8 +1,82 @@
 import fs from 'fs';
 import path from 'path';
 
+const BASE_URL = 'https://www.comissoeslab.com.br';
+
+/**
+ * Retorna meta tags específicas por rota.
+ * Landing page: SEO completo + JSON-LD.
+ * Rotas privadas: noindex.
+ */
+function getRouteMeta(pathname, defaults) {
+    switch (pathname) {
+        case '/':
+            return {
+                title: defaults.title || 'Comissões Lab | Ferramenta de Análise para Afiliados Shopee',
+                description: defaults.description || 'A ferramenta definitiva para afiliados Shopee. Descubra quais SubIDs dão lucro, analise vendas por hora e tracking de canais em tempo real.',
+                canonical: `${BASE_URL}/`,
+                robots: 'index, follow',
+                ogType: 'website',
+                jsonLd: {
+                    "@context": "https://schema.org",
+                    "@type": "SoftwareApplication",
+                    "name": "Comissões Lab",
+                    "applicationCategory": "BusinessApplication",
+                    "operatingSystem": "Web",
+                    "description": defaults.description || 'Ferramenta de análise avançada para afiliados Shopee. Rastreamento por SubID, análise de canais e relatórios de comissão em tempo real.',
+                    "url": `${BASE_URL}/`,
+                    "offers": {
+                        "@type": "Offer",
+                        "price": "0",
+                        "priceCurrency": "BRL"
+                    },
+                    "publisher": {
+                        "@type": "Organization",
+                        "name": "Comissões Lab",
+                        "url": `${BASE_URL}/`
+                    }
+                }
+            };
+        case '/login':
+            return {
+                title: 'Login | Comissões Lab',
+                description: 'Acesse sua conta no Comissões Lab para gerenciar suas vendas e comissões da Shopee.',
+                canonical: `${BASE_URL}/login`,
+                robots: 'noindex, follow',
+                ogType: 'website',
+                jsonLd: null
+            };
+        case '/privacidade':
+            return {
+                title: 'Política de Privacidade | Comissões Lab',
+                description: 'Política de Privacidade do Comissões Lab. Saiba como tratamos seus dados pessoais em conformidade com a LGPD.',
+                canonical: `${BASE_URL}/privacidade`,
+                robots: 'index, follow',
+                ogType: 'website',
+                jsonLd: null
+            };
+        case '/forgot-password':
+            return {
+                title: 'Recuperar Senha | Comissões Lab',
+                description: 'Recupere o acesso à sua conta no Comissões Lab.',
+                canonical: `${BASE_URL}/forgot-password`,
+                robots: 'noindex, follow',
+                ogType: 'website',
+                jsonLd: null
+            };
+        default:
+            return {
+                title: defaults.title || 'Comissões Lab',
+                description: defaults.description || 'Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.',
+                canonical: `${BASE_URL}${pathname}`,
+                robots: 'noindex, nofollow',
+                ogType: 'website',
+                jsonLd: null
+            };
+    }
+}
+
 export default async function handler(req, res) {
-    // Ler o HTML original gerado pelo Vite na pasta dist do Vercel Environment
     const filePath = path.join(process.cwd(), 'dist', 'index.html');
     let html = '';
 
@@ -10,17 +84,19 @@ export default async function handler(req, res) {
         html = fs.readFileSync(filePath, 'utf8');
     } catch (err) {
         console.error("Erro ao ler index.html na raiz/dist", err);
-        // Se o fallback for ignorado pela plataforma Vercel Edge Serverless, retornar um stub amigável
-        return res.status(500).send('Servidor temporariamente indisponível. Arquivo base (index.html) não econtrado no deploy.');
+        return res.status(500).send('Servidor temporariamente indisponível.');
     }
 
-    // Buscar configurações da Tabela no Supabase
+    // Detectar pathname da request
+    const pathname = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';
+
+    // Buscar configurações do Supabase
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-    let title = "Comissões Lab";
-    let description = "Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.";
-    let bannerUrl = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop";
+    let siteTitle = "Comissões Lab";
+    let siteDescription = "Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.";
+    let bannerUrl = "";
     let faviconUrl = "/vite.svg";
 
     if (supabaseUrl && supabaseKey) {
@@ -36,8 +112,8 @@ export default async function handler(req, res) {
                 const data = await response.json();
                 if (data && data.length > 0) {
                     const settings = data[0];
-                    if (settings.title) title = settings.title;
-                    if (settings.description) description = settings.description;
+                    if (settings.title) siteTitle = settings.title;
+                    if (settings.description) siteDescription = settings.description;
                     if (settings.banner_url) bannerUrl = settings.banner_url;
                     if (settings.favicon_url) faviconUrl = settings.favicon_url;
                 }
@@ -47,41 +123,69 @@ export default async function handler(req, res) {
         }
     }
 
-    // Injetar Meta Tags Dinâmicas no HTML Bruto
-    // Substittuir <title> 
-    html = html.replace(/<title>(.*?)<\/title>/is, `<title>${title}</title>`);
+    // Obter meta tags específicas da rota
+    const meta = getRouteMeta(pathname, {
+        title: siteTitle,
+        description: siteDescription
+    });
+
+    const ogImage = bannerUrl || `${BASE_URL}/icons/pwa-512x512.png`;
+
+    // Substituir <title>
+    html = html.replace(/<title>(.*?)<\/title>/is, `<title>${meta.title}</title>`);
+
+    // Substituir meta description existente
+    html = html.replace(
+        /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+        `<meta name="description" content="${meta.description}" />`
+    );
+
+    // Substituir meta robots existente
+    html = html.replace(
+        /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
+        `<meta name="robots" content="${meta.robots}" />`
+    );
+
+    // Substituir canonical existente
+    html = html.replace(
+        /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+        `<link rel="canonical" href="${meta.canonical}" />`
+    );
 
     // Substituir favicon se alterado
     if (faviconUrl !== '/vite.svg') {
         html = html.replace(/<link[^>]+rel="icon"[^>]*>/is, `<link rel="icon" href="${faviconUrl}" />`);
     }
 
-    // Limpar cabeçalho para inserção de OG Tags novas
+    // Montar bloco de tags OG + Twitter + JSON-LD antes de </head>
     const headInsert = `
-    <!-- Dinâmico Injetado Vercel Edge -->
-    <meta name="description" content="${description}" />
-    
-    <!-- Open Graph / Facebook / WhatsApp -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="${title}" />
-    <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${bannerUrl}" />
+    <!-- SEO Dinâmico - Vercel -->
+    <meta property="og:type" content="${meta.ogType}" />
+    <meta property="og:title" content="${meta.title}" />
+    <meta property="og:description" content="${meta.description}" />
+    <meta property="og:url" content="${meta.canonical}" />
+    <meta property="og:image" content="${ogImage}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Comissões Lab" />
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${title}" />
-    <meta name="twitter:description" content="${description}" />
-    <meta name="twitter:image" content="${bannerUrl}" />
+    <meta name="twitter:title" content="${meta.title}" />
+    <meta name="twitter:description" content="${meta.description}" />
+    <meta name="twitter:image" content="${ogImage}" />
+    ${meta.jsonLd ? `<script type="application/ld+json">${JSON.stringify(meta.jsonLd)}</script>` : ''}
     </head>
   `;
 
     html = html.replace('</head>', headInsert);
 
-    // Exibir a página
+    // Headers de segurança + cache
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    // Cachear resposta no Edge por 1 minuto; em background será revalidada (ISR Style).
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+
     return res.status(200).send(html);
 }

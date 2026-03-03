@@ -22,7 +22,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
                         </span>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-400">
+                    <nav aria-label="Navegação principal" className="hidden md:flex items-center gap-8 text-sm font-medium text-neutral-400">
                         <a href="/#recursos" className="hover:text-white transition-colors">Recursos</a>
                         <a href="/#como-funciona" className="hover:text-white transition-colors">Como Funciona</a>
                         <a href="/#depoimentos" className="hover:text-white transition-colors">Depoimentos</a>
@@ -53,6 +53,9 @@ export function PublicLayout({ children }: PublicLayoutProps) {
                     <div className="flex items-center gap-2 mb-4 md:mb-0">
                         <FlaskConical className="w-5 h-5 text-[#f2a20d]" />
                         <span>Comissões Lab</span>
+                    </div>
+                    <div className="flex items-center gap-4 mb-4 md:mb-0">
+                        <Link to="/privacidade" className="hover:text-neutral-300 transition-colors">Política de Privacidade</Link>
                     </div>
                     <p>© 2026 Comissões Lab. Todos os direitos reservados.</p>
                 </div>

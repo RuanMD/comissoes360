@@ -397,7 +397,7 @@ export function useMetrics() {
                         subIdStats[subId].channels.add(channel);
 
                         if (!subIdDetails[subId]) subIdDetails[subId] = { products: {}, channelBreakdown: {}, orders: [] };
-                        if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, orders: 0, commission: 0 };
+                        if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
                         subIdDetails[subId].channelBreakdown[channel].clicks += entry.shopee_clicks;
 
                         if (!channelStats[channel]) channelStats[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
