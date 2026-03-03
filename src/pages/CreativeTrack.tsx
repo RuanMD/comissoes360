@@ -470,6 +470,14 @@ export function CreativeTrack() {
     const [hideSensitive, setHideSensitive] = useState(false);
     const [allEntries, setAllEntries] = useState<TrackEntry[]>([]);
 
+    const trackEntryCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        allEntries.forEach(entry => {
+            counts[entry.track_id] = (counts[entry.track_id] || 0) + 1;
+        });
+        return counts;
+    }, [allEntries]);
+
     // Shopee Conversions state
     const [shopeeConversions, setShopeeConversions] = useState<ShopeeConversion[]>([]);
     const [allUserConversions, setAllUserConversions] = useState<ShopeeConversion[]>([]);
@@ -2906,6 +2914,11 @@ export function CreativeTrack() {
                                     }`}
                             >
                                 {track.name}
+                                {trackEntryCounts[track.id] > 0 && (
+                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${isActive ? 'bg-background-dark/20 text-background-dark' : 'bg-primary/10 text-primary'}`}>
+                                        {trackEntryCounts[track.id]}
+                                    </span>
+                                )}
                             </button>
                         );
                     })}
@@ -2956,6 +2969,11 @@ export function CreativeTrack() {
                                             }`}
                                         title={track.status.charAt(0).toUpperCase() + track.status.slice(1)}
                                     />
+                                    {trackEntryCounts[track.id] > 0 && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-colors ${isActive ? 'bg-background-dark/20 text-background-dark' : 'bg-primary/10 text-primary group-hover:bg-primary/20'}`}>
+                                            {trackEntryCounts[track.id]}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}

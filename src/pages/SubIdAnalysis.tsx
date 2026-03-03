@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { supabase } from '../lib/supabase';
 import { syncService } from '../lib/syncService';
-import { useSalesSummary } from '../hooks/useSalesSummary';
 
 import { DateFilter } from '../components/ui/DateFilter';
 import { useOrderFilters } from '../hooks/useOrderFilters';

@@ -1,5 +1,6 @@
 import { Search, Filter, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { AdvancedFilters, FilterOperator } from '../../hooks/useOrderFilters';
+import { MultiSelect } from './MultiSelect';
 
 interface OrderFiltersPanelProps {
     searchQuery: string;
@@ -23,6 +24,7 @@ export function OrderFiltersPanel({
     uniqueChannels
 }: OrderFiltersPanelProps) {
     const activeFiltersCount = Object.entries(filters).filter(([key, val]) => {
+        if (Array.isArray(val)) return val.length > 0;
         if (typeof val === 'string') return val !== '';
         if (key === 'quantity' || key === 'commission') return (val as any).value !== null;
         return false;
@@ -83,34 +85,22 @@ export function OrderFiltersPanel({
                 <div className="bg-surface-dark border border-border-dark rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 animate-in slide-in-from-top-2">
 
                     {/* Canal Filter */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-text-secondary">Canal</label>
-                        <select
-                            value={filters.channel}
-                            onChange={(e) => handleFilterChange('channel', e.target.value)}
-                            className="w-full bg-background-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
-                        >
-                            <option value="">Todos</option>
-                            {uniqueChannels.map(ch => (
-                                <option key={ch} value={ch}>{ch}</option>
-                            ))}
-                        </select>
-                    </div>
+                    <MultiSelect
+                        label="Canal"
+                        options={uniqueChannels}
+                        selected={filters.channel}
+                        onChange={(vals) => handleFilterChange('channel', vals)}
+                        placeholder="Todos os Canais"
+                    />
 
                     {/* Status Filter */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-text-secondary">Status</label>
-                        <select
-                            value={filters.status}
-                            onChange={(e) => handleFilterChange('status', e.target.value)}
-                            className="w-full bg-background-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
-                        >
-                            <option value="">Todos</option>
-                            <option value="Concluído">Concluído</option>
-                            <option value="Pendente">Pendente</option>
-                            <option value="Cancelado">Cancelado</option>
-                        </select>
-                    </div>
+                    <MultiSelect
+                        label="Status"
+                        options={["Concluído", "Pendente", "Cancelado"]}
+                        selected={filters.status}
+                        onChange={(vals) => handleFilterChange('status', vals)}
+                        placeholder="Todos os Status"
+                    />
 
                     {/* Type Filter */}
                     <div className="flex flex-col gap-1.5">

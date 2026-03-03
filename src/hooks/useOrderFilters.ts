@@ -4,18 +4,18 @@ export type FilterOperator = 'eq' | 'gt' | 'lt';
 
 export interface AdvancedFilters {
     quantity: { operator: FilterOperator; value: number | null };
-    channel: string;
+    channel: string[];
     subId: string;
-    status: string;
+    status: string[];
     type: string;
     commission: { operator: FilterOperator; value: number | null };
 }
 
 const initialFilters: AdvancedFilters = {
     quantity: { operator: 'eq', value: null },
-    channel: '',
+    channel: [],
     subId: '',
-    status: '',
+    status: [],
     type: '',
     commission: { operator: 'gt', value: null },
 };
@@ -41,27 +41,29 @@ export function useOrderFilters(allOrders: any[]) {
             }
 
             // 2. Advanced Filters
-            if (filters.channel && order.channel !== filters.channel) return false;
+            if (filters.channel.length > 0 && !filters.channel.includes(order.channel)) return false;
 
             // For SubId exact match in advanced filters (optional, usually text search is enough but good to have)
             if (filters.subId && order.subId !== filters.subId) return false;
 
-            // Status grouping/exact match
-            if (filters.status) {
-                const normalizedStatus = order.status.toUpperCase();
-                const filterStatus = filters.status.toUpperCase();
+            // Status grouping/multi-match
+            if (filters.status.length > 0) {
+                const normalizedStatus = (order.status || '').toUpperCase();
 
-                // Handle alias match (assuming Paid/Completed are equivalent in user view)
-                if (filterStatus === 'CONCLUÍDO') {
-                    if (!['PAID', 'VALIDATED', 'COMPLETED', 'CONCLUÍDO'].includes(normalizedStatus)) return false;
-                } else if (filterStatus === 'CANCELADO') {
-                    if (!['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'CANCELADO'].includes(normalizedStatus)) return false;
-                } else if (filterStatus === 'PENDENTE') {
-                    if (['PAID', 'VALIDATED', 'COMPLETED', 'CONCLUÍDO', 'CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'CANCELADO'].includes(normalizedStatus)) return false;
-                } else {
-                    // Failsafe exact
-                    if (normalizedStatus !== filterStatus) return false;
-                }
+                const matchesAnySelected = filters.status.some(filterValue => {
+                    const filterStatus = filterValue.toUpperCase();
+
+                    if (filterStatus === 'CONCLUÍDO') {
+                        return ['PAID', 'VALIDATED', 'COMPLETED', 'CONCLUÍDO'].includes(normalizedStatus);
+                    } else if (filterStatus === 'CANCELADO') {
+                        return ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'CANCELADO'].includes(normalizedStatus);
+                    } else if (filterStatus === 'PENDENTE') {
+                        return !['PAID', 'VALIDATED', 'COMPLETED', 'CONCLUÍDO', 'CANCELLED', 'INVALID', 'FAILED', 'UNPAID', 'CANCELADO'].includes(normalizedStatus);
+                    }
+                    return normalizedStatus === filterStatus;
+                });
+
+                if (!matchesAnySelected) return false;
             }
 
             if (filters.type) {
