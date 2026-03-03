@@ -9,38 +9,52 @@ const BASE_URL = 'https://www.comissoeslab.com.br';
  * Rotas privadas: noindex.
  */
 function getRouteMeta(pathname, defaults) {
+    const siteName = "Comissões Lab";
     switch (pathname) {
         case '/':
             return {
-                title: defaults.title || 'Comissões Lab | Ferramenta de Análise para Afiliados Shopee',
+                title: defaults.title || `${siteName} | Ferramenta de Análise para Afiliados Shopee`,
                 description: defaults.description || 'A ferramenta definitiva para afiliados Shopee. Descubra quais SubIDs dão lucro, analise vendas por hora e tracking de canais em tempo real.',
                 canonical: `${BASE_URL}/`,
                 robots: 'index, follow',
                 ogType: 'website',
-                jsonLd: {
-                    "@context": "https://schema.org",
-                    "@type": "SoftwareApplication",
-                    "name": "Comissões Lab",
-                    "applicationCategory": "BusinessApplication",
-                    "operatingSystem": "Web",
-                    "description": defaults.description || 'Ferramenta de análise avançada para afiliados Shopee. Rastreamento por SubID, análise de canais e relatórios de comissão em tempo real.',
-                    "url": `${BASE_URL}/`,
-                    "offers": {
-                        "@type": "Offer",
-                        "price": "0",
-                        "priceCurrency": "BRL"
-                    },
-                    "publisher": {
-                        "@type": "Organization",
-                        "name": "Comissões Lab",
+                jsonLd: [
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "WebSite",
+                        "name": siteName,
+                        "alternateName": ["Comissoes Lab", "ComissoesLab"],
                         "url": `${BASE_URL}/`
+                    },
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "SoftwareApplication",
+                        "name": siteName,
+                        "applicationCategory": "BusinessApplication",
+                        "operatingSystem": "Web",
+                        "description": defaults.description || 'Ferramenta de análise avançada para afiliados Shopee. Rastreamento por SubID, análise de canais e relatórios de comissão em tempo real.',
+                        "url": `${BASE_URL}/`,
+                        "offers": {
+                            "@type": "Offer",
+                            "price": "0",
+                            "priceCurrency": "BRL"
+                        },
+                        "publisher": {
+                            "@type": "Organization",
+                            "name": siteName,
+                            "url": `${BASE_URL}/`,
+                            "logo": {
+                                "@type": "ImageObject",
+                                "url": `${BASE_URL}/favicon.png`
+                            }
+                        }
                     }
-                }
+                ]
             };
         case '/login':
             return {
-                title: 'Login | Comissões Lab',
-                description: 'Acesse sua conta no Comissões Lab para gerenciar suas vendas e comissões da Shopee.',
+                title: `Login | ${siteName}`,
+                description: `Acesse sua conta no ${siteName} para gerenciar suas vendas e comissões da Shopee.`,
                 canonical: `${BASE_URL}/login`,
                 robots: 'noindex, follow',
                 ogType: 'website',
@@ -48,8 +62,8 @@ function getRouteMeta(pathname, defaults) {
             };
         case '/privacidade':
             return {
-                title: 'Política de Privacidade | Comissões Lab',
-                description: 'Política de Privacidade do Comissões Lab. Saiba como tratamos seus dados pessoais em conformidade com a LGPD.',
+                title: `Política de Privacidade | ${siteName}`,
+                description: `Política de Privacidade do ${siteName}. Saiba como tratamos seus dados pessoais em conformidade com a LGPD.`,
                 canonical: `${BASE_URL}/privacidade`,
                 robots: 'index, follow',
                 ogType: 'website',
@@ -57,8 +71,8 @@ function getRouteMeta(pathname, defaults) {
             };
         case '/forgot-password':
             return {
-                title: 'Recuperar Senha | Comissões Lab',
-                description: 'Recupere o acesso à sua conta no Comissões Lab.',
+                title: `Recuperar Senha | ${siteName}`,
+                description: `Recupere o acesso à sua conta no ${siteName}.`,
                 canonical: `${BASE_URL}/forgot-password`,
                 robots: 'noindex, follow',
                 ogType: 'website',
@@ -66,7 +80,7 @@ function getRouteMeta(pathname, defaults) {
             };
         default:
             return {
-                title: defaults.title || 'Comissões Lab',
+                title: defaults.title || siteName,
                 description: defaults.description || 'Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.',
                 canonical: `${BASE_URL}${pathname}`,
                 robots: 'noindex, nofollow',
@@ -97,7 +111,7 @@ export default async function handler(req, res) {
     let siteTitle = "Comissões Lab";
     let siteDescription = "Plataforma avançada para gestão de vendas e relatórios de afiliados Shopee.";
     let bannerUrl = "";
-    let faviconUrl = "/vite.svg";
+    let faviconUrl = "/favicon.png";
 
     if (supabaseUrl && supabaseKey) {
         try {
@@ -152,9 +166,10 @@ export default async function handler(req, res) {
         `<link rel="canonical" href="${meta.canonical}" />`
     );
 
-    // Substituir favicon se alterado
-    if (faviconUrl !== '/vite.svg') {
+    // Substituir favicons e apple-touch-icon
+    if (faviconUrl) {
         html = html.replace(/<link[^>]+rel="icon"[^>]*>/is, `<link rel="icon" href="${faviconUrl}" />`);
+        html = html.replace(/<link[^>]+rel="apple-touch-icon"[^>]*>/is, `<link rel="apple-touch-icon" href="${faviconUrl}" />`);
     }
 
     // Montar bloco de tags OG + Twitter + JSON-LD antes de </head>
@@ -174,11 +189,13 @@ export default async function handler(req, res) {
     <meta name="twitter:title" content="${meta.title}" />
     <meta name="twitter:description" content="${meta.description}" />
     <meta name="twitter:image" content="${ogImage}" />
-    ${meta.jsonLd ? `<script type="application/ld+json">${JSON.stringify(meta.jsonLd)}</script>` : ''}
+    ${meta.jsonLd ? meta.jsonLd.map(ld => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join('\n    ') : ''}
     </head>
   `;
 
     html = html.replace('</head>', headInsert);
+    // ... rest of the file ...
+
 
     // Headers de segurança + cache
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

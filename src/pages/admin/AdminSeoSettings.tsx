@@ -159,6 +159,7 @@ export function AdminSeoSettings() {
                                 <div>
                                     <p className="text-sm font-medium text-white mb-1">Ícone Local (Favicon / App Icon)</p>
                                     <p className="text-xs text-text-secondary">Ícone do navegador e atalho celular (PWA). Formato PNG 1:1.</p>
+                                    <p className="text-[10px] text-amber-500 mt-1 leading-tight">Dica: Use uma imagem quadrada de pelo menos 48x48px (ideal 512x512px) para que o Google exiba seu ícone nos resultados.</p>
                                 </div>
                             </div>
 
