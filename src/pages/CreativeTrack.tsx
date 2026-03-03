@@ -29,7 +29,7 @@ import {
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
     ChevronDown, ChevronRight, FileEdit, Archive, ArchiveRestore,
-    Clock, XCircle, MousePointer2
+    Clock, XCircle
 } from 'lucide-react';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
@@ -2365,7 +2365,13 @@ export function CreativeTrack() {
 
     // ========== GLOBAL KPIs (all tracks + unmatched) ==========
     const globalKpis = useMemo(() => {
-        // Filter all conversions (including matched and unmatched) by date
+        // Get IDs of visible tracks (active or archived)
+        const visibleTrackIds = new Set(creativeTracks.map(t => t.id));
+
+        // Filter all_entries to only include visible tracks
+        const visibleEntries = filteredAllEntries.filter(e => visibleTrackIds.has(e.track_id));
+
+        // Get purchase dates for filtering conversions
         const now = new Date();
         let start: Date = new Date(0);
         let end: Date = endOfDay(now);
@@ -2381,23 +2387,29 @@ export function CreativeTrack() {
                 break;
         }
 
+        // Filter conversions to only include those belonging to visible tracks
+        // USER REQUEST: Completely remove unmatched (Sem Track) from this analysis
         const filteredConversionsForKpis = allUserConversions.filter(c => {
             if (!c.purchase_time) return false;
+
+            // Only include conversions with a track_id that is currently visible
+            if (!c.track_id || !visibleTrackIds.has(c.track_id)) return false;
+
             const dateObj = new Date(c.purchase_time);
             if (isNaN(dateObj.getTime())) return false;
             if (dateFilter === 'all') return true;
             return isWithinInterval(dateObj, { start, end });
         });
 
-        if (filteredAllEntries.length === 0 && filteredConversionsForKpis.length === 0) return null;
+        if (visibleEntries.length === 0 && filteredConversionsForKpis.length === 0) return null;
 
-        // Total Commission from all RAW conversions (matches Products page logic)
+        // Total Commission from all RAW conversions
         const totalCommission = filteredConversionsForKpis.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
 
         // Investment, Ad Clicks, Shopee Clicks from aggregate table (entries)
-        const totalInvestment = filteredAllEntries.reduce((s, e) => s + Number(e.investment), 0);
-        const totalShopeeClicks = filteredAllEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
-        const totalAdClicks = filteredAllEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
+        const totalInvestment = visibleEntries.reduce((s, e) => s + Number(e.investment), 0);
+        const totalShopeeClicks = visibleEntries.reduce((s, e) => s + Number(e.shopee_clicks), 0);
+        const totalAdClicks = visibleEntries.reduce((s, e) => s + Number(e.ad_clicks), 0);
 
         // Unique orders by conversion_id (or order_id) from raw conversions
         const uniqueOrderIds = new Set(filteredConversionsForKpis.map(c => c.order_id || c.conversion_id));
@@ -2407,7 +2419,7 @@ export function CreativeTrack() {
         const totalCpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
 
         const uniqueDates = new Set([
-            ...filteredAllEntries.map(e => e.date),
+            ...visibleEntries.map(e => e.date),
             ...filteredConversionsForKpis.map(c => c.purchase_time ? format(new Date(c.purchase_time), 'yyyy-MM-dd') : '').filter(Boolean),
         ]);
         const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
@@ -2458,7 +2470,7 @@ export function CreativeTrack() {
             untrackedDirectOrders, untrackedIndirectOrders, untrackedDirectValue, untrackedIndirectValue,
             completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
         };
-    }, [filteredAllEntries, allUserConversions, dateFilter, customRange]);
+    }, [filteredAllEntries, allUserConversions, dateFilter, customRange, creativeTracks, showArchived]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
@@ -2487,36 +2499,8 @@ export function CreativeTrack() {
                 return dir * (valA - valB);
             }) as { track: Track; orders: number; commission: number; investment: number; profit: number; pct: number; adClicks: number; shopeeClicks: number; cpc: number; isUnmatched: boolean }[] : [];
 
-        // Add "Sem Track" row for unmatched conversions
-        if (hasUnmatched) {
-            const unmatchedOrderIds = new Set(filteredUnmatchedConversions.map(c => c.conversion_id));
-            const unmatchedCommission = filteredUnmatchedConversions.reduce((s, c) => s + Number(c.item_total_commission || 0), 0);
-            const semTrack: Track = {
-                id: '__sem_track__',
-                user_id: '',
-                name: 'Sem Track',
-                affiliate_link: '',
-                sub_id: '',
-                created_at: '',
-                funnel_id: null,
-                status: 'desativado',
-            };
-            ranked.push({
-                track: semTrack,
-                orders: unmatchedOrderIds.size,
-                commission: unmatchedCommission,
-                investment: 0,
-                profit: unmatchedCommission,
-                pct: 0,
-                adClicks: 0,
-                shopeeClicks: 0,
-                cpc: 0,
-                isUnmatched: true,
-            });
-        }
-
         return ranked;
-    }, [tracks, filteredAllEntries, filteredUnmatchedConversions, rankingSortCol, rankingSortDir]);
+    }, [filteredAllEntries, creativeTracks, rankingSortCol, rankingSortDir]);
 
     const entryProfit = (parseFloat(entryForm.commission_value) || 0) - (parseFloat(entryForm.investment) || 0);
     const entryProfitPct = (parseFloat(entryForm.investment) || 0) > 0
@@ -3026,41 +3010,7 @@ export function CreativeTrack() {
                             )}
 
                             {/* Pedidos com Track / sem Track - Diretas vs Indiretas */}
-                            {globalKpis && (globalKpis.trackedSales > 0 || globalKpis.untrackedSales > 0) && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    {/* Pedidos com Track */}
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
-                                        <div className="flex items-center gap-1.5 sm:gap-2">
-                                            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
-                                            <span className="text-[10px] sm:text-xs text-text-secondary">Pedidos com Track</span>
-                                        </div>
-                                        <span className="text-sm sm:text-lg font-bold text-blue-400">{globalKpis.trackedSales ?? 0}</span>
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="text-green-400 font-semibold">{globalKpis.trackedDirectOrders}D</span>
-                                            <span className="text-text-secondary">·</span>
-                                            <span className="text-amber-400 font-semibold">{globalKpis.trackedIndirectOrders}I</span>
-                                            <span className="text-text-secondary">—</span>
-                                            <span className="text-text-secondary">R$ {formatBRL(globalKpis.trackedDirectValue + globalKpis.trackedIndirectValue)}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Pedidos sem Track */}
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-3 sm:p-4 flex flex-col gap-1.5 sm:gap-2">
-                                        <div className="flex items-center gap-1.5 sm:gap-2">
-                                            <MousePointer2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
-                                            <span className="text-[10px] sm:text-xs text-text-secondary">Pedidos sem Track</span>
-                                        </div>
-                                        <span className="text-sm sm:text-lg font-bold text-neutral-400">{globalKpis.untrackedSales ?? 0}</span>
-                                        <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="text-green-400 font-semibold">{globalKpis.untrackedDirectOrders}D</span>
-                                            <span className="text-text-secondary">·</span>
-                                            <span className="text-amber-400 font-semibold">{globalKpis.untrackedIndirectOrders}I</span>
-                                            <span className="text-text-secondary">—</span>
-                                            <span className="text-text-secondary">R$ {formatBRL(globalKpis.untrackedDirectValue + globalKpis.untrackedIndirectValue)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            {/* Sales attribution blocks removed by user request (Criativo Track focus) */}
 
                             {/* Track Ranking Table */}
                             {trackRanking.length > 0 && (
