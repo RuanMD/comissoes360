@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { supabase } from '../lib/supabase';
 import { syncService } from '../lib/syncService';
+import { useSalesSummary } from '../hooks/useSalesSummary';
+
 import { DateFilter } from '../components/ui/DateFilter';
 import { useOrderFilters } from '../hooks/useOrderFilters';
 import { OrderFiltersPanel } from '../components/ui/OrderFiltersPanel';
@@ -29,7 +31,9 @@ interface MatchedTrack {
 
 export function SubIdAnalysis() {
     const metrics = useMetrics();
-    const { commissionData, clickData, reportType, isAutoSyncing } = useData();
+    const { commissionData, clickData, isAutoSyncing } = useData();
+
+
     const { user } = useAuth();
     const { showToast } = useToast();
     const [hideNames, setHideNames] = useState(false);
@@ -99,7 +103,7 @@ export function SubIdAnalysis() {
         return dateAgg;
     }, [clickData, commissionData]);
 
-    // Detect matching tracks when both CSVs are loaded
+    // Detect matching tracks and sync with summary data
     const detectMatchingTracks = useCallback(async () => {
         if (!user || (commissionData.length === 0 && clickData.length === 0)) {
             setMatchedTracks([]);
@@ -121,35 +125,23 @@ export function SubIdAnalysis() {
                 return;
             }
 
-            // Build canonical sub_ids from CSV
-            const csvSubIds = new Set<string>();
-            clickData.forEach(click => {
-                const raw = click['Sub_id'] || '';
-                const canonical = raw.split('-').filter(Boolean).join('-');
-                if (canonical) csvSubIds.add(canonical);
-            });
-            commissionData.forEach(item => {
-                const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                const canonical = parts.join('-');
-                if (canonical) csvSubIds.add(canonical);
-            });
-
-            // Match tracks
+            // Match tracks using summary data
             const matched: MatchedTrack[] = [];
             for (const track of tracks) {
                 if (!track.sub_id) continue;
-                let matchingCsvSubId: string | null = null;
-                for (const csvSub of csvSubIds) {
-                    if (csvSub === track.sub_id || csvSub.includes(track.sub_id) || track.sub_id.includes(csvSub)) {
-                        matchingCsvSubId = csvSub;
-                        break;
-                    }
-                }
-                if (!matchingCsvSubId) continue;
 
-                const dateAgg = buildDateAgg(matchingCsvSubId);
+                // Find if this track sub_id exists in our summary data
+                const matchingSubId = Object.keys(metrics.subIdDetails).find(csvSub =>
+                    csvSub === track.sub_id || csvSub.includes(track.sub_id) || track.sub_id.includes(csvSub)
+                );
+
+                if (!matchingSubId) continue;
+
+                // Use the aggregation from the summary hook if possible, or build a simple one
+                // For now, we'll use the buildDateAgg for the specific chart view in this page
+                const dateAgg = buildDateAgg(matchingSubId);
                 if (Object.keys(dateAgg).length > 0) {
-                    matched.push({ track, csvSubId: matchingCsvSubId, dateAggregation: dateAgg });
+                    matched.push({ track, csvSubId: matchingSubId, dateAggregation: dateAgg });
                 }
             }
 
@@ -157,7 +149,8 @@ export function SubIdAnalysis() {
         } catch (err) {
             console.error('Erro ao buscar tracks:', err);
         }
-    }, [user, reportType, clickData, commissionData, buildDateAgg]);
+    }, [user, metrics.subIdDetails, buildDateAgg, commissionData.length, clickData.length]);
+
 
     useEffect(() => {
         detectMatchingTracks();

@@ -1,10 +1,12 @@
 import { useMetrics } from '../hooks/useMetrics';
+import { useSalesSummary } from '../hooks/useSalesSummary';
 import { DateFilter } from '../components/ui/DateFilter';
 import { Zap, ShieldCheck } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 export function DirectsVsIndirects() {
     const metrics = useMetrics();
+    const summary = useSalesSummary();
 
     if (metrics.isEmpty) {
         return (
@@ -40,7 +42,7 @@ export function DirectsVsIndirects() {
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
-                                    data={metrics.directsVsIndirects}
+                                    data={summary.chartData}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={80}
@@ -50,7 +52,7 @@ export function DirectsVsIndirects() {
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    {metrics.directsVsIndirects.map((_, index) => (
+                                    {summary.chartData.map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
@@ -71,12 +73,12 @@ export function DirectsVsIndirects() {
                     </div>
                     <div className="bg-surface-dark border border-border-dark rounded-2xl p-6 group hover:border-border-hover transition-colors">
                         <h4 className="text-lg font-medium text-white mb-2">Vendas Diretas</h4>
-                        <p className="text-3xl font-bold font-mono text-primary">{metrics.directsVsIndirects[0].value}</p>
+                        <p className="text-3xl font-bold font-mono text-primary">{summary.directs.count}</p>
                         <p className="text-sm text-text-secondary mt-1 overflow-hidden text-ellipsis">Pedidos do link promovido</p>
                     </div>
                     <div className="bg-surface-dark border border-border-dark rounded-2xl p-6 group hover:border-border-hover transition-colors">
                         <h4 className="text-lg font-medium text-white mb-2">Vendas Indiretas</h4>
-                        <p className="text-3xl font-bold font-mono text-[#3b82f6]">{metrics.directsVsIndirects[1].value}</p>
+                        <p className="text-3xl font-bold font-mono text-[#3b82f6]">{summary.indirects.count}</p>
                         <p className="text-sm text-text-secondary mt-1 overflow-hidden text-ellipsis">Pedidos via carrinho cruzado</p>
                     </div>
                 </div>

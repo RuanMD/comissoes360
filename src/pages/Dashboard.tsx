@@ -1,4 +1,5 @@
 import { useMetrics } from '../hooks/useMetrics';
+import { useSalesSummary } from '../hooks/useSalesSummary';
 import { DateFilter } from '../components/ui/DateFilter';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -9,8 +10,16 @@ import {
 import { useData } from '../context/DataContext';
 
 export function Dashboard() {
-    const { commissionData, clickData, hasStartedAnalysis, setHasStartedAnalysis, handleFileUpload, clearData } = useData();
+    const {
+        commissionData,
+        clickData,
+        hasStartedAnalysis,
+        setHasStartedAnalysis,
+        handleFileUpload,
+        clearData
+    } = useData();
     const metrics = useMetrics();
+    const summary = useSalesSummary();
 
     if (!hasStartedAnalysis) {
         return (
@@ -57,7 +66,7 @@ export function Dashboard() {
                                 <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#3b82f6]/20 text-[#3b82f6] rounded-xl flex items-center justify-center mb-3 sm:mb-4 transition-transform">
                                     <Upload className="w-6 h-6 sm:w-8 sm:h-8" />
                                 </div>
-                                <h3 className="text-base sm:text-lg font-bold mb-1 sm:mb-2 text-white">Cliques Carregados</h3>
+                                <h3 className="text-base sm:text-lg font-bold mb-1 sm:mb-2 text-white">Cliques Carregadas</h3>
                                 <p className="text-xs sm:text-sm text-[#3b82f6] font-medium">{clickData.length} registros</p>
                             </>
                         ) : (
@@ -187,12 +196,18 @@ export function Dashboard() {
                     <div className="flex items-center gap-3 sm:gap-4 text-right">
                         <div>
                             <p className="text-[10px] sm:text-xs text-text-secondary">Shopee</p>
-                            <p className="text-xs sm:text-sm font-bold text-white font-mono">R$ {metrics.commissionSource.shopee.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-2xl font-bold text-white">R$ {summary.indirectValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-amber-400 font-medium">
+                                {summary.indirectPercentage}% do total
+                            </p>
                         </div>
                         <div className="h-6 sm:h-8 w-px bg-border-dark"></div>
                         <div>
                             <p className="text-[10px] sm:text-xs text-primary">Vendedores</p>
-                            <p className="text-xs sm:text-sm font-bold text-primary font-mono">R$ {metrics.commissionSource.seller.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-2xl font-bold text-primary">R$ {summary.directValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-emerald-400 font-medium">
+                                {summary.directPercentage}% do total
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -227,7 +242,7 @@ export function Dashboard() {
                     </div>
                     <div className="relative h-[220px] sm:h-[300px] w-full mt-auto flex items-end gap-1 sm:gap-2 pt-8 overflow-hidden">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={metrics.dailyChart}>
+                            <LineChart data={summary.chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#393328" vertical={false} />
                                 <XAxis dataKey="date" stroke="#baaf9c" fontSize={11} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#baaf9c" fontSize={11} tickLine={false} axisLine={false} />
@@ -257,7 +272,6 @@ export function Dashboard() {
                                     <span className="text-text-secondary">Vendas: {item.count} un.</span>
                                 </div>
                                 <div className="h-1.5 w-full bg-surface-highlight rounded-full overflow-hidden mt-1">
-                                    {/* Using an arbitrary visual percentage based on index just for effect since we don't have standard max in this simple view */}
                                     <div className="h-full bg-primary/80 transition-all" style={{ width: `${100 - (idx * 15)}%` }}></div>
                                 </div>
                             </div>
