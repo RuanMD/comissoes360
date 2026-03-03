@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../components/ui/ToastContext';
-import { Loader2, Plus, Trash2, Save } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, Copy, GripVertical } from 'lucide-react';
+import { Reorder } from 'framer-motion';
 import { ALL_FEATURE_KEYS, FEATURE_LABELS, FeatureKey } from '../../hooks/useFeatureAccess';
 
 interface Plan {
@@ -104,6 +105,37 @@ export function AdminPlans() {
         }
     };
 
+    const handleDuplicatePlan = async (plan: Plan) => {
+        setSaving(true);
+        try {
+            const { data, error } = await supabase
+                .from('plans')
+                .insert({
+                    name: `${plan.name} (Cópia)`,
+                    description: plan.description,
+                    price: plan.price,
+                    period: plan.period,
+                    checkout_url: plan.checkout_url,
+                    features: plan.features,
+                    is_popular: false,
+                    is_active: plan.is_active,
+                    feature_keys: plan.feature_keys || [],
+                })
+                .select()
+                .single();
+            if (error) throw error;
+            if (data) {
+                setPlans(prev => [...prev, data]);
+                showToast('Plano duplicado com sucesso!');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('Erro ao duplicar plano.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleDeletePlan = async (id: string, name: string) => {
         if (!window.confirm(`Tem certeza que deseja excluir o plano "${name}"? Esta ação não pode ser desfeita.`)) return;
         setSaving(true);
@@ -127,6 +159,12 @@ export function AdminPlans() {
             p.id === planId ? { ...p, features: [...p.features, feat] } : p
         ));
         setNewFeature({ ...newFeature, [planId]: '' });
+    };
+
+    const handleReorderFeatures = (planId: string, newFeatures: string[]) => {
+        setPlans(plans.map(p =>
+            p.id === planId ? { ...p, features: newFeatures } : p
+        ));
     };
 
     const handleRemoveFeature = (planId: string, featureIndex: number) => {
@@ -267,20 +305,32 @@ export function AdminPlans() {
                     {/* Features */}
                     <div className="border border-border-dark rounded-xl p-4 bg-background-dark">
                         <h4 className="text-sm font-bold text-white mb-4">Itens inclusos neste plano</h4>
-                        <ul className="flex flex-col gap-2 mb-4">
+                        <Reorder.Group
+                            axis="y"
+                            values={plan.features}
+                            onReorder={(newFeatures) => handleReorderFeatures(plan.id, newFeatures)}
+                            className="flex flex-col gap-2 mb-4"
+                        >
                             {plan.features.map((feature, fIdx) => (
-                                <li key={fIdx} className="flex justify-between items-center bg-surface-dark px-3 py-2 rounded-lg text-sm text-neutral-300 border border-border-dark">
-                                    <span>{feature}</span>
+                                <Reorder.Item
+                                    key={`${feature}-${fIdx}`}
+                                    value={feature}
+                                    className="flex justify-between items-center bg-surface-dark px-3 py-2 rounded-lg text-sm text-neutral-300 border border-border-dark cursor-grab active:cursor-grabbing"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <GripVertical className="w-4 h-4 text-neutral-500 flex-shrink-0" />
+                                        <span>{feature}</span>
+                                    </div>
                                     <button
                                         onClick={() => handleRemoveFeature(plan.id, fIdx)}
                                         className="text-red-400 hover:text-red-500"
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
-                                </li>
+                                </Reorder.Item>
                             ))}
                             {plan.features.length === 0 && <p className="text-xs text-text-secondary">Nenhum item adicionado.</p>}
-                        </ul>
+                        </Reorder.Group>
 
                         <div className="flex gap-2">
                             <input
@@ -351,13 +401,23 @@ export function AdminPlans() {
                     </div>
 
                     <div className="flex justify-between items-center mt-2">
-                        <button
-                            onClick={() => handleDeletePlan(plan.id, plan.name)}
-                            disabled={saving}
-                            className="text-red-400 hover:text-red-500 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-                        >
-                            <Trash2 className="w-4 h-4" /> Excluir Plano
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => handleDuplicatePlan(plan)}
+                                disabled={saving}
+                                className="text-neutral-400 hover:text-white hover:bg-white/10 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                                title="Duplicar este plano"
+                            >
+                                <Copy className="w-4 h-4" /> Duplicar
+                            </button>
+                            <button
+                                onClick={() => handleDeletePlan(plan.id, plan.name)}
+                                disabled={saving}
+                                className="text-red-400 hover:text-red-500 hover:bg-red-500/10 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Trash2 className="w-4 h-4" /> Excluir Plano
+                            </button>
+                        </div>
                         <button
                             onClick={() => handleSavePlan(plan)}
                             disabled={saving}
