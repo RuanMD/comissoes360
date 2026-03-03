@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useData } from '../../context/DataContext';
+import { useData } from '../../hooks/useData';
 import { Calendar, ChevronDown, Check } from 'lucide-react';
 
 export function DateFilter() {

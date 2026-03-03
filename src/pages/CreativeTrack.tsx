@@ -36,7 +36,7 @@ import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
 import { formatBRL, formatPct } from '../utils/format';
 import { extractShopeeIds } from '../utils/shopee';
 import { AdPreviewModal } from '../components/AdPreviewModal';
-import { useData } from '../context/DataContext';
+import { useData } from '../hooks/useData';
 import { DateFilter } from '../components/ui/DateFilter';
 
 const extractFbAdLink = (creative: any): string | null => {
@@ -285,9 +285,17 @@ export function CreativeTrack() {
     }, [tracks, showArchived]);
 
     const nextSubId = useMemo(() => {
-        const count = creativeTracks.length + 1;
+        const numbers = tracks
+            .filter(t => !t.name.startsWith('Orgânico -'))
+            .map(t => {
+                const match = t.name.match(/^(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            });
+
+        const maxNumber = Math.max(0, ...numbers);
+        const count = maxNumber + 1;
         return count.toString().padStart(3, '0');
-    }, [creativeTracks]);
+    }, [tracks]);
 
     useEffect(() => {
         if (showNewForm) {
@@ -535,7 +543,7 @@ export function CreativeTrack() {
                 .update({ user_preferences: { ...current, global_kpi_order: globalOrder, track_kpi_order: trackOrder } })
                 .eq('id', user.id);
         }, 500);
-    }, [user]);
+    }, [user?.id]);
 
     const saveRankingSortToSupabase = useCallback((col: string, dir: string) => {
         if (!user) return;
@@ -547,7 +555,7 @@ export function CreativeTrack() {
                 .update({ user_preferences: { ...current, ranking_sort: { column: col, dir } } })
                 .eq('id', user.id);
         }, 500);
-    }, [user]);
+    }, [user?.id]);
 
     // Load preferences from Supabase on mount
     useEffect(() => {
@@ -574,7 +582,7 @@ export function CreativeTrack() {
                 localStorage.setItem('shopee_analisar_ranking_sort_dir', prefs.ranking_sort.dir || 'desc');
             }
         })();
-    }, [user]);
+    }, [user?.id]);
 
     const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
     const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } });
@@ -622,7 +630,7 @@ export function CreativeTrack() {
             fetchAllEntries();
             fetchAllUserConversions();
         }
-    }, [user]);
+    }, [user?.id]);
 
     const fetchTracks = async () => {
         setLoading(true);
@@ -820,7 +828,7 @@ export function CreativeTrack() {
                 if (s.shopType) insertPayload.product_shop_type = JSON.stringify(s.shopType);
             }
 
-            const newTrackId = Math.random().toString(36).substr(2, 9); // Temporary ID for local use
+            const newTrackId = crypto.randomUUID(); // Valid UUID for local and DB use
             const fullPayload = {
                 ...insertPayload,
                 id: newTrackId,
@@ -2146,7 +2154,7 @@ export function CreativeTrack() {
             if (isNaN(dateObj.getTime())) return true;
             return isWithinInterval(dateObj, { start, end });
         });
-    }, [entries, dateFilter, customRange]);
+    }, [user?.id, dateFilter, customRange]);
 
     const filteredAllEntries = useMemo(() => {
         if (!allEntries.length) return [];
@@ -2616,7 +2624,7 @@ export function CreativeTrack() {
                                     <div className="flex flex-col gap-0.5 mt-1 border-t border-white/5 pt-1.5">
                                         {modalProductData.commissionRate > 0 && (
                                             <p className="text-[11px] font-bold text-green-400">
-                                                Comissao: {modalProductData.commissionRate}%
+                                                Comissao: {formatPct(modalProductData.commissionRate < 1 ? modalProductData.commissionRate * 100 : modalProductData.commissionRate)}%
                                                 <span className="ml-1 text-green-500/70 font-normal">
                                                     (R$ {parseFloat(modalProductData.commission || 0).toFixed(2)})
                                                 </span>
@@ -3693,7 +3701,7 @@ export function CreativeTrack() {
                                                     </span>
                                                     {selectedTrack.product_commission_rate != null && (
                                                         <span className="text-[10px] text-green-400/60 block">
-                                                            {(selectedTrack.product_commission_rate * 100).toFixed(1)}% total
+                                                            {formatPct(selectedTrack.product_commission_rate * 100)}% total
                                                         </span>
                                                     )}
                                                 </div>
@@ -3703,7 +3711,7 @@ export function CreativeTrack() {
                                                     <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
                                                         <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
                                                         <span className="text-sm font-bold text-white">
-                                                            {(selectedTrack.product_seller_commission_rate * 100).toFixed(1)}%
+                                                            {formatPct(selectedTrack.product_seller_commission_rate * 100)}%
                                                         </span>
                                                     </div>
                                                 )}
@@ -3713,7 +3721,7 @@ export function CreativeTrack() {
                                                     <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
                                                         <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
                                                         <span className="text-sm font-bold text-white">
-                                                            {(selectedTrack.product_shopee_commission_rate * 100).toFixed(1)}%
+                                                            {formatPct(selectedTrack.product_shopee_commission_rate * 100)}%
                                                         </span>
                                                     </div>
                                                 )}

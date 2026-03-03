@@ -134,11 +134,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('mustReset');
     };
 
+    const contextValue = React.useMemo(() => ({
+        session, user, subscriptionStatus, isAdmin, mustChangePassword, loading,
+        signInWithPassword, updatePassword, sendPasswordResetEmail, signOut, clearMustResetBlock
+    }), [session, user, subscriptionStatus, isAdmin, mustChangePassword, loading]);
+
     return (
-        <AuthContext.Provider value={{
-            session, user, subscriptionStatus, isAdmin, mustChangePassword, loading,
-            signInWithPassword, updatePassword, sendPasswordResetEmail, signOut, clearMustResetBlock
-        }}>
+        <AuthContext.Provider value={contextValue}>
             {children}
         </AuthContext.Provider>
     );

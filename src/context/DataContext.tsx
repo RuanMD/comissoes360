@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import Papa from 'papaparse';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -25,7 +25,7 @@ export interface DataContextType {
     isAutoSyncing: boolean;
 }
 
-const DataContext = createContext<DataContextType | undefined>(undefined);
+export const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
@@ -135,7 +135,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                         newTracksToCreate.push({
                             user_id: user.id,
                             sub_id: subId,
-                            name: subId === 'Sem Sub_id' ? `Orgânico - ${channel}` : subId,
+                            name: subId === 'Sem Sub_id' ? `Orgânico - ${channel} ` : subId,
                             channel: channel,
                             status: 'ativo'
                         });
@@ -221,7 +221,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                     conversionRows.push({
                         track_id: trackId,
                         user_id: user?.id || null,
-                        conversion_id: item['ID do pedido']?.toString() || `${trackId || 'unmatched'}-${dateObj.getTime()}`,
+                        conversion_id: item['ID do pedido']?.toString() || `${trackId || 'unmatched'} -${dateObj.getTime()} `,
                         click_time: parseShopeeDate(item['Tempo dos Cliques'])?.toISOString() || null,
                         purchase_time: dateObj.toISOString(),
                         order_id: item['ID do pedido']?.toString() || null,
@@ -316,20 +316,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }, [clickData, commissionData, fileName, user]);
     // Only trigger when a new file processes, clickData or commissionData changes 
 
+    const contextValue = useMemo(() => ({
+        commissionData, clickData, fileName, handleFileUpload, reportType, clearData,
+        dateFilter, setDateFilter, customRange, setCustomRange, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
+    }), [
+        commissionData, clickData, fileName, reportType,
+        dateFilter, customRange, hasStartedAnalysis, isAutoSyncing
+    ]);
+
     return (
-        <DataContext.Provider value={{
-            commissionData, clickData, fileName, handleFileUpload, reportType, clearData,
-            dateFilter, setDateFilter, customRange, setCustomRange, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
-        }}>
+        <DataContext.Provider value={contextValue}>
             {children}
         </DataContext.Provider>
     );
 }
 
-export function useData() {
-    const context = useContext(DataContext);
-    if (!context) {
-        throw new Error('useData must be used within a DataProvider');
-    }
-    return context;
-}

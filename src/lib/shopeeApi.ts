@@ -4,7 +4,9 @@
  * (funciona tanto em desenvolvimento quanto em produção).
  */
 
-const SHOPEE_EDGE_FN = 'https://yiyfmdbhzvwsfkpberve.supabase.co/functions/v1/shopee-api';
+import { supabase } from './supabase';
+
+const SHOPEE_EDGE_FN = 'shopee-api';
 
 interface GenerateLinkParams {
     originUrl: string;
@@ -29,28 +31,23 @@ interface FetchProductResult {
     shop: any | null;
 }
 
-async function callShopeeProxy(body: Record<string, unknown>): Promise<Response> {
-    return fetch(SHOPEE_EDGE_FN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+async function callShopeeProxy(body: Record<string, unknown>): Promise<any> {
+    const { data, error } = await supabase.functions.invoke(SHOPEE_EDGE_FN, {
+        body: body,
     });
+
+    if (error) throw error;
+    return data;
 }
 
 /**
  * Gera um link curto de afiliado Shopee via Edge Function (proxy seguro).
  */
 export async function generateShopeeLink(params: GenerateLinkParams): Promise<GenerateLinkResult> {
-    const response = await callShopeeProxy({
+    const data = await callShopeeProxy({
         action: 'generate-link',
         ...params,
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error || `Erro do servidor (${response.status})`);
-    }
 
     if (!data.shortLink) {
         throw new Error('A Shopee retornou resposta vazia. Tente novamente.');
@@ -87,16 +84,10 @@ export async function resolveShopeeUrl(shortUrl: string): Promise<string> {
  * Busca dados de produto e loja via Edge Function (proxy seguro).
  */
 export async function fetchShopeeProduct(params: FetchProductParams): Promise<FetchProductResult> {
-    const response = await callShopeeProxy({
+    const data = await callShopeeProxy({
         action: 'fetch-product',
         ...params,
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.error || `Erro do servidor (${response.status})`);
-    }
 
     return { product: data.product ?? null, shop: data.shop ?? null };
 }

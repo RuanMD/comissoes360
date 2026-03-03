@@ -7,7 +7,7 @@ import {
 import {
     Upload, BarChart3, CheckCircle2, RefreshCw, ExternalLink, FileText, MousePointer2, DownloadCloud
 } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useData } from '../hooks/useData';
 
 export function Dashboard() {
     const {

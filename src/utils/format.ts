@@ -11,10 +11,10 @@ export function formatBRL(value: number): string {
     });
 }
 
-/** Formata porcentagem: 12,5% (1 casa decimal) */
+/** Formata porcentagem: 12% ou 12,5% */
 export function formatPct(value: number): string {
     return value.toLocaleString('pt-BR', {
-        minimumFractionDigits: 1,
+        minimumFractionDigits: 0,
         maximumFractionDigits: 1,
     });
 }

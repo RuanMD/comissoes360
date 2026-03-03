@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useData } from '../context/DataContext';
+import { useData } from './useData';
 import { startOfDay, endOfDay, subDays, isWithinInterval, format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { db } from '../lib/db';
@@ -88,60 +88,6 @@ export function useMetrics() {
         fetchDbData();
     }, []);
 
-    // 0. Automatic Refresh on Window Focus
-    useEffect(() => {
-        let timeoutId: NodeJS.Timeout;
-
-        const handleFocus = async () => {
-            if (!navigator.onLine) return;
-
-            // Debounce the refresh
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(async () => {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) return; // Only refresh if user is logged in
-
-                console.log('App focused, refreshing metrics...');
-                try {
-                    const { data: convData, error: convError } = await supabase.from('shopee_conversions').select('*');
-                    const { data: trackData, error: trackError } = await supabase.from('creative_tracks').select('*, creative_track_entries(*)').eq('is_archived', false);
-
-                    if (!convError && convData) {
-                        setDbConversions(convData);
-                        await db.orders.clear();
-                        await db.orders.bulkAdd(convData.map(c => ({
-                            order_id: c.order_id,
-                            purchase_time: c.purchase_time,
-                            actual_amount: c.actual_amount,
-                            commission: c.item_total_commission,
-                            status: c.order_status,
-                            data: c,
-                            updated_at: new Date().toISOString()
-                        })));
-                    }
-                    if (!trackError && trackData) {
-                        setDbTracks(trackData);
-                        await db.tracks.clear();
-                        await db.tracks.bulkAdd(trackData);
-                        setLastSync(new Date());
-                    }
-                } catch (err) {
-                    console.warn('Autorefresh failed:', err);
-                }
-            }, 1000); // 1s debounce
-        };
-
-        window.addEventListener('focus', handleFocus);
-        window.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') handleFocus();
-        });
-
-        return () => {
-            window.removeEventListener('focus', handleFocus);
-            window.removeEventListener('visibilitychange', handleFocus);
-            clearTimeout(timeoutId);
-        };
-    }, []);
 
     // 1. Filter Clicks by Date
     const filteredClicks = useMemo(() => {
@@ -511,7 +457,7 @@ export function useMetrics() {
 
             // Push granular order details
             allOrders.push({
-                id: item['ID do pedido'] || (item._isFromDb ? item.conversion_id : Math.random().toString(36).substr(2, 9)),
+                id: item['ID do pedido'] || (item._isFromDb ? item.conversion_id : crypto.randomUUID()),
                 date: item['Horário do pedido'] || '—',
                 productName: prodName,
                 imageUrl: item._image || item._parsedImage || null,

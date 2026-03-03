@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment, useMemo } from 'react';
 import { useMetrics, parseShopeeDate } from '../hooks/useMetrics';
-import { useData } from '../context/DataContext';
+import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { supabase } from '../lib/supabase';
@@ -174,7 +174,7 @@ export function SubIdAnalysis() {
 
         setSavingCreate(true);
         try {
-            const newTrackId = Math.random().toString(36).substr(2, 9);
+            const newTrackId = crypto.randomUUID();
             const fullPayload = {
                 user_id: user.id,
                 name: createName.trim(),

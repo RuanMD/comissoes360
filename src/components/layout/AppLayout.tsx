@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useData } from '../../context/DataContext';
+import { useData } from '../../hooks/useData';
 import { useAuth } from '../../context/AuthContext';
 import { LogOut, Settings, FlaskConical } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
@@ -40,7 +40,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 setNavLabels(prefs.nav_labels);
             }
         })();
-    }, [user]);
+    }, [user?.id]);
 
     // Listen for nav order/labels changes from admin panel
     useEffect(() => {
