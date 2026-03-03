@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { LayoutDashboard, LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 import { useMetrics } from '../../hooks/useMetrics';
@@ -76,6 +76,19 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* Sidebar Desktop */}
             <div className="hidden md:flex flex-col w-72 bg-surface-dark border-r border-border-dark h-full justify-between p-4">
                 <div className="flex flex-col gap-6">
+                    {/* Brand Logo Section */}
+                    <div className="px-2 py-4 flex flex-col items-center gap-1 border-b border-border-dark/50 mb-2">
+                        <div className="relative group">
+                            {/* Subtle backglow unique to the logo */}
+                            <div className="absolute inset-0 bg-primary/10 blur-2xl rounded-full scale-150 group-hover:bg-primary/20 transition-all duration-700" />
+                            <img
+                                src="/logo/full.png"
+                                alt="Comissões Lab"
+                                className="relative z-10 w-full max-w-[180px] h-auto object-contain transition-transform duration-500 hover:scale-105"
+                            />
+                        </div>
+                    </div>
+
                     {/* User Profile Mock & Logout */}
                     <div className="flex items-center justify-between p-3 rounded-xl bg-surface-highlight/50 border border-border-dark group cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setIsProfileModalOpen(true)}>
                         <div className="flex items-center gap-3">
@@ -151,13 +164,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsProfileModalOpen(true)}
-                            className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30"
+                            className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/30 overflow-hidden"
                         >
                             {userMetaName ? userMetaName.charAt(0).toUpperCase() : (user?.email ? user.email.charAt(0).toUpperCase() : 'C')}
                         </button>
-                        <div className="font-bold text-primary flex items-center gap-2">
-                            <LayoutDashboard className="w-5 h-5" />
-                            <span className="truncate max-w-[150px]">Comissões Lab</span>
+                        <div className="flex items-center gap-2">
+                            <img src="/logo/icon.png" alt="Comissões Lab" className="w-8 h-8 object-contain" />
+                            <span className="truncate max-w-[150px] font-bold text-white tracking-tight">Comissões Lab</span>
                         </div>
                     </div>
                 </div>
