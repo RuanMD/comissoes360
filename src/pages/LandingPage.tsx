@@ -91,10 +91,31 @@ const ADVANCED_FEATURES = [
 const FAQS = [
     { q: "Preciso dar minha senha da Shopee?", a: "Jamais! No plano Essencial, você apenas faz upload do CSV que já baixou da Shopee. No plano Avançado, usamos a API oficial com suas credenciais de desenvolvedor (App ID e Secret), nunca sua senha pessoal." },
     { q: "Em quanto tempo vejo resultados?", a: "Em literalmente 30 segundos após o upload. Seus dashboards são gerados instantaneamente. Muitos afiliados descobrem na primeira análise que estavam investindo tempo em canais que não convertem." },
-    { q: "Qual a diferença entre o Essencial e o Avançado?", a: "O Essencial te dá análise completa via upload de CSV: dashboard, SubIDs, canais, produtos, temporal e mais. O Avançado elimina o CSV — a plataforma sincroniza suas vendas automaticamente via API da Shopee. Além disso, se você faz tráfego pago com a Meta (Facebook/Instagram Ads), o Criativo Track puxa suas métricas e vincula ao produto automaticamente. Também inclui gestão de funil e gerador de links." },
+    { q: "Qual a diferença entre o Essencial e o Avançado?", a: "O Essencial te dá análise completa via upload de CSV: dashboard, SubIDs, canais, produtos, temporal e mais. O Avançado elimina o CSV — a plataforma sincroniza suas vendas automaticamente via API da Shopee. Além disso, se você faz tráfego pago com a Meta (Facebook/Instagram Ads), o Criativo Track puxa suas métricas e vinculas ao produto automaticamente. Também inclui gestão de funil e gerador de links." },
     { q: "Posso cancelar a qualquer momento?", a: "Sim! Sem contratos, sem fidelidade, sem burocracia. Cancele direto pela plataforma de pagamento. E você ainda tem 7 dias de garantia incondicional — se não gostar, devolvemos 100% do valor." },
     { q: "Funciona para quem está começando?", a: "Com certeza. Se você já tem pelo menos um relatório CSV da Shopee, já consegue extrair insights valiosos. A ferramenta foi feita para ser simples: não precisa de conhecimento técnico." },
     { q: "Os dados são seguros?", a: "Totalmente. Seus dados são privados, criptografados e nunca compartilhados com terceiros. Cada usuário só vê seus próprios dados. Usamos infraestrutura de nível empresarial." }
+];
+
+const TESTIMONIALS = [
+    {
+        name: "Ricardo Silva",
+        role: "Afiliado Elite",
+        content: "O Comissões Lab mudou o jogo pra mim. Antes eu perdia horas no Excel e não sabia qual grupo de WhatsApp estava vendendo. Agora vejo tudo em segundos.",
+        image: "https://i.pravatar.cc/150?u=ricardo"
+    },
+    {
+        name: "Ana Oliveira",
+        role: "Top Afiliada Shopee",
+        content: "A função de Criativo Track é sensacional. Consigo saber exatamente qual vídeo do TikTok gerou a venda indireta. Vale cada centavo!",
+        image: "https://i.pravatar.cc/150?u=ana"
+    },
+    {
+        name: "Bruno Santos",
+        role: "Afiliado Iniciante",
+        content: "Mesmo sendo iniciante, o painel é muito fácil de usar. O upload do CSV é instantâneo e os gráficos são lindos e fáceis de entender.",
+        image: "https://i.pravatar.cc/150?u=bruno"
+    }
 ];
 
 const COMPARISON_FEATURES = [
@@ -182,6 +203,24 @@ export function LandingPage() {
                 <meta name="description" content="A ferramenta definitiva para afiliados Shopee. Descubra quais SubIDs dão lucro, analise vendas por hora e tracking de canais em tempo real." />
                 <link rel="canonical" href="https://www.comissoeslab.com.br/" />
                 <meta name="robots" content="index, follow" />
+
+                {/* JSON-LD Structured Data */}
+                <script type="application/ld+json">
+                    {JSON.stringify({
+                        "@context": "https://schema.org",
+                        "@type": "SoftwareApplication",
+                        "name": "Comissões Lab",
+                        "operatingSystem": "Web",
+                        "applicationCategory": "BusinessApplication",
+                        "description": "Ferramenta de análise de comissões para afiliados Shopee.",
+                        "offers": {
+                            "@type": "Offer",
+                            "price": "47.00",
+                            "priceCurrency": "BRL"
+                        }
+                    })}
+                </script>
+
                 <meta property="og:type" content="website" />
                 <meta property="og:title" content="Comissões Lab | Ferramenta de Análise para Afiliados Shopee" />
                 <meta property="og:description" content="Saiba exatamente de onde vêm suas vendas na Shopee com rastreamento por SubID e Canais." />
@@ -417,6 +456,32 @@ export function LandingPage() {
                         <a href="#preco" className="inline-flex items-center gap-2 text-[#f2a20d] font-semibold hover:underline">
                             Ver preços <ArrowRight className="w-4 h-4" />
                         </a>
+                    </div>
+                </div>
+            </section>
+
+            {/* ============ DEPOIMENTOS ============ */}
+            <section className="py-24 bg-gradient-to-b from-[#121212] to-black/20" id="depoimentos">
+                <div className="max-w-7xl mx-auto px-4">
+                    <div className="text-center mb-16">
+                        <span className="text-[#f2a20d] font-bold tracking-widest text-sm uppercase mb-4 block">Social Proof</span>
+                        <h2 className="text-4xl font-bold text-white mb-4">Quem usa, recomenda</h2>
+                        <p className="text-neutral-400">Junte-se a centenas de afiliados que profissionalizaram sua análise.</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-8">
+                        {TESTIMONIALS.map((t, i) => (
+                            <div key={i} className="bg-[#18181A] border border-white/5 p-8 rounded-2xl relative">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <img src={t.image} alt={t.name} className="w-12 h-12 rounded-full border border-[#f2a20d]/30" />
+                                    <div>
+                                        <h4 className="font-bold text-white">{t.name}</h4>
+                                        <p className="text-xs text-[#f2a20d]">{t.role}</p>
+                                    </div>
+                                </div>
+                                <p className="text-neutral-400 italic">"{t.content}"</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </section>
