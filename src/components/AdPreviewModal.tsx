@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
+
 import { Loader2, X, ExternalLink, Image as ImageIcon } from 'lucide-react';
 
 interface AdPreviewModalProps {
@@ -52,7 +54,7 @@ export function AdPreviewModal({ isOpen, onClose, adId, fbToken }: AdPreviewModa
                     `https://graph.facebook.com/v21.0/${adData.creative.id}?fields=object_story_spec,asset_feed_spec&access_token=${fbToken}`
                 );
                 const creativeData = await creativeNodeRes.json();
-                
+
                 let link = null;
                 if (creativeData.object_story_spec) {
                     const spec = creativeData.object_story_spec;
@@ -94,7 +96,7 @@ export function AdPreviewModal({ isOpen, onClose, adId, fbToken }: AdPreviewModa
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                
+
                 <div className="p-4 overflow-y-auto flex-1 flex flex-col items-center custom-scrollbar">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-3">
@@ -108,10 +110,11 @@ export function AdPreviewModal({ isOpen, onClose, adId, fbToken }: AdPreviewModa
                     ) : (
                         <div className="w-full flex flex-col items-center gap-6">
                             {previewHtml ? (
-                                <div 
+                                <div
                                     className="w-full flex justify-center bg-white rounded-xl overflow-hidden shadow-inner"
-                                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }}
                                 />
+
                             ) : (
                                 <div className="text-center py-8">
                                     <p className="text-neutral-400 text-sm">Nenhum preview disponível.</p>
@@ -121,9 +124,9 @@ export function AdPreviewModal({ isOpen, onClose, adId, fbToken }: AdPreviewModa
                             {destLink && (
                                 <div className="w-full bg-background-dark border border-border-dark rounded-xl p-4 flex flex-col gap-2">
                                     <span className="text-xs font-bold text-text-secondary">Link Vinculado:</span>
-                                    <a 
-                                        href={destLink} 
-                                        target="_blank" 
+                                    <a
+                                        href={destLink}
+                                        target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-between bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors p-3 rounded-lg text-primary text-sm font-medium break-all"
                                     >

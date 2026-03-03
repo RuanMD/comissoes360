@@ -81,3 +81,50 @@ CREATE POLICY "Users can only see their own profile" ON public.users
 
 CREATE POLICY "Users can only update their own profile" ON public.users
     FOR UPDATE USING (auth.uid() = id);
+
+-- 5. Table: funnels
+ALTER TABLE public.funnels ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can only see their own funnels" ON public.funnels
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own funnels" ON public.funnels
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own funnels" ON public.funnels
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own funnels" ON public.funnels
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- 6. Table: shopee_links
+ALTER TABLE public.shopee_links ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can only see their own shopee_links" ON public.shopee_links
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own shopee_links" ON public.shopee_links
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own shopee_links" ON public.shopee_links
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own shopee_links" ON public.shopee_links
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- 7. Table: site_settings
+ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can only see their own settings" ON public.site_settings
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only insert their own settings" ON public.site_settings
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can only update their own settings" ON public.site_settings
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only delete their own settings" ON public.site_settings
+    FOR DELETE USING (auth.uid() = user_id);
+
+

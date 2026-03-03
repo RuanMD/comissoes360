@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
+
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { X, Search, Loader2, ChevronRight, Check, Link2, Trash2, Eye, Image as ImageIcon } from 'lucide-react';
@@ -573,8 +575,9 @@ export function FacebookAdsSyncModal({ isOpen, onClose, trackId, trackName, onSy
                                         <div className="w-full flex justify-center scale-[0.85] origin-top transform transition-all duration-300">
                                             <div
                                                 className="w-full bg-white rounded-xl overflow-hidden shadow-2xl ring-1 ring-black/5"
-                                                dangerouslySetInnerHTML={{ __html: previewHtml }}
+                                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }}
                                             />
+
                                         </div>
                                     ) : (
                                         <div className="h-full flex items-center justify-center text-neutral-500 text-[10px] italic">

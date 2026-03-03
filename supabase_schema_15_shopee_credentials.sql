@@ -22,6 +22,8 @@ BEGIN
         RAISE EXCEPTION 'Not authenticated';
     END IF;
 
+    -- SECURITY CHECK: Ensure we are only updating the authenticated user's record
+    -- The WHERE id = auth.uid() is already present, which is good.
     UPDATE public.users
     SET
         shopee_app_id_encrypted = CASE
@@ -35,6 +37,7 @@ BEGIN
             ELSE NULL
         END
     WHERE id = auth.uid();
+
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

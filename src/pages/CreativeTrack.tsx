@@ -2825,14 +2825,56 @@ export function CreativeTrack() {
                     <h1 className="text-xl sm:text-2xl font-bold text-white">Criativo Track</h1>
                     <p className="text-text-secondary text-sm mt-1">Acompanhe o desempenho de cada criativo de anúncio</p>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
-                    <DateFilter />
+                <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap justify-end w-full sm:w-auto">
+                    {/* DateFilter (Ontem) */}
+                    <div className="flex-1 sm:flex-none min-w-0">
+                        <DateFilter />
+                    </div>
+
+                    {/* Novo Track Button */}
                     <button
                         onClick={() => setShowNewForm(!showNewForm)}
-                        className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 shadow-[0_0_15px_rgba(242,162,13,0.3)] flex items-center gap-2 text-sm"
+                        className="bg-primary text-background-dark font-bold px-3 py-2 sm:px-4 sm:py-2 rounded-xl hover:bg-opacity-90 shadow-[0_0_15px_rgba(242,162,13,0.3)] flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap"
                     >
-                        <Plus className="w-4 h-4" /> <span className="sm:inline">Novo Track</span>
+                        <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Novo Track</span>
                     </button>
+
+                    {/* Global Sync Dropdown (Reload) */}
+                    <div className="relative" ref={globalSyncMenuRef}>
+                        <button
+                            onClick={() => setShowGlobalSyncMenu(!showGlobalSyncMenu)}
+                            disabled={isGlobalSyncing}
+                            className="px-2.5 py-2 border border-primary/50 text-xs sm:text-sm font-semibold text-primary rounded-xl hover:bg-primary hover:text-background-dark transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isGlobalSyncing ? 'animate-spin' : ''}`} />
+                            <span className="hidden lg:inline">{isGlobalSyncing ? 'Sincronizando...' : 'Sync Global'}</span>
+                            {!isGlobalSyncing && <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                        </button>
+
+                        {showGlobalSyncMenu && !isGlobalSyncing && (
+                            <div className="absolute right-0 mt-2 w-56 bg-surface-dark rounded-xl shadow-xl border border-border-dark py-2 z-50">
+                                <button
+                                    onClick={() => handleGlobalSync('all')}
+                                    className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 transition-colors font-semibold"
+                                >
+                                    🚀 Sincronização Total
+                                </button>
+                                <div className="h-px w-full bg-border-dark my-1"></div>
+                                <button
+                                    onClick={() => handleGlobalSync('meta')}
+                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
+                                >
+                                    Apenas Meta Ads
+                                </button>
+                                <button
+                                    onClick={() => handleGlobalSync('shopee')}
+                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
+                                >
+                                    Apenas Shopee
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -2840,18 +2882,18 @@ export function CreativeTrack() {
             {newTrackModal}
 
             {/* Mobile: horizontal scroll tabs - MOVED HERE */}
-            <div className="flex md:hidden items-center gap-2 mb-2">
-                <button
-                    onClick={() => setShowArchived(!showArchived)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${showArchived
-                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                        : 'bg-surface-dark border-border-dark text-text-secondary'
-                        }`}
-                >
-                    {showArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                    {showArchived ? 'Ver Ativos' : 'Arquivados'}
-                </button>
-                <div className="flex overflow-x-auto gap-2 pb-1 hide-scrollbar shrink-0">
+            <div className="flex md:hidden items-center mb-2 overflow-hidden w-full">
+                <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar shrink-0 min-w-0 flex-1 px-1">
+                    <button
+                        onClick={() => setShowArchived(!showArchived)}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${showArchived
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                            : 'bg-surface-dark border-border-dark text-text-secondary'
+                            }`}
+                    >
+                        {showArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                        {showArchived ? 'Ver Ativos' : 'Arquivados'}
+                    </button>
                     {creativeTracks.map(track => {
                         const isActive = selectedTrack?.id === track.id;
                         return (
@@ -2925,52 +2967,10 @@ export function CreativeTrack() {
                     {!selectedTrack ? (
                         <div className="flex-1 flex flex-col gap-5">
                             {/* General Overview Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center justify-between gap-3 hidden md:flex">
                                 <div>
                                     <h2 className="text-xl font-bold text-white">Visão Geral</h2>
                                     <p className="text-text-secondary text-sm">Compilado de todos os criativos</p>
-                                </div>
-                                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                                    <span className="text-xs text-text-secondary bg-surface-dark px-3 py-1.5 rounded-lg border border-border-dark">
-                                        {creativeTracks.length} {creativeTracks.length === 1 ? 'criativo' : 'criativos'}
-                                    </span>
-
-                                    {/* Global Sync Dropdown */}
-                                    <div className="relative" ref={globalSyncMenuRef}>
-                                        <button
-                                            onClick={() => setShowGlobalSyncMenu(!showGlobalSyncMenu)}
-                                            disabled={isGlobalSyncing}
-                                            className="px-4 py-2 border border-primary/50 text-sm font-semibold text-primary rounded-xl hover:bg-primary hover:text-background-dark transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <RefreshCw className={`w-4 h-4 ${isGlobalSyncing ? 'animate-spin' : ''}`} />
-                                            {isGlobalSyncing ? 'Sincronizando...' : 'Sync Global'}
-                                            {!isGlobalSyncing && <ChevronDown className="w-4 h-4" />}
-                                        </button>
-
-                                        {showGlobalSyncMenu && !isGlobalSyncing && (
-                                            <div className="absolute right-0 mt-2 w-56 bg-surface-dark rounded-xl shadow-xl border border-border-dark py-2 z-50">
-                                                <button
-                                                    onClick={() => handleGlobalSync('all')}
-                                                    className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 transition-colors font-semibold"
-                                                >
-                                                    🚀 Sincronização Total
-                                                </button>
-                                                <div className="h-px w-full bg-border-dark my-1"></div>
-                                                <button
-                                                    onClick={() => handleGlobalSync('meta')}
-                                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
-                                                >
-                                                    Apenas Meta Ads
-                                                </button>
-                                                <button
-                                                    onClick={() => handleGlobalSync('shopee')}
-                                                    className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between"
-                                                >
-                                                    Apenas Shopee
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
                             </div>
 
@@ -3120,7 +3120,7 @@ export function CreativeTrack() {
                                     </div>
 
                                     {/* Mobile Card View */}
-                                    <div className="md:hidden flex flex-col gap-3 p-3 bg-background-dark/30">
+                                    <div className="md:hidden flex flex-col gap-3 p-3 bg-background-dark/30 w-full min-w-0">
                                         {trackRanking.map((row) => {
                                             const isUnmatched = row.isUnmatched;
                                             const statusColor = isUnmatched ? 'bg-red-500/20 text-red-400 border-red-500/30' :
@@ -3133,16 +3133,16 @@ export function CreativeTrack() {
                                                 <div
                                                     key={row.track.id}
                                                     onClick={() => !isUnmatched && handleSelectTrack(row.track)}
-                                                    className={`bg-surface-dark border rounded-2xl p-3 sm:p-4 shadow-lg transition-all flex flex-col gap-3 sm:gap-4 ${isUnmatched ? 'border-red-500/30 opacity-80' : 'border-border-dark active:scale-[0.98]'}`}
+                                                    className={`bg-surface-dark border rounded-2xl p-3 sm:p-4 shadow-lg transition-all flex flex-col gap-3 sm:gap-4 w-full min-w-0 ${isUnmatched ? 'border-red-500/30 opacity-80' : 'border-border-dark active:scale-[0.98]'}`}
                                                 >
                                                     {/* Card Header: Title & Status */}
-                                                    <div className="flex justify-between items-start">
+                                                    <div className="flex justify-between items-start gap-2 w-full min-w-0">
                                                         <div className="flex flex-col min-w-0 flex-1">
                                                             <h4 className={`font-bold text-base sm:text-lg leading-tight truncate ${isUnmatched ? 'text-red-400 italic' : 'text-white'}`}>
                                                                 {row.track.name}
                                                             </h4>
                                                             {row.track.sub_id && (
-                                                                <span className="text-[10px] text-text-secondary font-mono mt-1 px-1.5 py-0.5 bg-background-dark/50 rounded inline-block w-fit">
+                                                                <span className="text-[10px] text-text-secondary font-mono mt-1 px-1.5 py-0.5 bg-background-dark/50 rounded inline-block w-fit truncate max-w-full">
                                                                     {row.track.sub_id}
                                                                 </span>
                                                             )}
@@ -3150,8 +3150,8 @@ export function CreativeTrack() {
                                                                 <span className="text-[10px] text-red-400/70 mt-1">Conversões não vinculadas</span>
                                                             )}
                                                         </div>
-                                                        <div className="flex flex-col items-end gap-2">
-                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider ${statusColor}`}>
+                                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                                            <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider whitespace-nowrap ${statusColor}`}>
                                                                 {isUnmatched ? 'sem track' : row.track.status}
                                                             </span>
                                                             {!isUnmatched && <ChevronRight className="w-4 h-4 text-text-secondary/30" />}
@@ -3159,49 +3159,49 @@ export function CreativeTrack() {
                                                     </div>
 
                                                     {/* Card Body: Metrics Grid */}
-                                                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                                                    <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full min-w-0">
                                                         {/* Primary Group: Financials */}
-                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider">Lucro</span>
-                                                                <DollarSign className="w-3 h-3 text-text-secondary/50" />
+                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50 min-w-0">
+                                                            <div className="flex justify-between items-center gap-1">
+                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider truncate">Lucro</span>
+                                                                <DollarSign className="w-3 h-3 text-text-secondary/50 shrink-0" />
                                                             </div>
-                                                            <span className={`text-sm sm:text-base font-black ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                            <span className={`text-sm sm:text-base font-black truncate ${row.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                                                 R$ {formatBRL(row.profit)}
                                                             </span>
-                                                            <span className={`text-[10px] font-bold ${row.pct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                                                            <span className={`text-[10px] font-bold truncate ${row.pct >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
                                                                 {formatPct(row.pct)}% ROI
                                                             </span>
                                                         </div>
 
                                                         {/* Secondary Group: Volume */}
-                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider">Shopee</span>
-                                                                <ShoppingCart className="w-3 h-3 text-text-secondary/50" />
+                                                        <div className="bg-background-dark/40 rounded-xl p-2.5 sm:p-3 flex flex-col gap-0.5 sm:gap-1 border border-border-dark/50 min-w-0">
+                                                            <div className="flex justify-between items-center gap-1">
+                                                                <span className="text-[9px] sm:text-[10px] text-text-secondary uppercase font-bold tracking-wider truncate">Shopee</span>
+                                                                <ShoppingCart className="w-3 h-3 text-text-secondary/50 shrink-0" />
                                                             </div>
-                                                            <div className="flex items-baseline gap-1">
-                                                                <span className="text-sm sm:text-base font-bold text-blue-400">{row.orders}</span>
-                                                                <span className="text-[10px] text-text-secondary font-medium">pedidos</span>
+                                                            <div className="flex items-baseline gap-1 min-w-0">
+                                                                <span className="text-sm sm:text-base font-bold text-blue-400 truncate">{row.orders}</span>
+                                                                <span className="text-[10px] text-text-secondary font-medium truncate">pedidos</span>
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-primary">
+                                                            <span className="text-[10px] font-bold text-primary truncate">
                                                                 R$ {formatBRL(row.commission)} comissão
                                                             </span>
                                                         </div>
 
                                                         {/* Traffic Group */}
-                                                        <div className="col-span-2 bg-background-dark/20 rounded-xl px-3 py-2 flex items-center justify-between border border-border-dark/30">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold">Cliques Ads</span>
-                                                                    <span className="text-xs font-bold text-neutral-300">{row.adClicks.toLocaleString('pt-BR')}</span>
+                                                        <div className="col-span-2 bg-background-dark/20 rounded-xl px-3 py-2 flex items-center justify-between border border-border-dark/30 w-full min-w-0">
+                                                            <div className="flex items-center gap-4 min-w-0">
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold truncate">Cliques Ads</span>
+                                                                    <span className="text-xs font-bold text-neutral-300 truncate">{row.adClicks.toLocaleString('pt-BR')}</span>
                                                                 </div>
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold">Cliques Shopee</span>
-                                                                    <span className="text-xs font-bold text-neutral-300">{row.shopeeClicks.toLocaleString('pt-BR')}</span>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-[9px] text-text-secondary uppercase font-bold truncate">Cliques Shopee</span>
+                                                                    <span className="text-xs font-bold text-neutral-300 truncate">{row.shopeeClicks.toLocaleString('pt-BR')}</span>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex flex-col text-right">
+                                                            <div className="flex flex-col text-right shrink-0">
                                                                 <span className="text-[9px] text-text-secondary uppercase font-bold">CPC Médio</span>
                                                                 <span className="text-xs font-mono font-bold text-amber-400">R$ {formatBRL(row.cpc)}</span>
                                                             </div>

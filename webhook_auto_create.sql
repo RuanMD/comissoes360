@@ -70,5 +70,10 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Permite que a API (service_role ou anon) chame esta função
+-- SECURITY: Revoke all public access by default
+REVOKE ALL ON FUNCTION public.create_or_update_subscriber(TEXT, TEXT, TEXT, TEXT, TIMESTAMP WITH TIME ZONE) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_or_update_subscriber(TEXT, TEXT, TEXT, TEXT, TIMESTAMP WITH TIME ZONE) FROM anon, authenticated;
+
+-- Permite que APENAS o service_role (usado pelo n8n/backend seguro) chame esta função
 GRANT EXECUTE ON FUNCTION public.create_or_update_subscriber TO service_role;
+
