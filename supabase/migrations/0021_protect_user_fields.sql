@@ -5,11 +5,11 @@
 CREATE OR REPLACE FUNCTION public.check_user_privileges()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Only the service_role or a superuser should be able to change is_admin or subscription status
-    -- We use CURRENT_SETTING to check the role or a custom check.
-    -- In this case, we block any update to is_admin, subscription_status, or subscription_expires_at
-    -- unless the values are identical or the updater is an admin (if we had a specific admin check).
-    
+    -- Allow service_role to bypass these checks so backend/edge functions can update these fields.
+    IF current_setting('role') = 'service_role' OR current_setting('role') = 'postgres' THEN
+        RETURN NEW;
+    END IF;
+
     -- Safety check: Prevent changing is_admin if not authorized
     IF (OLD.is_admin IS DISTINCT FROM NEW.is_admin) THEN
         RAISE EXCEPTION 'You are not authorized to change the is_admin flag.';

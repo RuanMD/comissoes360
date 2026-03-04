@@ -40,7 +40,14 @@ serve(async (req) => {
         const { data: { user: adminUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
         if (authError || !adminUser) {
-            return new Response(JSON.stringify({ error: 'Unauthorized', details: authError?.message }), {
+            console.error('Auth verification failed:', authError)
+            return new Response(JSON.stringify({
+                error: 'Unauthorized',
+                message: 'Failed to verify admin token',
+                details: authError,
+                token_present: !!token,
+                token_length: token?.length
+            }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
