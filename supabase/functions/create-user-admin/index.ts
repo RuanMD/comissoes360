@@ -4,27 +4,43 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 serve(async (req) => {
+    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+        return new Response('ok', {
+            headers: corsHeaders,
+            status: 200
+        })
     }
 
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
+        if (!supabaseUrl || !supabaseServiceKey) {
+            throw new Error('Supabase environment variables are not set')
+        }
+
         // Create admin client
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
         // Get Auth user from token
-        const authHeader = req.headers.get('Authorization')!
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+            return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
         const token = authHeader.replace('Bearer ', '')
         const { data: { user: adminUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
         if (authError || !adminUser) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            return new Response(JSON.stringify({ error: 'Unauthorized', details: authError?.message }), {
                 status: 401,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
@@ -44,8 +60,15 @@ serve(async (req) => {
             })
         }
 
-        // Request body
-        const { full_name, email, phone, password, plan_id, days } = await req.json()
+        // Request body validation
+        let body;
+        try {
+            body = await req.json()
+        } catch (e) {
+            throw new Error('Invalid JSON body')
+        }
+
+        const { full_name, email, phone, password, plan_id, days } = body
 
         if (!email || !password) {
             throw new Error('E-mail and password are required')
@@ -64,7 +87,7 @@ serve(async (req) => {
 
         const userId = newUser.user.id
         const expiresAt = new Date()
-        expiresAt.setDate(expiresAt.getDate() + (parseInt(days) || 1))
+        expiresAt.setDate(expiresAt.getDate() + (parseInt(days) || 30))
 
         // 2. Update public.users (trigger handle_new_user might have created a record already)
         // We update it with the specific plan and duration
@@ -81,11 +104,11 @@ serve(async (req) => {
             .eq('id', userId)
 
         if (updateError) {
-            // If update fails, we might want to cleanup the auth user, but for now we log it
             console.error('Error updating public profile:', updateError)
             return new Response(JSON.stringify({
                 success: false,
-                error: 'User created but profile update failed: ' + updateError.message
+                error: 'User created but profile update failed: ' + updateError.message,
+                userId: userId
             }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -101,7 +124,11 @@ serve(async (req) => {
         })
 
     } catch (error: any) {
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error('Function execution error:', error.message)
+        return new Response(JSON.stringify({
+            error: error.message,
+            stack: Deno.env.get('ENVIRONMENT') === 'development' ? error.stack : undefined
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400,
         })
