@@ -100,9 +100,11 @@ export function Channels() {
                         <div className="p-2 bg-green-500/10 rounded-lg border border-green-500/20">
                             <TrendingUp className="text-green-500 w-5 h-5" />
                         </div>
-                        <span className="text-text-secondary text-sm font-medium">Total Vendas</span>
+                        <div>
+                            <p className="text-sm text-text-secondary">Total Vendas</p>
+                            <p className="font-bold text-xl">{metrics.totalSalesCount.toLocaleString('pt-BR')}</p>
+                        </div>
                     </div>
-                    <div className="text-2xl font-bold text-white tracking-tight">{metrics.totalOrders.toLocaleString('pt-BR')}</div>
                 </div>
 
                 <div className="bg-surface-dark border border-border-dark p-5 rounded-2xl transition-all hover:border-yellow-500/30">
@@ -130,7 +132,7 @@ export function Channels() {
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('name')}>
                                     <div className="flex items-center gap-1.5">Canal <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
-                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('clicks')}>
+                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors pr-10" onClick={() => requestSort('clicks')}>
                                     <div className="flex items-center justify-end gap-1.5">Cliques <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('orders')}>
@@ -153,7 +155,7 @@ export function Channels() {
                                             {item.channel}
                                         </div>
                                     </td>
-                                    <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.clicks.toLocaleString('pt-BR')}</td>
+                                    <td className="p-4 text-sm text-text-secondary text-right font-mono pr-10">{item.clicks.toLocaleString('pt-BR')}</td>
                                     <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.orders.toLocaleString('pt-BR')}</td>
                                     <td className="p-4 text-sm text-right">
                                         <div className="flex items-center justify-end gap-2.5">
@@ -163,7 +165,7 @@ export function Channels() {
                                                     style={{ width: `${Math.min(parseFloat(item.conversion.replace(',', '.')) * 10, 100)}%` }}>
                                                 </div>
                                             </div>
-                                            <span className="font-mono text-white text-xs">{item.conversion}%</span>
+                                            <span className="font-mono text-white text-xs whitespace-nowrap">{item.conversion}%</span>
                                         </div>
                                     </td>
                                     <td className="p-4 text-sm text-primary font-bold text-right font-mono">
@@ -172,6 +174,15 @@ export function Channels() {
                                 </tr>
                             ))}
                         </tbody>
+                        <tfoot>
+                            <tr className="bg-primary/5 border-t-2 border-primary/30 font-bold">
+                                <td className="p-4 text-sm text-white">Totais do Ranking</td>
+                                <td className="p-4 text-sm text-white text-right font-mono pr-10">{metrics.totalClicks.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.totalSalesCount.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.conversionRate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                                <td className="p-4 text-sm text-primary text-right font-mono">R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>

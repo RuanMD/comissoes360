@@ -136,7 +136,7 @@ export function DirectsVsIndirects() {
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('type')}>
                                     <div className="flex items-center gap-1.5">Tipo <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
-                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('clicks')}>
+                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors pr-10" onClick={() => requestSort('clicks')}>
                                     <div className="flex items-center justify-end gap-1.5">Cliques <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('orders')}>
@@ -162,7 +162,7 @@ export function DirectsVsIndirects() {
                                             {item.type}
                                         </div>
                                     </td>
-                                    <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.clicks.toLocaleString('pt-BR')}</td>
+                                    <td className="p-4 text-sm text-text-secondary text-right font-mono pr-10">{item.clicks.toLocaleString('pt-BR')}</td>
                                     <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.orders.toLocaleString('pt-BR')}</td>
                                     <td className="p-4 text-sm text-white text-right font-mono">{item.conversion}%</td>
                                     <td className="p-4 text-sm text-text-secondary text-right font-mono">R$ {item.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
@@ -173,9 +173,9 @@ export function DirectsVsIndirects() {
                         <tfoot>
                             <tr className="bg-primary/5 border-t-2 border-primary/30 font-bold">
                                 <td className="p-4 text-sm text-white">Totais</td>
-                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.totalClicks.toLocaleString('pt-BR')}</td>
-                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.totalOrders.toLocaleString('pt-BR')}</td>
-                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.conversionRate}%</td>
+                                <td className="p-4 text-sm text-white text-right font-mono pr-10">{metrics.totalClicks.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.totalSalesCount.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono">{metrics.conversionRate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
                                 <td className="p-4 text-sm text-white text-right font-mono">R$ {metrics.totalOrderValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                 <td className="p-4 text-sm text-primary text-right font-mono">R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             </tr>

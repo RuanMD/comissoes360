@@ -321,7 +321,7 @@ export function SubIdAnalysis() {
                     </div>
                     <div>
                         <p className="text-sm text-text-secondary">Total Vendas</p>
-                        <p className="font-bold text-xl">{metrics.totalOrders.toLocaleString('pt-BR')}</p>
+                        <p className="font-bold text-xl">{metrics.totalSalesCount.toLocaleString('pt-BR')}</p>
                     </div>
                 </div>
 
@@ -369,10 +369,10 @@ export function SubIdAnalysis() {
                         <thead>
                             <tr className="bg-background-dark/50 border-b border-border-dark">
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('subId')}>
-                                    <div className="flex items-center gap-1.5">Sub ID <ArrowUpDown className="w-3.5 h-3.5" /></div>
+                                    <div className="flex items-center gap-1.5 justify-start">Sub ID <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
 
-                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('clicks')}>
+                                <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors pr-10" onClick={() => requestSort('clicks')}>
                                     <div className="flex items-center justify-end gap-1.5">Cliques <ArrowUpDown className="w-3.5 h-3.5" /></div>
                                 </th>
                                 <th className="p-4 text-xs font-bold text-text-secondary uppercase tracking-wider text-right cursor-pointer hover:text-white transition-colors" onClick={() => requestSort('orders')}>
@@ -422,17 +422,17 @@ export function SubIdAnalysis() {
                                                 </div>
                                             </td>
 
-                                            <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.clicks.toLocaleString('pt-BR')}</td>
+                                            <td className="p-4 text-sm text-text-secondary text-right font-mono pr-10">{item.clicks.toLocaleString('pt-BR')}</td>
                                             <td className="p-4 text-sm text-text-secondary text-right font-mono">{item.orders.toLocaleString('pt-BR')}</td>
                                             <td className="p-4 text-sm text-right">
                                                 <div className="flex items-center justify-end gap-2.5">
                                                     <div className="w-12 h-1.5 bg-background-dark rounded-full overflow-hidden hidden sm:block">
                                                         <div
-                                                            className={`h-full ${parseFloat(item.conversion) > 5 ? 'bg-green-500' : 'bg-primary'}`}
+                                                            className={`h-full ${parseFloat(item.conversion.replace(',', '.')) > 5 ? 'bg-green-500' : 'bg-primary'}`}
                                                             style={{ width: `${Math.min(parseFloat(item.conversion.replace(',', '.')) * 10, 100)}%` }}>
                                                         </div>
                                                     </div>
-                                                    <span className="font-mono text-white text-xs">{item.conversion}%</span>
+                                                    <span className="font-mono text-white text-xs whitespace-nowrap">{item.conversion}%</span>
                                                 </div>
                                             </td>
                                             <td className="p-4 text-sm text-primary font-bold text-right font-mono">
@@ -641,10 +641,10 @@ export function SubIdAnalysis() {
                         </tbody>
                         <tfoot>
                             <tr className="bg-primary/5 border-t-2 border-primary/30">
-                                <td className="p-4 text-sm font-bold text-white" colSpan={2}>Totais do Ranking</td>
-                                <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.totalClicks.toLocaleString('pt-BR')}</td>
-                                <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.totalOrders.toLocaleString('pt-BR')}</td>
-                                <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.conversionRate}%</td>
+                                <td className="p-4 text-sm font-bold text-white text-left">Totais do Ranking</td>
+                                <td className="p-4 text-sm text-white text-right font-mono font-bold pr-10">{metrics.totalClicks.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.totalSalesCount.toLocaleString('pt-BR')}</td>
+                                <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.conversionRate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
                                 <td className="p-4 text-sm text-primary font-bold text-right font-mono">R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                 {showTrackColumn && <td></td>}
                             </tr>

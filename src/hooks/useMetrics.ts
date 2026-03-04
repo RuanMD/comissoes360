@@ -188,11 +188,17 @@ export function useMetrics() {
             _attribution: item.attribution_type
         }));
 
-        const unifiedMap = new Map<string, any>();
-        filteredDb.forEach(item => { if (item['ID do pedido']) unifiedMap.set(item['ID do pedido'], item); });
-        filteredCsv.forEach(item => { if (item['ID do pedido']) unifiedMap.set(item['ID do pedido'], item); });
+        const dbOrderIds = new Set(filteredDb.map(item => item['ID do pedido']).filter(Boolean));
 
-        return Array.from(unifiedMap.values());
+        const combined = [
+            ...filteredDb,
+            ...filteredCsv.filter(item => {
+                const orderId = item['ID do pedido'];
+                return orderId && !dbOrderIds.has(orderId);
+            })
+        ];
+
+        return combined;
     }, [commissionData, dbConversions, dateFilter, customRange]);
     // Helper for robust Sub_ID normalization: removes double hyphens, trailing/leading hyphens, and trims
     const normalizeSubId = (sid: any): string => {
@@ -231,7 +237,8 @@ export function useMetrics() {
     const metrics = useMemo(() => {
         let totalNetCommission = 0;
         let totalOrderValue = 0;
-        let totalOrders = unifiedCommission.length;
+        let totalSalesCount = 0; // Total sum of quantities
+        let totalOrders = 0; // Distinct order IDs
         let totalClicks = 0; // Will be calculated from shopee_clicks
         let totalAdClicks = 0;
         let totalInvestment = 0;
@@ -428,6 +435,9 @@ export function useMetrics() {
             const orderVal = parseCurrency(item['Valor de Compra(R$)']);
             totalNetCommission += netComm;
             totalOrderValue += orderVal;
+            const itemQty = Number(item._qty) || Number(item['Quantidade de itens']) || 1;
+            totalSalesCount += itemQty;
+            totalOrders += 1;
 
             const attribution = item['Tipo de atribuição'] || '';
             if (attribution.toLowerCase().includes('mesma loja')) directsCount++;
@@ -468,23 +478,30 @@ export function useMetrics() {
             }
 
             if (!subIdStats[canonical]) subIdStats[canonical] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
-            subIdStats[canonical].orders += 1;
+            subIdStats[canonical].orders += itemQty;
             subIdStats[canonical].commission += netComm;
 
             if (!subIdDetails[canonical]) subIdDetails[canonical] = { products: {}, channelBreakdown: {}, orders: [] };
             const prodName = item['Nome do Item'] || 'Item Desconhecido';
             if (!subIdDetails[canonical].products[prodName]) subIdDetails[canonical].products[prodName] = { count: 0, commission: 0 };
-            subIdDetails[canonical].products[prodName].count += 1;
+            subIdDetails[canonical].products[prodName].count += itemQty;
             subIdDetails[canonical].products[prodName].commission += netComm;
-            subIdDetails[canonical].orders.push({ orderId: item['ID do pedido'] || '—', product: prodName, commission: netComm, status: item['Status do Pedido'] || '—', date: item['Horário do pedido'] || '—' });
+            subIdDetails[canonical].orders.push({
+                orderId: item['ID do pedido'] || '—',
+                product: prodName,
+                commission: netComm,
+                status: item['Status do Pedido'] || '—',
+                date: item['Horário do pedido'] || '—',
+                qty: itemQty
+            } as any);
 
             if (!productCounts[prodName]) productCounts[prodName] = { count: 0, commission: 0 };
-            productCounts[prodName].count += 1;
+            productCounts[prodName].count += itemQty;
             productCounts[prodName].commission += netComm;
 
             const catName = item['Categoria Global L1'] || 'Sem Categoria';
             if (!categoryStats[catName]) categoryStats[catName] = { count: 0, commission: 0 };
-            categoryStats[catName].count += 1;
+            categoryStats[catName].count += itemQty;
             categoryStats[catName].commission += netComm;
 
             let assignedChannel = item['Canal'] && item['Canal'] !== 'Desconhecido' ? item['Canal'] : 'Desconhecido';
@@ -504,11 +521,11 @@ export function useMetrics() {
             }
 
             if (!channelStats[assignedChannel]) channelStats[assignedChannel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
-            channelStats[assignedChannel].orders += 1;
+            channelStats[assignedChannel].orders += itemQty;
             channelStats[assignedChannel].commission += netComm;
 
             if (!subIdDetails[canonical].channelBreakdown[assignedChannel]) subIdDetails[canonical].channelBreakdown[assignedChannel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
-            subIdDetails[canonical].channelBreakdown[assignedChannel].orders += 1;
+            subIdDetails[canonical].channelBreakdown[assignedChannel].orders += itemQty;
             subIdDetails[canonical].channelBreakdown[assignedChannel].commission += netComm;
 
             const dateObj = parseShopeeDate(item['Horário do pedido']);
@@ -587,7 +604,7 @@ export function useMetrics() {
                     isDirect: order.type === 'Direta'
                 },
                 metrics: {
-                    orders: 1,
+                    orders: order.qty,
                     revenue: order.revenue,
                     commission: order.commission,
                     clicks: traffic.clicks * ratio,
@@ -658,7 +675,7 @@ export function useMetrics() {
                 clicks: Math.round(m.clicks),
                 orders: m.orders,
                 investment: m.investment,
-                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
                 revenue: m.revenue,
                 commission: m.commission,
                 epc: m.clicks > 0 ? m.commission / m.clicks : 0,
@@ -674,7 +691,7 @@ export function useMetrics() {
                 adClicks: Math.round(m.adClicks),
                 orders: m.orders,
                 investment: m.investment,
-                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
                 revenue: m.revenue,
                 commission: m.commission,
                 epc: m.clicks > 0 ? m.commission / m.clicks : 0,
@@ -691,7 +708,7 @@ export function useMetrics() {
                 revenue: m.revenue,
                 commission: m.commission,
                 investment: m.investment,
-                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
                 epc: m.clicks > 0 ? m.commission / m.clicks : 0,
             }))
             .sort((a, b) => b.commission - a.commission);
@@ -719,8 +736,8 @@ export function useMetrics() {
             adClicks: Math.round(m.adClicks),
             investment: m.investment,
             revenue: m.revenue,
-            conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-            roas: m.investment > 0 ? (m.commission / m.investment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+            conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
+            roas: m.investment > 0 ? (m.commission / m.investment).toFixed(2).replace('.', ',') : '0,00'
         })).sort((a, b) => b.commission - a.commission);
 
         // funnelByDirectVsIndirect aggregation
@@ -747,8 +764,8 @@ export function useMetrics() {
             adClicks: Math.round(m.adClicks),
             investment: m.investment,
             revenue: m.revenue,
-            conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-            roas: m.investment > 0 ? (m.commission / m.investment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+            conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
+            roas: m.investment > 0 ? (m.commission / m.investment).toFixed(2).replace('.', ',') : '0,00'
         }));
 
         const funnelByHour = Array.from({ length: 24 }, (_, i) => {
@@ -762,7 +779,7 @@ export function useMetrics() {
                 adClicks: Math.round(m.adClicks),
                 investment: m.investment,
                 revenue: m.revenue,
-                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                conversion: m.clicks > 0 ? (m.orders / m.clicks * 100).toFixed(2).replace('.', ',') : '0,00',
             };
         });
 
@@ -794,8 +811,9 @@ export function useMetrics() {
             funnelByDirectVsIndirect,
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             allOrders, productRanking, allProducts, categoriesRanking, channelsRanking,
-            conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100) : 0,
-            adClickToShopeeRate: totalAdClicks > 0 ? ((totalClicks / totalAdClicks) * 100) : 0,
+            totalSalesCount,
+            conversionRate: totalClicks > 0 ? Number((totalSalesCount / totalClicks * 100).toFixed(2)) : 0,
+            adClickToShopeeRate: totalAdClicks > 0 ? Number((totalClicks / totalAdClicks * 100).toFixed(2)) : 0,
             directsVsIndirects: [
                 { name: 'Diretas', value: directsCount, fill: '#f2a20d' },
                 { name: 'Indiretas', value: indirectsCount, fill: '#3b82f6' }

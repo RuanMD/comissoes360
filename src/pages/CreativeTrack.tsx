@@ -241,7 +241,7 @@ export function CreativeTrack() {
     const [newTrackLink, setNewTrackLink] = useState('');
     const [newTrackSubId, setNewTrackSubId] = useState('');
 
-    const [showArchived, setShowArchived] = useState(false);
+    const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active');
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>(() => {
         const saved = localStorage.getItem('creativeTrack_viewMode');
         return saved === 'kanban' ? 'kanban' : 'list';
@@ -251,9 +251,13 @@ export function CreativeTrack() {
     const creativeTracks = useMemo(() => {
         return tracks
             .filter(t => !t.name.startsWith('Orgânico -'))
-            .filter(t => !!t.is_archived === showArchived)
+            .filter(t => {
+                if (archiveFilter === 'active') return !t.is_archived;
+                if (archiveFilter === 'archived') return !!t.is_archived;
+                return true; // 'all'
+            })
             .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true }));
-    }, [tracks, showArchived]);
+    }, [tracks, archiveFilter]);
 
     const nextSubId = useMemo(() => {
         const numbers = tracks
@@ -428,10 +432,17 @@ export function CreativeTrack() {
     const [showGlobalSyncMenu, setShowGlobalSyncMenu] = useState(false);
     const globalSyncMenuRef = useRef<HTMLDivElement>(null);
 
+    // Archive Filter state
+    const [showArchiveFilterMenu, setShowArchiveFilterMenu] = useState(false);
+    const archiveFilterMenuRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (globalSyncMenuRef.current && !globalSyncMenuRef.current.contains(event.target as Node)) {
                 setShowGlobalSyncMenu(false);
+            }
+            if (archiveFilterMenuRef.current && !archiveFilterMenuRef.current.contains(event.target as Node)) {
+                setShowArchiveFilterMenu(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -447,6 +458,22 @@ export function CreativeTrack() {
     const [linkedFunnel, setLinkedFunnel] = useState<LinkedFunnel | null>(null);
     const [showFunnelPicker, setShowFunnelPicker] = useState(false);
     const [hideSensitive, setHideSensitive] = useState(false);
+
+    // Dynamic Status Style Helper
+    const getStatusStyle = (statusName: string = '') => {
+        const found = statuses?.find(s => s.slug === statusName || s.name.toLowerCase() === statusName.toLowerCase());
+        if (found) {
+            return {
+                color: found.color,
+                icon: found.icon
+            };
+        }
+        // Fallbacks
+        if (statusName === 'ativo') return { color: '#22c55e', icon: 'PlayCircle' };
+        if (statusName === 'validado') return { color: '#3b82f6', icon: 'CheckCircle2' };
+        if (statusName === 'rascunho') return { color: '#ffffff', icon: 'HelpCircle' };
+        return { color: '#ef4444', icon: 'StopCircle' }; // off/etc
+    };
     const [allEntries, setAllEntries] = useState<TrackEntry[]>([]);
 
     const trackEntryCounts = useMemo(() => {
@@ -594,13 +621,18 @@ export function CreativeTrack() {
     }, [trackKpiOrder]);
 
     useEffect(() => {
-        if (user) {
-            fetchTracks();
-            fetchFbToken();
-            fetchUserFunnels();
-            fetchAllEntries();
-            fetchAllUserConversions();
-        }
+        const initData = async () => {
+            if (user) {
+                const currentTracks = await fetchTracks();
+                fetchFbToken();
+                fetchUserFunnels();
+
+                // Pass currentTracks to ensure fetchAllEntries has the latest data immediately
+                fetchAllEntries(currentTracks.map(t => t.id));
+                fetchAllUserConversions();
+            }
+        };
+        initData();
     }, [user?.id]);
 
     const fetchTracks = async () => {
@@ -612,28 +644,40 @@ export function CreativeTrack() {
                 .eq('user_id', user!.id)
                 .order('name', { ascending: true });
             if (error) throw error;
-            setTracks(data || []);
+            const trackList = data || [];
+            setTracks(trackList);
+            return trackList;
         } catch (error) {
             console.error('Erro ao carregar tracks:', error);
             showToast('Erro ao carregar tracks.', 'error');
+            return [];
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchAllEntries = async () => {
+    const fetchAllEntries = async (trackIdsOverride?: string[]) => {
         if (!user) return;
-        const { data: userTracks } = await supabase
-            .from('creative_tracks')
-            .select('id')
-            .eq('user_id', user.id);
-        if (userTracks && userTracks.length > 0) {
-            const trackIds = userTracks.map(t => t.id);
+
+        let trackIds = trackIdsOverride;
+        if (!trackIds) {
+            const { data: userTracks } = await supabase
+                .from('creative_tracks')
+                .select('id')
+                .eq('user_id', user.id);
+            if (userTracks && userTracks.length > 0) {
+                trackIds = userTracks.map(t => t.id);
+            }
+        }
+
+        if (trackIds && trackIds.length > 0) {
             const { data } = await supabase
                 .from('creative_track_entries')
                 .select('*')
                 .in('track_id', trackIds);
             setAllEntries(data || []);
+        } else {
+            setAllEntries([]);
         }
     };
 
@@ -1711,6 +1755,13 @@ export function CreativeTrack() {
         setIsGlobalSyncing(true);
         setShowGlobalSyncMenu(false);
         try {
+            // Get current tracks for updated state reference
+            const currentTracks = tracks.length > 0 ? tracks : await fetchTracks();
+            if (!currentTracks || currentTracks.length === 0) {
+                showToast('Nenhum track encontrado para sincronizar.', 'info');
+                return;
+            }
+
             const globalEntriesMap = new Map<string, {
                 ad_clicks?: number;
                 shopee_clicks?: number;
@@ -1754,7 +1805,7 @@ export function CreativeTrack() {
                             for (const item of order.items) {
                                 // Match by product_item_id OR sub_id in utmContent (normalize separators)
                                 const normUtmContent = node.utmContent ? node.utmContent.replace(/[-,\s]+/g, '').toLowerCase() : '';
-                                const matchedTrack = tracks.find(t => {
+                                const matchedTrack = currentTracks.find(t => {
                                     if (t.product_item_id && item.itemId && Number(item.itemId) === Number(t.product_item_id)) return true;
                                     if (!t.sub_id || !normUtmContent) return false;
                                     const normTSub = t.sub_id.replace(/[-,\s]+/g, '').toLowerCase();
@@ -1878,7 +1929,7 @@ export function CreativeTrack() {
             }
 
             // 2. Process Meta Data
-            if ((mode === 'all' || mode === 'meta') && tracks.length > 0) {
+            if ((mode === 'all' || mode === 'meta') && currentTracks.length > 0) {
                 if (!fbToken) {
                     showToast('Token do Facebook não configurado.', 'error');
                 } else {
@@ -1970,7 +2021,7 @@ export function CreativeTrack() {
                 }
             }
 
-            await fetchAllEntries();
+            await fetchAllEntries(currentTracks.map(t => t.id));
             await fetchAllUserConversions();
             if (selectedTrack) {
                 const { data: trackEntries } = await supabase.from('creative_track_entries').select('*').eq('track_id', selectedTrack.id).order('date', { ascending: false });
@@ -2452,7 +2503,7 @@ export function CreativeTrack() {
             untrackedDirectOrders, untrackedIndirectOrders, untrackedDirectValue, untrackedIndirectValue,
             completedOrders, completedValue, pendingOrders, pendingValue, cancelledOrders, cancelledValue
         };
-    }, [filteredAllEntries, allUserConversions, dateFilter, customRange, creativeTracks, showArchived]);
+    }, [filteredAllEntries, allUserConversions, dateFilter, customRange, creativeTracks, archiveFilter]);
 
     // ========== TRACK RANKING ==========
     const trackRanking = useMemo(() => {
@@ -2893,16 +2944,42 @@ export function CreativeTrack() {
                     {/* Mobile: horizontal scroll tabs - MOVED HERE */}
                     <div className="flex md:hidden items-center mb-2 overflow-hidden w-full">
                         <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar shrink-0 min-w-0 flex-1 px-1">
-                            <button
-                                onClick={() => setShowArchived(!showArchived)}
-                                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${showArchived
-                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                                    : 'bg-surface-dark border-border-dark text-text-secondary'
-                                    }`}
-                            >
-                                {showArchived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                                {showArchived ? 'Ver Ativos' : 'Arquivados'}
-                            </button>
+                            <div className="relative shrink-0" ref={archiveFilterMenuRef}>
+                                <button
+                                    onClick={() => setShowArchiveFilterMenu(!showArchiveFilterMenu)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${archiveFilter !== 'active'
+                                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                                        : 'bg-surface-dark border-border-dark text-text-secondary'
+                                        }`}
+                                >
+                                    {archiveFilter === 'archived' ? <Archive className="w-3.5 h-3.5" /> : (archiveFilter === 'all' ? <LayoutList className="w-3.5 h-3.5" /> : <ArchiveRestore className="w-3.5 h-3.5" />)}
+                                    {archiveFilter === 'active' ? 'Ativos' : (archiveFilter === 'archived' ? 'Arquivados' : 'Todos')}
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${showArchiveFilterMenu ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {showArchiveFilterMenu && (
+                                    <div className="absolute left-0 mt-2 w-36 bg-surface-dark rounded-xl shadow-xl border border-border-dark py-1.5 z-[60] animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <button
+                                            onClick={() => { setArchiveFilter('active'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/5 ${archiveFilter === 'active' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <ArchiveRestore className="w-3.5 h-3.5" /> Ativos
+                                        </button>
+                                        <button
+                                            onClick={() => { setArchiveFilter('archived'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/5 ${archiveFilter === 'archived' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <Archive className="w-3.5 h-3.5" /> Arquivados
+                                        </button>
+                                        <button
+                                            onClick={() => { setArchiveFilter('all'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/5 ${archiveFilter === 'all' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <LayoutList className="w-3.5 h-3.5" /> Todos
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                             {creativeTracks.map(track => {
                                 const isActive = selectedTrack?.id === track.id;
                                 return (
@@ -2930,16 +3007,44 @@ export function CreativeTrack() {
                     <div className="flex gap-4 min-h-0">
                         {/* Left: Tracks List */}
                         <div className="w-48 flex-shrink-0 flex flex-col gap-3 hidden md:flex">
-                            <button
-                                onClick={() => setShowArchived(!showArchived)}
-                                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${showArchived
-                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
-                                    : 'bg-surface-dark border-border-dark text-text-secondary hover:border-primary/30 hover:text-white'
-                                    }`}
-                            >
-                                {showArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                                {showArchived ? 'Ver Ativos' : 'Ver Arquivados'}
-                            </button>
+                            <div className="relative" ref={archiveFilterMenuRef}>
+                                <button
+                                    onClick={() => setShowArchiveFilterMenu(!showArchiveFilterMenu)}
+                                    className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${archiveFilter !== 'active'
+                                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-lg shadow-amber-500/10'
+                                        : 'bg-surface-dark border-border-dark text-text-secondary hover:border-primary/30 hover:text-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {archiveFilter === 'archived' ? <Archive className="w-4 h-4" /> : (archiveFilter === 'all' ? <LayoutList className="w-4 h-4" /> : <ArchiveRestore className="w-4 h-4" />)}
+                                        {archiveFilter === 'active' ? 'Ver Ativos' : (archiveFilter === 'archived' ? 'Ver Arquivados' : 'Ver Todos')}
+                                    </div>
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showArchiveFilterMenu ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {showArchiveFilterMenu && (
+                                    <div className="absolute left-0 top-full mt-2 w-full bg-surface-dark rounded-xl shadow-2xl border border-border-dark py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <button
+                                            onClick={() => { setArchiveFilter('active'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors hover:bg-white/5 ${archiveFilter === 'active' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <ArchiveRestore className="w-4 h-4" /> Ativos
+                                        </button>
+                                        <button
+                                            onClick={() => { setArchiveFilter('archived'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors hover:bg-white/5 ${archiveFilter === 'archived' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <Archive className="w-4 h-4" /> Arquivados
+                                        </button>
+                                        <button
+                                            onClick={() => { setArchiveFilter('all'); setShowArchiveFilterMenu(false); }}
+                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2.5 transition-colors hover:bg-white/5 ${archiveFilter === 'all' ? 'text-primary font-bold' : 'text-text-secondary'}`}
+                                        >
+                                            <LayoutList className="w-4 h-4" /> Todos
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar">
                                 {creativeTracks.map(track => {
                                     const isActive = selectedTrack?.id === track.id;
@@ -2963,11 +3068,11 @@ export function CreativeTrack() {
                                                 )}
                                             </div>
                                             <div
-                                                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-[0_0_8px] transition-all ${track.status === 'ativo' ? 'bg-green-500 shadow-green-500/50' :
-                                                    track.status === 'validado' ? 'bg-blue-500 shadow-blue-500/50' :
-                                                        track.status === 'rascunho' ? 'bg-white shadow-white/50' :
-                                                            'bg-red-500 shadow-red-500/50'
-                                                    }`}
+                                                className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-[0_0_8px] transition-all"
+                                                style={{
+                                                    backgroundColor: getStatusStyle(track.status).color,
+                                                    boxShadow: `0 0 8px ${getStatusStyle(track.status).color}80`
+                                                }}
                                                 title={track.status.charAt(0).toUpperCase() + track.status.slice(1)}
                                             />
                                             {trackEntryCounts[track.id] > 0 && (
@@ -3072,7 +3177,7 @@ export function CreativeTrack() {
                                                     <tbody>
                                                         {trackRanking.map((row) => {
                                                             const isUnmatched = row.isUnmatched;
-                                                            const statusColor = isUnmatched ? 'bg-red-500' : row.track.status === 'ativo' ? 'bg-green-500' : row.track.status === 'validado' ? 'bg-blue-500' : 'bg-red-500';
+                                                            const statusStyle = getStatusStyle(row.track.status);
                                                             return (
                                                                 <tr
                                                                     key={row.track.id}
@@ -3087,7 +3192,10 @@ export function CreativeTrack() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-3 text-center">
-                                                                        <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
+                                                                        <span
+                                                                            className={`inline-block w-2 h-2 rounded-full ${isUnmatched ? 'bg-red-500' : ''}`}
+                                                                            style={!isUnmatched ? { backgroundColor: statusStyle.color, boxShadow: `0 0 6px ${statusStyle.color}80` } : {}}
+                                                                        />
                                                                     </td>
                                                                     <td className="p-3 text-right text-neutral-300">{row.adClicks.toLocaleString('pt-BR')}</td>
                                                                     <td className="p-3 text-right text-neutral-300">{row.shopeeClicks.toLocaleString('pt-BR')}</td>
@@ -3108,11 +3216,11 @@ export function CreativeTrack() {
                                             <div className="md:hidden flex flex-col gap-3 p-3 bg-background-dark/30 w-full min-w-0">
                                                 {trackRanking.map((row) => {
                                                     const isUnmatched = row.isUnmatched;
-                                                    const statusColor = isUnmatched ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                                                        row.track.status === 'ativo' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                                                            row.track.status === 'validado' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                                                                row.track.status === 'rascunho' ? 'bg-white/10 text-white border-white/20' :
-                                                                    'bg-red-500/20 text-red-400 border-red-500/30';
+                                                    const statusStyle = getStatusStyle(row.track.status);
+
+                                                    const customStatusStyle = isUnmatched
+                                                        ? { backgroundColor: '#ef444420', color: '#f87171', border: '1px solid #ef44444d' }
+                                                        : { backgroundColor: `${statusStyle.color}20`, color: statusStyle.color, border: `1px solid ${statusStyle.color}4d` };
 
                                                     return (
                                                         <div
@@ -3136,8 +3244,11 @@ export function CreativeTrack() {
                                                                     )}
                                                                 </div>
                                                                 <div className="flex flex-col items-end gap-2 shrink-0">
-                                                                    <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider whitespace-nowrap ${statusColor}`}>
-                                                                        {isUnmatched ? 'sem track' : row.track.status}
+                                                                    <span
+                                                                        className="text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider whitespace-nowrap"
+                                                                        style={customStatusStyle}
+                                                                    >
+                                                                        {isUnmatched ? 'sem track' : (statuses?.find(s => s.slug === row.track.status || s.name.toLowerCase() === row.track.status.toLowerCase())?.name || row.track.status)}
                                                                     </span>
                                                                     {!isUnmatched && <ChevronRight className="w-4 h-4 text-text-secondary/30" />}
                                                                 </div>
@@ -3202,8 +3313,8 @@ export function CreativeTrack() {
                             ) : (
                                 <>
                                     {/* Track Header */}
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                        <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 min-w-0">
+                                        <div className="flex flex-col gap-3 flex-1 min-w-0">
                                             <div className="flex items-start gap-3">
                                                 <div className="flex flex-col gap-1">
                                                     {editingTrack ? (
@@ -3214,8 +3325,8 @@ export function CreativeTrack() {
                                                             autoFocus
                                                         />
                                                     ) : (
-                                                        <div className="flex items-center gap-2 group">
-                                                            <h2 className={`text-lg sm:text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
+                                                        <div className="flex items-center gap-2 group min-w-0 w-full max-w-full">
+                                                            <h2 className={`text-lg sm:text-xl font-bold text-white transition-all truncate flex-1 md:max-w-[450px] lg:max-w-[600px] ${hideSensitive ? 'blur-md select-none' : ''}`} title={selectedTrack.name}>
                                                                 {selectedTrack.name}
                                                             </h2>
                                                             <div className="flex items-center gap-1">
@@ -3251,7 +3362,7 @@ export function CreativeTrack() {
                                                         </div>
                                                     )}
                                                     {selectedTrack.sub_id && !editingTrack && (
-                                                        <span className={`w-fit px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                        <span className={`w-fit max-w-[250px] sm:max-w-[400px] px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all truncate ${hideSensitive ? 'blur-sm select-none' : ''}`} title={selectedTrack.sub_id}>
                                                             {selectedTrack.sub_id}
                                                         </span>
                                                     )}
@@ -3336,7 +3447,7 @@ export function CreativeTrack() {
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2 flex-wrap shrink-0">
                                             {editingTrack ? (
                                                 <div className="flex items-center gap-2">
                                                     <button onClick={() => setEditingTrack(false)} className="px-3 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm"><X className="w-4 h-4" /></button>
