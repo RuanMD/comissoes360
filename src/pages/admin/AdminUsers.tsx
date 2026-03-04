@@ -6,6 +6,7 @@ import { Loader2, Search, ChevronLeft, ChevronRight, Shield, ShieldOff, Calendar
 import { format, addDays, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ALL_FEATURE_KEYS, FEATURE_LABELS, FeatureKey } from '../../hooks/useFeatureAccess';
+import { AddUserModal } from '../../components/admin/AddUserModal';
 
 interface UserRow {
     id: string;
@@ -16,6 +17,8 @@ interface UserRow {
     created_at: string;
     plan_id: string | null;
     feature_overrides: Record<string, boolean>;
+    full_name: string | null;
+    phone: string | null;
 }
 
 interface PlanOption {
@@ -42,6 +45,8 @@ export function AdminUsers() {
     const [plans, setPlans] = useState<PlanOption[]>([]);
     const [overridesUser, setOverridesUser] = useState<UserRow | null>(null);
     const [tempOverrides, setTempOverrides] = useState<Record<string, boolean>>({});
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [customDays, setCustomDays] = useState('');
 
     const { user: currentUser, signInWithPassword } = useAuth();
     const { showToast } = useToast();
@@ -56,7 +61,7 @@ export function AdminUsers() {
         try {
             let query = supabase
                 .from('users')
-                .select('id, email, subscription_status, subscription_expires_at, is_admin, created_at, plan_id, feature_overrides', { count: 'exact' })
+                .select('id, email, subscription_status, subscription_expires_at, is_admin, created_at, plan_id, feature_overrides, full_name, phone', { count: 'exact' })
                 .order('created_at', { ascending: false });
 
             if (filter === 'active') {
@@ -132,6 +137,7 @@ export function AdminUsers() {
             if (error) throw error;
             showToast(`Assinatura estendida por ${days} dias!`);
             setExtendingUser(null);
+            setCustomDays(''); // Limpa o valor personalizado
             fetchUsers();
         } catch (error) {
             console.error(error);
@@ -249,7 +255,17 @@ export function AdminUsers() {
                         <option value="admins">Admins</option>
                     </select>
                 </div>
-                <span className="text-sm text-text-secondary whitespace-nowrap">{totalCount} usuário(s)</span>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-primary text-background-dark font-bold px-4 py-2.5 rounded-lg hover:brightness-110 transition-all text-sm"
+                    >
+                        <CalendarPlus className="w-4 h-4" />
+                        Novo Usuário
+                    </button>
+                    <span className="text-sm text-text-secondary whitespace-nowrap">{totalCount} usuário(s)</span>
+                </div>
             </div>
 
             {/* Table */}
@@ -258,7 +274,8 @@ export function AdminUsers() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-border-dark">
-                                <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Email</th>
+                                <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Usuário</th>
+                                <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">WhatsApp</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Status</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Plano</th>
                                 <th className="text-left px-4 py-3 text-xs font-medium text-text-secondary uppercase tracking-wide">Expira em</th>
@@ -270,7 +287,7 @@ export function AdminUsers() {
                         <tbody>
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-10 text-center text-text-secondary">
+                                    <td colSpan={8} className="px-4 py-10 text-center text-text-secondary">
                                         Nenhum usuário encontrado.
                                     </td>
                                 </tr>
@@ -283,12 +300,31 @@ export function AdminUsers() {
                                     return (
                                         <tr key={user.id} className="border-b border-border-dark last:border-0 hover:bg-surface-highlight/50 transition-colors">
                                             <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-white truncate max-w-[200px]">{user.email}</span>
-                                                    {isCurrentUser && (
-                                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">Você</span>
-                                                    )}
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-white font-medium truncate max-w-[200px]">
+                                                            {user.full_name || 'Sem nome'}
+                                                        </span>
+                                                        {isCurrentUser && (
+                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">Você</span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-text-secondary truncate max-w-[200px]">{user.email}</span>
                                                 </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="text-sm text-white">
+                                                    {user.phone ? (
+                                                        <a
+                                                            href={`https://wa.me/${user.phone.replace(/\D/g, '')}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="hover:text-primary transition-colors flex items-center gap-1"
+                                                        >
+                                                            {user.phone}
+                                                        </a>
+                                                    ) : '—'}
+                                                </span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isExpired
@@ -453,6 +489,39 @@ export function AdminUsers() {
                                         )}
                                     </button>
                                 ))}
+
+                                <div className="mt-4 pt-4 border-t border-border-dark">
+                                    <label className="block text-xs font-medium text-text-secondary mb-2 uppercase tracking-wider">Quantidade personalizada (dias)</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            placeholder="Ex: 45"
+                                            className="flex-1 bg-background-dark border border-border-dark rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-primary transition-colors"
+                                            value={customDays}
+                                            onChange={(e) => setCustomDays(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && customDays) {
+                                                    extendSubscription(extendingUser.id, parseInt(customDays));
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const d = parseInt(customDays);
+                                                if (!isNaN(d) && d > 0) {
+                                                    extendSubscription(extendingUser.id, d);
+                                                } else {
+                                                    showToast('Insira um número válido de dias.', 'error');
+                                                }
+                                            }}
+                                            disabled={actionLoading === extendingUser.id || !customDays}
+                                            className="px-4 py-2 bg-primary text-background-dark font-bold rounded-lg text-sm hover:brightness-110 disabled:opacity-50 transition-all"
+                                        >
+                                            Confirmar
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -608,6 +677,13 @@ export function AdminUsers() {
                     </div>
                 </div>
             )}
+
+            <AddUserModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                plans={plans}
+                onSuccess={fetchUsers}
+            />
         </div>
     );
 }

@@ -5,7 +5,7 @@ import { Filter, MousePointerClick, ShoppingBag, DollarSign, TrendingDown } from
 
 export function FunnelAnalysis() {
     const metrics = useMetrics();
-    const [activeTab, setActiveTab] = useState<'subid' | 'channel'>('subid');
+    const [activeTab, setActiveTab] = useState<'subid' | 'channel' | 'category'>('subid');
 
     if (metrics.isEmpty) {
         return (
@@ -150,6 +150,12 @@ export function FunnelAnalysis() {
                 >
                     Funil por Canal
                 </button>
+                <button
+                    onClick={() => setActiveTab('category')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTab === 'category' ? 'bg-primary/10 text-primary border border-primary/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'}`}
+                >
+                    Funil por Categoria
+                </button>
             </div>
 
             {/* Funnel by Sub_ID */}
@@ -287,6 +293,55 @@ export function FunnelAnalysis() {
                                 ))}
                                 {metrics.funnelByChannel.length === 0 && (
                                     <tr><td colSpan={7} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Funnel by Category */}
+            {activeTab === 'category' && (
+                <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                    <div className="p-5 border-b border-border-dark">
+                        <h3 className="text-lg font-bold text-white">Funil por Categoria</h3>
+                        <p className="text-text-secondary text-sm">Performance por categoria de produto</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-background-dark/50 border-b border-border-dark">
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap">Categoria</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Ads</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Shopee</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Pedidos</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Conversão</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Receita</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Comissão</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Investimento</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border-dark">
+                                {(metrics as any).funnelByCategory.map((item: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-background-dark/30 transition-colors">
+                                        <td className="p-4 text-sm text-white">{item.category}</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{item.adClicks}</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{item.clicks}</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">{item.orders}</td>
+                                        <td className="p-4 text-sm text-right font-mono text-blue-400">{item.conversion}%</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">
+                                            R$ {item.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-4 text-sm text-primary font-bold text-right font-mono">
+                                            R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-4 text-sm text-red-400 text-right font-mono">
+                                            R$ {item.investment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {(metrics as any).funnelByCategory.length === 0 && (
+                                    <tr><td colSpan={8} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
                                 )}
                             </tbody>
                         </table>

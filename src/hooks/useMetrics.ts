@@ -488,6 +488,7 @@ export function useMetrics() {
         // === Simplified Funnel: Independent Clicks and Orders ===
         const funnelSubIdMap: Record<string, { clicks: number, orders: number, revenue: number, commission: number }> = {};
         const funnelChannelMap: Record<string, { clicks: number, orders: number, revenue: number, commission: number }> = {};
+        const funnelByCategoryMap: Record<string, { clicks: number, adClicks: number, orders: number, revenue: number, commission: number, investment: number }> = {};
 
         // Initialize funnel maps from all clicks
         filteredClicks.forEach(click => {
@@ -512,6 +513,7 @@ export function useMetrics() {
                 if (match) subId = match;
             }
             const channel = item['Canal'] || 'Desconhecido';
+            const catName = item['Categoria Global L1'] || 'Sem Categoria';
             const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
             const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
 
@@ -524,6 +526,22 @@ export function useMetrics() {
             funnelChannelMap[channel].orders += 1;
             funnelChannelMap[channel].revenue += orderVal;
             funnelChannelMap[channel].commission += netComm;
+
+            // Category logic with click attribution
+            if (!funnelByCategoryMap[catName]) {
+                funnelByCategoryMap[catName] = { clicks: 0, adClicks: 0, orders: 0, revenue: 0, commission: 0, investment: 0 };
+            }
+            funnelByCategoryMap[catName].orders += 1;
+            funnelByCategoryMap[catName].revenue += orderVal;
+            funnelByCategoryMap[catName].commission += netComm;
+
+            const stats = subIdStats[subId] || { clicks: 0, adClicks: 0, investment: 0, orders: 0 };
+            if (stats.orders > 0) {
+                const ratio = 1 / stats.orders;
+                funnelByCategoryMap[catName].clicks += stats.clicks * ratio;
+                funnelByCategoryMap[catName].adClicks += stats.adClicks * ratio;
+                funnelByCategoryMap[catName].investment += stats.investment * ratio;
+            }
         });
 
         const epc = totalClicks > 0 ? totalNetCommission / totalClicks : 0;
@@ -561,12 +579,27 @@ export function useMetrics() {
             }))
             .sort((a, b) => b.commission - a.commission);
 
+        const funnelByCategory = Object.entries(funnelByCategoryMap)
+            .map(([category, s]) => ({
+                category,
+                adClicks: Math.round(s.adClicks),
+                clicks: Math.round(s.clicks),
+                orders: s.orders,
+                revenue: s.revenue,
+                commission: s.commission,
+                investment: s.investment,
+                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+            }))
+            .sort((a, b) => b.commission - a.commission);
+
         return {
             isEmpty: commissionData.length === 0 && clickData.length === 0 && dbConversions.length === 0 && dbTracks.length === 0,
             totalOrders, totalNetCommission, totalOrderValue, totalClicks, totalAdClicks, totalInvestment,
             epc, cpc, roas, cpa,
             funnelBySubId,
             funnelByChannel,
+            funnelByCategory,
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             allOrders, productRanking, allProducts, categoriesRanking, channelsRanking,
             conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
