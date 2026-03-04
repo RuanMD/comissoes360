@@ -26,6 +26,7 @@ import { AdminSeoSettings } from './pages/admin/AdminSeoSettings';
 import { AdminPlans } from './pages/admin/AdminPlans';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminLeads } from './pages/admin/AdminLeads';
+import { AdminStatusManagement } from './pages/admin/AdminStatusManagement';
 
 // Páginas Públicas & Auth
 import { Login } from './pages/auth/Login';
@@ -76,6 +77,7 @@ export default function App() {
                                     <Route path="/produtos" element={<FeatureGuard><Products /></FeatureGuard>} />
                                     <Route path="/temporal" element={<FeatureGuard><TemporalAnalysis /></FeatureGuard>} />
                                     <Route path="/diretas-vs-indiretas" element={<FeatureGuard><DirectsVsIndirects /></FeatureGuard>} />
+                                    <Route path="/status" element={<FeatureGuard><AdminStatusManagement /></FeatureGuard>} />
                                     <Route path="/criativo-track" element={<FeatureGuard><CreativeTrack /></FeatureGuard>} />
                                     <Route path="/gerador-links" element={<FeatureGuard><LinkGenerator /></FeatureGuard>} />
                                 </Route>

@@ -16,6 +16,7 @@ export const ALL_FEATURE_KEYS = [
     'temporal',
     'diretas_indiretas',
     'criativo_track',
+    'status_management',
     'gerador_links',
 ] as const;
 
@@ -34,6 +35,7 @@ export const ROUTE_TO_FEATURE: Record<string, FeatureKey> = {
     '/temporal': 'temporal',
     '/diretas-vs-indiretas': 'diretas_indiretas',
     '/criativo-track': 'criativo_track',
+    '/status': 'status_management',
     '/gerador-links': 'gerador_links',
 };
 
@@ -50,6 +52,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
     temporal: 'Temporal',
     diretas_indiretas: 'Diretas x Indiretas',
     criativo_track: 'Criativo Track',
+    status_management: 'Gestão de Status',
     gerador_links: 'Gerador de Links',
 };
 

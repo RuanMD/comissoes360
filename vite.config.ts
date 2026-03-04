@@ -12,6 +12,9 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.png', 'icons/*.png'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 4000000 // 4MB
+        },
         manifest: {
           name: 'Comissões Lab',
           short_name: 'Comissões Lab',

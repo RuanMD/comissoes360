@@ -6,6 +6,7 @@ const adminTabs = [
     { path: '/admin/settings', icon: Settings, label: 'Formulário' },
     { path: '/admin/seo', icon: Globe, label: 'Link Preview' },
     { path: '/admin/plans', icon: CreditCard, label: 'Planos' },
+    { path: '/admin/status', icon: Settings, label: 'Gestão de Status' },
     { path: '/admin/users', icon: Users, label: 'Usuários' },
     { path: '/admin/leads', icon: UserPlus, label: 'Leads' },
 ];
@@ -32,8 +33,8 @@ export function AdminLayout() {
                             key={tab.path}
                             to={tab.path}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl whitespace-nowrap text-sm font-medium transition-all ${isActive
-                                    ? 'bg-primary text-background-dark shadow-lg shadow-primary/20'
-                                    : 'bg-surface-dark text-text-secondary border border-border-dark hover:bg-surface-highlight hover:text-white'
+                                ? 'bg-primary text-background-dark shadow-lg shadow-primary/20'
+                                : 'bg-surface-dark text-text-secondary border border-border-dark hover:bg-surface-highlight hover:text-white'
                                 }`}
                         >
                             <tab.icon className="w-4 h-4" />

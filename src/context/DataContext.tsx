@@ -20,10 +20,20 @@ export interface DataContextType {
     setDateFilter: (filter: DateFilterStr) => void;
     customRange: CustomDateRange;
     setCustomRange: (range: CustomDateRange) => void;
+    statuses: any[];
+    fetchStatuses: () => Promise<void>;
+    reorderStatuses: (newOrder: string[]) => Promise<void>;
     hasStartedAnalysis: boolean;
     setHasStartedAnalysis: (val: boolean) => void;
     isAutoSyncing: boolean;
 }
+
+export const DEFAULT_SYSTEM_STATUSES = [
+    { slug: 'ativo', name: 'Ativo', color: '#3b82f6', icon: 'PlayCircle' },
+    { slug: 'off', name: 'Desativado/Off', color: '#94a3b8', icon: 'StopCircle' },
+    { slug: 'validado', name: 'Validado', color: '#22c55e', icon: 'CheckCircle2' },
+    { slug: 'rascunho', name: 'Rascunho', color: '#eab308', icon: 'Pencil' },
+];
 
 export const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -35,8 +45,73 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [reportType, setReportType] = useState<ReportType>('unknown');
     const [dateFilter, setDateFilter] = useState<DateFilterStr>('all');
     const [customRange, setCustomRange] = useState<CustomDateRange>({ start: '', end: '' });
+    const [statuses, setStatuses] = useState<any[]>([]);
     const [hasStartedAnalysis, setHasStartedAnalysis] = useState<boolean>(false);
     const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
+
+    const fetchStatuses = async () => {
+        if (!user) return;
+        const [statusRes, prefsRes] = await Promise.all([
+            supabase.from('track_statuses').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
+            supabase.from('users').select('user_preferences').eq('id', user.id).single()
+        ]);
+
+        let dbData: any[] = [];
+        if (!statusRes.error && statusRes.data) {
+            dbData = statusRes.data;
+        }
+
+        const prefs = (prefsRes.data?.user_preferences as any) || {};
+        const statusOrder = prefs.status_order || [];
+
+        // Merge system defaults with database records
+        const allStatuses = DEFAULT_SYSTEM_STATUSES.map(def => {
+            const dbMatch = dbData.find(s => s.slug === def.slug);
+            return dbMatch ? { ...dbMatch, isSystem: true, id: dbMatch.id || def.slug } : { ...def, isSystem: true, id: def.slug };
+        });
+
+        const customOnes = dbData.filter(s => !s.slug).map(s => ({ ...s, isSystem: false }));
+        const combined = [...allStatuses, ...customOnes].map(s => ({ ...s, id: s.id || s.slug }));
+
+        if (statusOrder.length > 0) {
+            combined.sort((a, b) => {
+                const idxA = statusOrder.indexOf(a.id);
+                const idxB = statusOrder.indexOf(b.id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+        }
+
+        setStatuses(combined);
+    };
+
+    const reorderStatuses = async (newOrder: string[]) => {
+        if (!user) return;
+        setStatuses(prev => {
+            const sorted = [...prev].sort((a, b) => {
+                const idxA = newOrder.indexOf(a.id);
+                const idxB = newOrder.indexOf(b.id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+            return sorted;
+        });
+
+        const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+        const current = (data?.user_preferences as Record<string, unknown>) ?? {};
+        await supabase
+            .from('users')
+            .update({ user_preferences: { ...current, status_order: newOrder } })
+            .eq('id', user.id);
+    };
+
+    useEffect(() => {
+        if (user) fetchStatuses();
+    }, [user]);
 
     // Normaliza sub_id removendo separadores (vírgula, espaço, hífen) para matching robusto
     const normalizeSubId = (s: string) => s.replace(/[-,\s]+/g, '').toLowerCase();
@@ -318,10 +393,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const contextValue = useMemo(() => ({
         commissionData, clickData, fileName, handleFileUpload, reportType, clearData,
-        dateFilter, setDateFilter, customRange, setCustomRange, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
+        dateFilter, setDateFilter, customRange, setCustomRange, statuses, fetchStatuses,
+        reorderStatuses, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
     }), [
         commissionData, clickData, fileName, reportType,
-        dateFilter, customRange, hasStartedAnalysis, isAutoSyncing
+        dateFilter, customRange, statuses, hasStartedAnalysis, isAutoSyncing
     ]);
 
     return (
