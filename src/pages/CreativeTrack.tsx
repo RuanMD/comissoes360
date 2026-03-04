@@ -11,10 +11,9 @@ import {
 import {
     SortableContext,
     rectSortingStrategy,
-    useSortable,
     arrayMove,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableKpiCard } from '../components/dashboard/SortableKpiCard';
 import { supabase } from '../lib/supabase';
 import { syncService } from '../lib/syncService';
 import { useAuth } from '../context/AuthContext';
@@ -39,13 +38,9 @@ import { AdPreviewModal } from '../components/AdPreviewModal';
 import { useData } from '../hooks/useData';
 import { DateFilter } from '../components/ui/DateFilter';
 import { KanbanBoard } from '../components/KanbanBoard';
+import { StatusSelector } from '../components/ui/StatusSelector';
 
-const TRACK_STATUSES = [
-    { slug: 'rascunho', name: 'Rascunho', color: '#ffffff', icon: 'FileEdit' },
-    { slug: 'ativo', name: 'Ativo', color: '#22c55e', icon: 'PlayCircle' },
-    { slug: 'validado', name: 'Validado', color: '#3b82f6', icon: 'CheckCircle2' },
-    { slug: 'desativado', name: 'Desativado', color: '#ef4444', icon: 'StopCircle' },
-];
+// TRACK_STATUSES was removed to use dynamic statuses from useData
 
 const extractFbAdLink = (creative: any): string | null => {
     if (!creative) return null;
@@ -227,48 +222,11 @@ interface ShopeeConversion {
     synced_at: string;
 }
 
-function SortableKpiCard({ id, kpi, compact }: { id: string; kpi: { label: string; value: string; icon: any; color: string }; compact?: boolean }) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id });
-
-    const style: React.CSSProperties = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.5 : 1,
-        zIndex: isDragging ? 50 : 'auto',
-        position: 'relative' as const,
-    };
-
-    const Icon = kpi.icon;
-
-    return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-            className={`bg-surface-dark border border-border-dark rounded-2xl flex flex-col cursor-grab active:cursor-grabbing select-none ${compact ? 'p-3 sm:p-4 gap-1.5 sm:gap-2' : 'p-4 gap-2'
-                }`}
-        >
-            <div className={`flex items-center ${compact ? 'gap-1.5 sm:gap-2' : 'gap-2'}`}>
-                <Icon className={`${compact ? 'w-3.5 h-3.5 sm:w-4 sm:h-4' : 'w-4 h-4'} ${kpi.color}`} />
-                <span className={`${compact ? 'text-[10px] sm:text-xs' : 'text-xs'} text-text-secondary`}>{kpi.label}</span>
-            </div>
-            <span className={`${compact ? 'text-sm sm:text-lg' : 'text-lg'} font-bold ${kpi.color}`}>{kpi.value}</span>
-        </div>
-    );
-}
 
 export function CreativeTrack() {
     const { user } = useAuth();
     const { showToast } = useToast();
-    const { dateFilter, customRange } = useData();
+    const { dateFilter, customRange, statuses } = useData();
 
     const [tracks, setTracks] = useState<Track[]>([]);
     const [loading, setLoading] = useState(true);
@@ -2170,7 +2128,7 @@ export function CreativeTrack() {
             if (isNaN(dateObj.getTime())) return true;
             return isWithinInterval(dateObj, { start, end });
         });
-    }, [user?.id, dateFilter, customRange]);
+    }, [entries, user?.id, dateFilter, customRange]);
 
     const filteredAllEntries = useMemo(() => {
         if (!allEntries.length) return [];
@@ -2924,7 +2882,7 @@ export function CreativeTrack() {
             {viewMode === 'kanban' ? (
                 <KanbanBoard
                     tracks={creativeTracks}
-                    statuses={TRACK_STATUSES}
+                    statuses={statuses}
                     trackEntryCounts={trackEntryCounts}
                     onSelectTrack={handleSelectTrack}
                     onUpdateStatus={(track: any, newStatus: string) => handleUpdateStatus(track, newStatus as any)}
@@ -3242,6 +3200,1348 @@ export function CreativeTrack() {
                                     )}
                                 </div>
                             ) : (
+                                <>
+                                    {/* Track Header */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex items-start gap-3">
+                                                <div className="flex flex-col gap-1">
+                                                    {editingTrack ? (
+                                                        <input
+                                                            className="bg-background-dark border border-primary rounded-lg p-2 text-white text-lg sm:text-xl font-bold outline-none w-full"
+                                                            value={editName}
+                                                            onChange={e => setEditName(e.target.value)}
+                                                            autoFocus
+                                                        />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 group">
+                                                            <h2 className={`text-lg sm:text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
+                                                                {selectedTrack.name}
+                                                            </h2>
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            await navigator.clipboard.writeText(selectedTrack.name);
+                                                                            showToast('Nome copiado para a área de transferência!', 'success');
+                                                                        } catch (err) {
+                                                                            showToast('Erro ao copiar nome.', 'error');
+                                                                        }
+                                                                    }}
+                                                                    className="p-1 rounded-md text-neutral-500 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                                                                    title="Copiar Nome"
+                                                                >
+                                                                    <Copy className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingTrack(true);
+                                                                        setEditName(selectedTrack.name);
+                                                                        setEditLink(selectedTrack.affiliate_link || '');
+                                                                        setEditSubIds(selectedTrack.sub_id
+                                                                            ? selectedTrack.sub_id.split(/[-,]/).map((s: string) => s.trim()).filter(Boolean)
+                                                                            : ['']);
+                                                                    }}
+                                                                    className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
+                                                                    title="Editar Criativo"
+                                                                >
+                                                                    <Pencil className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {selectedTrack.sub_id && !editingTrack && (
+                                                        <span className={`w-fit px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                            {selectedTrack.sub_id}
+                                                        </span>
+                                                    )}
+                                                    {selectedTrack.affiliate_link && !editingTrack && (
+                                                        <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-surface-highlight/50 border border-border-dark rounded-lg w-fit">
+                                                            <span className={`text-[10px] sm:text-xs text-text-secondary font-mono truncate max-w-[150px] sm:max-w-[250px] transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                                {selectedTrack.affiliate_link}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleCopyTrackLink(selectedTrack.affiliate_link)}
+                                                                className="text-primary hover:text-primary-light transition-colors p-0.5"
+                                                                title="Copiar Link"
+                                                            >
+                                                                {trackLinkCopied ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> : <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
+                                                            </button>
+                                                            <a
+                                                                href={selectedTrack.affiliate_link}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary hover:text-primary-light transition-colors p-0.5"
+                                                                title="Acessar Link do Produto"
+                                                            >
+                                                                <ExternalLink className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                            </a>
+
+                                                            {/* Link Verification Shield */}
+                                                            {(() => {
+                                                                const status = getLinkIntegrity(selectedTrack.affiliate_link, fbLinkedAds);
+                                                                if (status === 'valid') return (
+                                                                    <div className="group relative flex items-center ml-1">
+                                                                        <div className="flex items-center text-green-500 cursor-help">
+                                                                            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-green-500/10" />
+                                                                        </div>
+                                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-neutral-900 border border-green-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
+                                                                            <span className="font-bold text-green-400 block mb-0.5">Link Verificado ✅</span>
+                                                                            O mesmo link configurado aqui está presente nos seus anúncios do Facebook.
+                                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                                if (status === 'error') return (
+                                                                    <div className="group relative flex items-center ml-1">
+                                                                        <div className="flex items-center text-red-500 cursor-help">
+                                                                            <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-red-500/10" />
+                                                                        </div>
+                                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-neutral-900 border border-red-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
+                                                                            <span className="font-bold text-red-400 block mb-0.5">Links Divergentes! ⚠️</span>
+                                                                            O link desta track no MOP NÃO é o mesmo usado nos anúncios do Facebook. Verifique para não perder o rastreio.
+                                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                                return null;
+                                                            })()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {!editingTrack && (
+                                                    <div className="flex items-center gap-2 ml-2">
+                                                        <button
+                                                            onClick={() => setHideSensitive(!hideSensitive)}
+                                                            className={`p-1.5 rounded-lg border transition-all ${hideSensitive
+                                                                ? 'bg-primary text-background-dark border-primary shadow-[0_0_10px_rgba(242,162,13,0.3)]'
+                                                                : 'bg-surface-highlight text-text-secondary border-border-dark hover:text-white'
+                                                                }`}
+                                                            title={hideSensitive ? "Mostrar dados sensíveis" : "Ocultar dados sensíveis"}
+                                                        >
+                                                            {hideSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {!editingTrack && selectedTrack && (
+                                                <div className="flex items-center gap-1 bg-background-dark/50 p-1 rounded-xl border border-border-dark w-fit">
+                                                    <StatusSelector
+                                                        currentStatusSlug={selectedTrack.status || 'rascunho'}
+                                                        statuses={statuses}
+                                                        onSelect={(newStatus) => handleUpdateStatus(selectedTrack, newStatus as any)}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {editingTrack ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => setEditingTrack(false)} className="px-3 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm"><X className="w-4 h-4" /></button>
+                                                    <button onClick={handleUpdateTrack} disabled={saving} className="bg-primary text-background-dark font-bold px-4 py-2 rounded-lg hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2 text-sm"><Save className="w-4 h-4" /> Salvar</button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <button
+                                                        onClick={() => setShowSyncModal(true)}
+                                                        className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center gap-1"
+                                                    >
+                                                        <Link2 className="w-4 h-4" /> Vincular Anúncios
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowFunnelPicker(!showFunnelPicker)}
+                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors ${linkedFunnel
+                                                            ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
+                                                            : 'text-neutral-400 hover:text-white hover:bg-white/10'
+                                                            }`}
+                                                    >
+                                                        <Filter className="w-4 h-4" /> {linkedFunnel ? linkedFunnel.name : 'Vincular Funil'}
+                                                    </button>
+
+
+                                                    <button
+                                                        onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
+                                                        disabled={saving}
+                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
+                                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
+                                                            : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                                                            }`}
+                                                    >
+                                                        {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                                                        {selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleDeleteTrack(selectedTrack)}
+                                                        disabled={saving}
+                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50 ${selectedTrack.is_archived
+                                                            ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                                                            : 'text-neutral-500 cursor-not-allowed'
+                                                            }`}
+                                                        title={selectedTrack.is_archived ? 'Excluir permanentemente' : 'Arquive antes de excluir'}
+                                                    >
+                                                        <Trash2 className="w-4 h-4" /> Excluir
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Tabs Navigation */}
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border-dark scrollbar-track-transparent mt-2">
+                                        <button
+                                            onClick={() => setActiveTab('metrics')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'metrics' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <BarChart3 className="w-4 h-4" /> Métricas
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('product')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'product' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <PackageSearch className="w-4 h-4" /> Dados do Produto
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('custom')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'custom' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <Tag className="w-4 h-4" /> Campos
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('conversions')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'conversions' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <ShoppingCart className="w-4 h-4" /> Conversões
+                                        </button>
+                                    </div>
+
+                                    <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        {/* Funnel Picker */}
+                                        {showFunnelPicker && (
+                                            <div className="bg-surface-dark border border-primary/30 rounded-2xl p-4">
+                                                <h4 className="text-xs font-bold text-text-secondary mb-3">Vincular Funil</h4>
+                                                {userFunnels.length === 0 ? (
+                                                    <p className="text-xs text-text-secondary">Nenhum funil criado. Acesse a aba Funil para criar.</p>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {linkedFunnel && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    await supabase.from('creative_tracks').update({ funnel_id: null }).eq('id', selectedTrack!.id);
+                                                                    setLinkedFunnel(null);
+                                                                    setSelectedTrack({ ...selectedTrack!, funnel_id: null });
+                                                                    setShowFunnelPicker(false);
+                                                                    showToast('Funil desvinculado.');
+                                                                }}
+                                                                className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                                                            >
+                                                                Desvincular
+                                                            </button>
+                                                        )}
+                                                        {userFunnels.map(f => (
+                                                            <button
+                                                                key={f.id}
+                                                                onClick={async () => {
+                                                                    await supabase.from('creative_tracks').update({ funnel_id: f.id }).eq('id', selectedTrack!.id);
+                                                                    setLinkedFunnel(f);
+                                                                    setSelectedTrack({ ...selectedTrack!, funnel_id: f.id });
+                                                                    setShowFunnelPicker(false);
+                                                                    showToast(`Funil "${f.name}" vinculado!`);
+                                                                }}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${linkedFunnel?.id === f.id
+                                                                    ? 'border-primary bg-primary/10 text-primary font-bold'
+                                                                    : 'border-border-dark text-text-secondary hover:border-primary/50 hover:text-white'
+                                                                    }`}
+                                                            >
+                                                                {f.name} ({(f.days || []).length}d)
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Edit Fields */}
+                                        {editingTrack && (
+                                            <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Link de Afiliado</label>
+                                                    <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editLink} onChange={e => setEditLink(e.target.value)} placeholder="https://..." />
+                                                </div>
+                                                <div className="flex flex-col gap-1 sm:col-span-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-xs text-text-secondary">Sub IDs (separados por -)</label>
+                                                        {editSubIds.length < 5 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditSubIds([...editSubIds, ''])}
+                                                                className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <Plus className="w-3 h-3" /> Adicionar Sub ID
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {editSubIds.map((sid, idx) => (
+                                                            <div key={idx} className="flex items-center gap-1">
+                                                                {idx > 0 && <span className="text-text-secondary text-sm font-bold">-</span>}
+                                                                <input
+                                                                    className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm w-40"
+                                                                    value={sid}
+                                                                    onChange={e => {
+                                                                        const updated = [...editSubIds];
+                                                                        updated[idx] = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                                                                        setEditSubIds(updated);
+                                                                    }}
+                                                                    placeholder={`Sub ID ${idx + 1}`}
+                                                                />
+                                                                {editSubIds.length > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditSubIds(editSubIds.filter((_, i) => i !== idx))}
+                                                                        className="text-neutral-500 hover:text-red-400 transition-colors p-0.5"
+                                                                    >
+                                                                        <X className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex items-start gap-1.5 mt-1 text-amber-400/80 bg-amber-500/5 border border-amber-500/10 rounded-lg px-2.5 py-2">
+                                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                                        <span className="text-[11px] leading-relaxed">Alterar os Sub IDs pode desvincular conversões já sincronizadas com a Shopee e/ou Meta Ads. Recomenda-se gerar um novo link após a alteração.</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    </div>
+
+                                    <div className={activeTab === 'product' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        {/* Product Details Section */}
+                                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-4">
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+                                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                                    <PackageSearch className="w-4 h-4 text-orange-400" />
+                                                    Dados do Produto {!selectedTrack.product_name && <span className="text-xs font-normal text-text-secondary">(Opcional)</span>}
+                                                </h3>
+                                                {!editingProduct && (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => { setFetchProductError(null); handleFetchProductData(); }}
+                                                            disabled={fetchingProductData || !selectedTrack.affiliate_link}
+                                                            className="px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 transition-colors text-xs flex items-center gap-1.5 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {fetchingProductData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                            {fetchingProductData ? 'Buscando...' : 'Buscar Dados Shopee'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditingProduct(true)}
+                                                            className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" /> Editar Dados
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {fetchProductError && (
+                                                <div className="mb-3 bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-lg flex gap-2 text-xs">
+                                                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                                    <span>{fetchProductError}</span>
+                                                </div>
+                                            )}
+
+                                            {editingProduct ? (
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Preço do Produto (R$)</label>
+                                                        <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} placeholder="Ex: 99.90" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Valor do Frete (R$)</label>
+                                                        <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.shipping} onChange={e => setProductForm({ ...productForm, shipping: e.target.value })} placeholder="Ex: 15.00" disabled={productForm.free_shipping} />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 justify-center pt-5">
+                                                        <label className="flex items-center gap-2 text-sm text-white cursor-pointer select-none">
+                                                            <input type="checkbox" className="w-4 h-4 rounded border-border-dark bg-background-dark checked:bg-primary accent-primary" checked={productForm.free_shipping} onChange={e => setProductForm({ ...productForm, free_shipping: e.target.checked, shipping: e.target.checked ? '0' : productForm.shipping })} />
+                                                            Frete Grátis
+                                                        </label>
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Quantidade Vendida</label>
+                                                        <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.sold} onChange={e => setProductForm({ ...productForm, sold: e.target.value })} placeholder="Ex: 1500" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Quantidade de Avaliações</label>
+                                                        <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.reviews} onChange={e => setProductForm({ ...productForm, reviews: e.target.value })} placeholder="Ex: 350" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Nota de Avaliação (1.0 - 5.0)</label>
+                                                        <input type="number" step="0.1" min="1" max="5" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.rating} onChange={e => setProductForm({ ...productForm, rating: e.target.value })} placeholder="Ex: 4.8" />
+                                                    </div>
+
+                                                    <div className="col-span-full flex items-center justify-end gap-2 mt-2">
+                                                        <button onClick={() => {
+                                                            setEditingProduct(false);
+                                                            setProductForm({
+                                                                price: selectedTrack.product_price?.toString() || '',
+                                                                shipping: selectedTrack.product_shipping?.toString() || '',
+                                                                free_shipping: !!selectedTrack.product_free_shipping,
+                                                                reviews: selectedTrack.product_reviews?.toString() || '',
+                                                                sold: selectedTrack.product_sold?.toString() || '',
+                                                                rating: selectedTrack.product_rating?.toString() || ''
+                                                            });
+                                                        }} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs">Cancelar</button>
+                                                        <button onClick={handleUpdateProduct} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-xs">
+                                                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Salvar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : selectedTrack.product_name ? (
+                                                /* ── Rich API Data View ── */
+                                                <div className="flex flex-col gap-4">
+                                                    {/* Product header: image + name + shop */}
+                                                    <div className="flex gap-4">
+                                                        {selectedTrack.product_image_url ? (
+                                                            <img
+                                                                src={selectedTrack.product_image_url}
+                                                                alt={selectedTrack.product_name}
+                                                                className="w-24 h-24 rounded-xl object-cover border border-border-dark flex-shrink-0"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-24 h-24 rounded-xl bg-background-dark border border-border-dark flex items-center justify-center flex-shrink-0">
+                                                                <ImageIcon className="w-8 h-8 text-neutral-600" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex flex-col gap-1.5 min-w-0">
+                                                            <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                                                                {selectedTrack.product_name}
+                                                            </h4>
+                                                            {selectedTrack.product_shop_name && (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Store className="w-3.5 h-3.5 text-neutral-500" />
+                                                                    <span className="text-xs text-neutral-400">{selectedTrack.product_shop_name}</span>
+                                                                    {selectedTrack.product_shop_rating != null && (
+                                                                        <span className="text-xs text-yellow-400 flex items-center gap-0.5 ml-1">
+                                                                            <Star className="w-3 h-3 fill-yellow-400" /> {selectedTrack.product_shop_rating}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {selectedTrack.product_link && (
+                                                                <a
+                                                                    href={selectedTrack.product_link}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3" /> Ver na Shopee
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Data grid */}
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                                                        {/* Price */}
+                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Preço</span>
+                                                            <span className="text-sm font-bold text-primary">
+                                                                R$ {selectedTrack.product_price != null ? formatBRL(selectedTrack.product_price) : '--'}
+                                                            </span>
+                                                            {selectedTrack.product_price_min != null && selectedTrack.product_price_max != null && selectedTrack.product_price_min !== selectedTrack.product_price_max && (
+                                                                <span className="text-[10px] text-neutral-500 block">
+                                                                    R$ {formatBRL(selectedTrack.product_price_min)} ~ R$ {formatBRL(selectedTrack.product_price_max)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Discount */}
+                                                        {selectedTrack.product_discount_rate != null && selectedTrack.product_discount_rate > 0 && (
+                                                            <div className="bg-background-dark/50 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Desconto</span>
+                                                                <span className="text-sm font-bold text-red-400">-{selectedTrack.product_discount_rate}%</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Commission Total */}
+                                                        <div className="bg-background-dark/50 border border-green-500/20 rounded-xl px-3 py-2.5">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Comissão</span>
+                                                            <span className="text-sm font-bold text-green-400">
+                                                                {selectedTrack.product_commission != null ? `R$ ${formatBRL(selectedTrack.product_commission)}` : '--'}
+                                                            </span>
+                                                            {selectedTrack.product_commission_rate != null && (
+                                                                <span className="text-[10px] text-green-400/60 block">
+                                                                    {formatPct(selectedTrack.product_commission_rate * 100)}% total
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Seller Commission Rate */}
+                                                        {selectedTrack.product_seller_commission_rate != null && (
+                                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
+                                                                <span className="text-sm font-bold text-white">
+                                                                    {formatPct(selectedTrack.product_seller_commission_rate * 100)}%
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Shopee Commission Rate */}
+                                                        {selectedTrack.product_shopee_commission_rate != null && (
+                                                            <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                                <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
+                                                                <span className="text-sm font-bold text-white">
+                                                                    {formatPct(selectedTrack.product_shopee_commission_rate * 100)}%
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Rating */}
+                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Avaliação</span>
+                                                            <span className="text-sm font-bold text-white flex items-center gap-1">
+                                                                {selectedTrack.product_rating != null ? (
+                                                                    <>
+                                                                        <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                                                                        {selectedTrack.product_rating}
+                                                                        {selectedTrack.product_reviews != null && (
+                                                                            <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews})</span>
+                                                                        )}
+                                                                    </>
+                                                                ) : '--'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Sales */}
+                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Vendidos</span>
+                                                            <span className="text-sm font-bold text-white">
+                                                                {selectedTrack.product_sold != null ? selectedTrack.product_sold.toLocaleString('pt-BR') : '--'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Shipping */}
+                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Frete</span>
+                                                            <span className="text-sm font-bold text-white">
+                                                                {selectedTrack.product_free_shipping ? (
+                                                                    <span className="text-green-400">Grátis</span>
+                                                                ) : selectedTrack.product_shipping != null ? (
+                                                                    `R$ ${formatBRL(selectedTrack.product_shipping)}`
+                                                                ) : (
+                                                                    <span className="text-neutral-500 font-normal text-xs">Manual</span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+
+                                                    {/* Fetched at timestamp */}
+                                                    {selectedTrack.product_fetched_at && (
+                                                        <p className="text-[10px] text-neutral-600 text-right mt-2">
+                                                            Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                /* ── Basic Manual View (old tracks without API data) ── */
+                                                <div className="flex flex-wrap gap-4">
+                                                    <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                        <Tag className="w-4 h-4 text-text-secondary" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</span>
+                                                            <span className="text-sm font-bold text-white transition-all">
+                                                                {selectedTrack.product_price != null ? `R$ ${formatBRL(selectedTrack.product_price)}` : <span className="text-neutral-500 font-normal">Não def.</span>}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                        <Truck className="w-4 h-4 text-text-secondary" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Frete</span>
+                                                            <span className="text-sm font-bold text-white transition-all">
+                                                                {selectedTrack.product_free_shipping ? (
+                                                                    <span className="text-green-400">Grátis</span>
+                                                                ) : selectedTrack.product_shipping != null ? (
+                                                                    `R$ ${formatBRL(selectedTrack.product_shipping)}`
+                                                                ) : (
+                                                                    <span className="text-neutral-500 font-normal">Não def.</span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                        <PackageSearch className="w-4 h-4 text-text-secondary" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Vendidos</span>
+                                                            <span className="text-sm font-bold text-white transition-all">
+                                                                {selectedTrack.product_sold != null ? `${selectedTrack.product_sold} un.` : <span className="text-neutral-500 font-normal">Não def.</span>}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
+                                                        <Star className="w-4 h-4 text-text-secondary" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Avaliação</span>
+                                                            <span className="text-sm font-bold text-white transition-all">
+                                                                {selectedTrack.product_rating != null ? (
+                                                                    <span className="flex items-center gap-1">
+                                                                        {selectedTrack.product_rating} <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews || 0})</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-neutral-500 font-normal">Não def.</span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                    </div>
+
+
+                                    <div className={activeTab === 'custom' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-6">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="flex flex-col gap-1">
+                                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                                        <Tag className="w-5 h-5 text-primary" /> Campos Personalizados
+                                                    </h3>
+                                                    <p className="text-xs text-text-secondary">Defina informações extras chave-valor para este criativo.</p>
+                                                </div>
+                                                {!editingCustomFields ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            const fields = Object.entries(selectedTrack?.custom_fields || {}).map(([key, value]) => ({ key, value }));
+                                                            setTabCustomFields(fields.length > 0 ? fields : []);
+                                                            setEditingCustomFields(true);
+                                                        }}
+                                                        className="bg-primary/10 text-primary border border-primary/20 px-4 py-2 rounded-xl font-bold hover:bg-primary/20 transition-all text-sm flex items-center gap-2"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" /> Editar Campos
+                                                    </button>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setEditingCustomFields(false)}
+                                                            className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                        <button
+                                                            onClick={handleUpdateCustomFields}
+                                                            disabled={saving}
+                                                            className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2 text-sm shadow-lg shadow-primary/10"
+                                                        >
+                                                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {!editingCustomFields ? (
+                                                <div className="flex flex-col gap-3">
+                                                    {selectedTrack?.custom_fields && Object.keys(selectedTrack.custom_fields).length > 0 ? (
+                                                        Object.entries(selectedTrack.custom_fields).map(([k, v]) => (
+                                                            <div key={k} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-background-dark/50 border border-border-dark rounded-xl px-4 py-3 group hover:border-primary/30 transition-all">
+                                                                <div className="flex-shrink-0 w-full sm:w-32 py-1 px-2.5 bg-white/5 rounded-lg border border-white/10 uppercase text-[10px] font-bold text-neutral-400">
+                                                                    {k}
+                                                                </div>
+                                                                <div className="text-sm text-white font-bold break-all flex-1">
+                                                                    {v}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="col-span-full py-12 flex flex-col items-center justify-center bg-background-dark/30 rounded-2xl border border-dashed border-border-dark">
+                                                            <Tag className="w-8 h-8 text-neutral-700 mb-3" />
+                                                            <p className="text-sm text-neutral-500">Nenhum campo personalizado definido.</p>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setTabCustomFields([]);
+                                                                    setEditingCustomFields(true);
+                                                                }}
+                                                                className="mt-4 text-xs text-primary hover:underline font-bold"
+                                                            >
+                                                                + Adicionar Primeiro Campo
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-3">
+                                                    {tabCustomFields.map((field, idx) => (
+                                                        <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Nome do Campo</label>
+                                                                    <input
+                                                                        placeholder="Ex: Campanha"
+                                                                        value={field.key}
+                                                                        onChange={(e) => handleTabCustomFieldChange(idx, 'key', e.target.value)}
+                                                                        className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Valor</label>
+                                                                    <input
+                                                                        placeholder="Valor"
+                                                                        value={field.value}
+                                                                        onChange={(e) => handleTabCustomFieldChange(idx, 'value', e.target.value)}
+                                                                        className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleTabRemoveCustomField(idx)}
+                                                                className="mt-6 p-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                                                                title="Remover"
+                                                            >
+                                                                <X className="w-5 h-5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+
+                                                    <button
+                                                        onClick={handleTabAddCustomField}
+                                                        disabled={tabCustomFields.length >= 10}
+                                                        className="mt-2 w-fit flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 transition-all border border-dashed border-primary/30"
+                                                    >
+                                                        <Plus className="w-4 h-4" /> Adicionar Novo Campo
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        {/* FB Sync Buttons */}
+                                        {fbLinkedAds.length > 0 && (
+                                            <div className="bg-surface-dark border border-blue-500/20 rounded-2xl p-4">
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    <div>
+                                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                                            <Link2 className="w-4 h-4 text-blue-400" />
+                                                            Facebook Ads ({fbLinkedAds.length} anúncio{fbLinkedAds.length > 1 ? 's' : ''} vinculado{fbLinkedAds.length > 1 ? 's' : ''})
+                                                        </h3>
+                                                        <div className={`mt-2 flex flex-wrap gap-2 transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
+                                                            {fbLinkedAds.map(a => (
+                                                                <div key={a.ad_id} className="flex flex-col bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1.5 min-w-[150px]">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-xs text-white font-medium truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
+                                                                            {a.ad_name || a.ad_id}
+                                                                        </span>
+                                                                        <button
+                                                                            onClick={() => setPreviewAdId(a.ad_id)}
+                                                                            className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors ml-2"
+                                                                            title="Ver Criativo"
+                                                                        >
+                                                                            <Eye className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                    {a.ad_link && (
+                                                                        <a
+                                                                            href={a.ad_link}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-1.5 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors w-full group"
+                                                                            title={a.ad_link}
+                                                                        >
+                                                                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                                                            <span className="truncate flex-1">{a.ad_link}</span>
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => handleSyncFb('today')}
+                                                            disabled={syncingFb}
+                                                            className="flex items-center gap-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3 py-2 rounded-lg font-bold hover:bg-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                                                        >
+                                                            {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
+                                                            Sync Hoje
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleSyncFb('all')}
+                                                            disabled={syncingFb}
+                                                            className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-2 rounded-lg font-bold hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                                                        >
+                                                            {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                            Sync Geral
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* KPIs Dashboard */}
+                                        {loadingEntries ? (
+                                            <div className="flex justify-center py-8">
+                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                            </div>
+                                        ) : kpis ? (
+                                            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTrackKpiDragEnd}>
+                                                <SortableContext items={trackKpiOrder} strategy={rectSortingStrategy}>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                        {trackKpiOrder.map((id) => {
+                                                            const kpiMap: Record<string, any> = {
+                                                                profit: { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                                orders: { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+                                                                completed: { label: 'Pedidos Concluídos', value: `${kpis.completedOrders} (R$ ${formatBRL(kpis.completedValue)})`, icon: CheckCircle2, color: 'text-green-400' },
+                                                                pending: { label: 'Pedidos Pendentes', value: `${kpis.pendingOrders} (R$ ${formatBRL(kpis.pendingValue)})`, icon: Clock, color: 'text-yellow-400' },
+                                                                cancelled: { label: 'Pedidos Cancelados', value: `${kpis.cancelledOrders} (R$ ${formatBRL(kpis.cancelledValue)})`, icon: XCircle, color: 'text-red-400' },
+                                                                avgOrders: { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+                                                                commission: { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
+                                                                investment: { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+                                                                profitPct: { label: 'Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+                                                                shopeeClicks: { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
+                                                                adClicks: { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+                                                                cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(kpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
+                                                            };
+                                                            const kpi = kpiMap[id];
+                                                            if (!kpi) return null;
+                                                            return <SortableKpiCard key={id} id={id} kpi={kpi} />;
+                                                        })}
+                                                    </div>
+                                                </SortableContext>
+                                            </DndContext>
+                                        ) : (
+                                            <div className="text-center py-6 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
+                                                Nenhum registro ainda. Adicione o primeiro abaixo.
+                                            </div>
+                                        )}
+
+                                        {/* Video KPIs */}
+                                        {videoKpis && (
+                                            <div className="mt-3">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Video className="w-4 h-4 text-violet-400" />
+                                                    <span className="text-sm font-semibold text-white">Métricas de Vídeo</span>
+                                                    <span className="text-[10px] text-text-secondary bg-violet-500/10 px-2 py-0.5 rounded-full">Termômetro do Criativo</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                                    {[
+                                                        { label: 'ThruPlay', value: videoKpis.totalThruplay.toLocaleString('pt-BR'), color: 'text-violet-400', hint: 'Assistiu 15s ou mais (ou o vídeo inteiro se for menor que 15s)' },
+                                                        { label: '25% Assistido', value: videoKpis.totalP25.toLocaleString('pt-BR'), color: 'text-blue-400', hint: 'Assistiu pelo menos 25% do vídeo' },
+                                                        { label: '50% Assistido', value: videoKpis.totalP50.toLocaleString('pt-BR'), color: 'text-cyan-400', hint: 'Assistiu pelo menos metade do vídeo' },
+                                                        { label: '95% Assistido', value: videoKpis.totalP95.toLocaleString('pt-BR'), color: 'text-emerald-400', hint: 'Assistiu quase o vídeo inteiro (95%)' },
+                                                        { label: 'Retenção (95/25)', value: `${videoKpis.retentionRate.toFixed(1)}%`, color: videoKpis.retentionRate >= 30 ? 'text-green-400' : 'text-amber-400', hint: 'De quem assistiu 25%, quantos foram até 95%' },
+                                                    ].map((kpi, i) => (
+                                                        <div key={i} className="bg-surface-dark border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-1.5">
+                                                            <span className="text-xs text-text-secondary">{kpi.label}</span>
+                                                            <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
+                                                            <span className="text-[10px] leading-tight text-neutral-500">{kpi.hint}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    </div>
+
+                                    <div className={activeTab === 'conversions' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        {/* ══════ Shopee Conversions Section ══════ */}
+                                        <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                                            <div className="p-4 border-b border-border-dark flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <ShoppingCart size={16} className="text-orange-400" />
+                                                    <h3 className="text-sm font-bold text-white">
+                                                        Conversões Shopee ({filteredConversions.length})
+                                                    </h3>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <button
+                                                        onClick={handleSyncConversions}
+                                                        disabled={syncingConversions}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all disabled:opacity-50"
+                                                    >
+                                                        {syncingConversions ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                                        Sync Conversões
+                                                    </button>
+                                                    <button
+                                                        onClick={handleSyncValidated}
+                                                        disabled={syncingValidated}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-all disabled:opacity-50"
+                                                    >
+                                                        {syncingValidated ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                                                        Sync Validadas
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Conversion KPIs */}
+                                            {filteredConversions.length > 0 && (() => {
+                                                const totalNetComm = filteredConversions.reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                                const validatedComm = filteredConversions.filter(c => c.is_validated).reduce((s, c) => s + (c.item_total_commission || 0), 0);
+                                                const totalOrders = new Set(filteredConversions.map(c => c.order_id).filter(Boolean)).size;
+                                                const validatedOrders = new Set(filteredConversions.filter(c => c.is_validated).map(c => c.order_id).filter(Boolean)).size;
+                                                const fraudCount = filteredConversions.filter(c => c.fraud_status && c.fraud_status !== 'NONE' && c.fraud_status !== '').length;
+                                                const fraudPct = filteredConversions.length > 0 ? ((fraudCount / filteredConversions.length) * 100) : 0;
+                                                const directCount = filteredConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct').length;
+                                                const indirectCount = filteredConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type).length;
+
+                                                return (
+                                                    <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                        <div className="bg-background-dark border border-orange-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Comissão Total</span>
+                                                            <span className="text-base sm:text-lg font-bold text-orange-400">{formatBRL(totalNetComm)}</span>
+                                                            {validatedComm > 0 && (
+                                                                <span className="text-[10px] text-emerald-400">✅ {formatBRL(validatedComm)} validada</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="bg-background-dark border border-blue-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Pedidos</span>
+                                                            <span className="text-base sm:text-lg font-bold text-blue-400">{totalOrders}</span>
+                                                            {validatedOrders > 0 && (
+                                                                <span className="text-[10px] text-emerald-400">✅ {validatedOrders} validados</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="bg-background-dark border border-red-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Taxa Fraude</span>
+                                                            <span className={`text-base sm:text-lg font-bold ${fraudPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                                {fraudPct.toFixed(1)}%
+                                                            </span>
+                                                            <span className="text-[10px] text-text-secondary">{fraudCount} suspeito(s)</span>
+                                                        </div>
+                                                        <div className="bg-background-dark border border-violet-500/20 rounded-xl p-3 flex flex-col gap-1">
+                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider">Atribuição</span>
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className="text-sm font-bold text-green-400">{directCount}D</span>
+                                                                <span className="text-[10px] text-text-secondary">vs</span>
+                                                                <span className="text-sm font-bold text-amber-400">{indirectCount}I</span>
+                                                            </div>
+                                                            <span className="text-[10px] text-text-secondary">Diretas vs Indiretas</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* Conversion List */}
+                                            {filteredConversions.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="min-w-full w-full text-xs">
+                                                        <thead>
+                                                            <tr className="border-t border-border-dark bg-background-dark">
+                                                                <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Data</th>
+                                                                <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Produto</th>
+                                                                <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Qtd</th>
+                                                                <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Comissão</th>
+                                                                <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Status</th>
+                                                                <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Tipo</th>
+                                                                <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Validado</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {filteredConversions.slice(0, 50).map((conv) => (
+                                                                <tr key={conv.id} className="border-t border-border-dark/50 hover:bg-surface-dark/50 transition-colors">
+                                                                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+                                                                        {conv.purchase_time ? format(new Date(conv.purchase_time), 'dd/MM HH:mm') : '—'}
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-white min-w-0">
+                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                            {conv.image_url && (
+                                                                                <img src={conv.image_url} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
+                                                                            )}
+                                                                            <span className="truncate max-w-[180px]">{conv.item_name || `Item #${conv.item_id}`}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-right text-white whitespace-nowrap">{conv.qty}</td>
+                                                                    <td className="px-3 py-2 text-right font-medium text-orange-400 whitespace-nowrap">
+                                                                        {formatBRL(conv.item_total_commission)}
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${['PAID', 'VALIDATED', 'COMPLETED'].includes(conv.conversion_status || '')
+                                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                                            : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID'].includes(conv.conversion_status || '')
+                                                                                ? 'bg-red-500/20 text-red-400'
+                                                                                : 'bg-amber-500/20 text-amber-400'
+                                                                            }`}>
+                                                                            {conv.conversion_status || 'PENDING'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                                        <span className={`text-[10px] ${conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct'
+                                                                            ? 'text-green-400' : 'text-amber-400'
+                                                                            }`}>
+                                                                            {conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct' ? 'Direta' : conv.attribution_type || '—'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-3 py-2 text-center">
+                                                                        {conv.is_validated ? (
+                                                                            <ShieldCheck size={14} className="text-emerald-400 mx-auto" />
+                                                                        ) : conv.fraud_status && conv.fraud_status !== 'NONE' && conv.fraud_status !== '' ? (
+                                                                            <AlertTriangle size={14} className="text-red-400 mx-auto" />
+                                                                        ) : (
+                                                                            <span className="text-text-secondary">—</span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                    {filteredConversions.length > 50 && (
+                                                        <div className="p-3 text-center text-xs text-text-secondary border-t border-border-dark/50">
+                                                            Mostrando 50 de {filteredConversions.length} conversões
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="p-6 text-center text-sm text-text-secondary">
+                                                    Nenhuma conversão sincronizada. Use os botões acima para buscar dados da API Shopee.
+                                                </div>
+                                            )}
+                                        </div>
+
+                                    </div>
+
+                                    <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        {/* Entries Table */}
+                                        {
+                                            <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                                                <div className="p-4 border-b border-border-dark flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <h3 className="text-sm font-bold text-white">Histórico ({filteredEntries.length} registros)</h3>
+                                                        <span className="hidden sm:inline-block text-xs font-normal text-text-secondary bg-background-dark px-2.5 py-1 rounded-md border border-border-dark">
+                                                            Dê 2 cliques na linha para editar
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setShowManualEntry(true)}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-all"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" /> Registro Manual
+                                                    </button>
+                                                </div>
+                                                {filteredEntries.length > 0 ? (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm">
+                                                            <thead>
+                                                                <tr className="border-b border-border-dark text-text-secondary text-xs">
+                                                                    {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
+                                                                    <th className="text-left p-3">Data</th>
+                                                                    <th className="text-right p-3">Cliq. Anúncio</th>
+                                                                    <th className="text-right p-3">Cliq. Shopee</th>
+                                                                    <th className="text-right p-3">CPC</th>
+                                                                    <th className="text-right p-3">Pedidos</th>
+                                                                    <th className="text-right p-3">Comissão</th>
+                                                                    <th className="text-right p-3">Investimento</th>
+                                                                    <th className="text-right p-3">Lucro</th>
+                                                                    <th className="text-right p-3">%</th>
+                                                                    <th className="text-center p-3"></th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-border-dark/30">
+                                                                {filteredEntries.map(entry => {
+                                                                    const isEditing = editingEntryId === entry.id;
+
+                                                                    // Funnel evaluation
+                                                                    const entryIndex = entries.indexOf(entry);
+                                                                    const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
+                                                                    let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
+                                                                    if (linkedFunnel) {
+                                                                        const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
+                                                                        const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
+
+                                                                        // Use maintenance groups for days beyond configured ones
+                                                                        const mConds = linkedFunnel.maintenance_conditions;
+                                                                        const maintenanceGroups = (Array.isArray(mConds) && mConds.length > 0 && typeof mConds[0] === 'object' && 'id' in mConds[0])
+                                                                            ? (mConds as FunnelConditionGroup[])
+                                                                            : null;
+
+                                                                        const groupsToEval = funnelDay?.condition_groups?.length
+                                                                            ? funnelDay.condition_groups
+                                                                            : (dayNumber > maxFunnelDay && maintenanceGroups)
+                                                                                ? maintenanceGroups
+                                                                                : null;
+
+                                                                        // Fallback for legacy structure if present
+                                                                        const legacyConditions = funnelDay?.conditions || (dayNumber > maxFunnelDay && !maintenanceGroups ? (mConds as FunnelCondition[]) : null);
+
+                                                                        const eProfit = Number(entry.commission_value) - Number(entry.investment);
+                                                                        const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
+                                                                        const metricMap: Record<string, number> = {
+                                                                            ad_clicks: Number(entry.ad_clicks),
+                                                                            shopee_clicks: Number(entry.shopee_clicks),
+                                                                            cpc: Number(entry.cpc),
+                                                                            orders: Number(entry.orders),
+                                                                            commission_value: Number(entry.commission_value),
+                                                                            investment: Number(entry.investment),
+                                                                            profit: eProfit,
+                                                                            roi_percentage: eRoi,
+                                                                        };
+
+                                                                        if (groupsToEval && groupsToEval.length > 0) {
+                                                                            // LOGIC OR: If ANY group matches its internal conditions, the day passes
+                                                                            const anyGroupPass = groupsToEval.some(group => {
+                                                                                if (!group.conditions || group.conditions.length === 0) return false;
+                                                                                // LOGIC AND: All conditions in a group must match
+                                                                                return group.conditions.every(cond => {
+                                                                                    const actual = metricMap[cond.metric] ?? 0;
+                                                                                    switch (cond.operator) {
+                                                                                        case '<=': return actual <= cond.value;
+                                                                                        case '>=': return actual >= cond.value;
+                                                                                        case '==': return actual === cond.value;
+                                                                                        case '>': return actual > cond.value;
+                                                                                        case '<': return actual < cond.value;
+                                                                                        default: return false;
+                                                                                    }
+                                                                                });
+                                                                            });
+                                                                            funnelStatus = anyGroupPass ? 'pass' : 'fail';
+                                                                        } else if (legacyConditions && legacyConditions.length > 0) {
+                                                                            // Backward compatibility for legacy funnels
+                                                                            const allPass = legacyConditions.every(cond => {
+                                                                                const actual = metricMap[cond.metric] ?? 0;
+                                                                                switch (cond.operator) {
+                                                                                    case '<=': return actual <= cond.value;
+                                                                                    case '>=': return actual >= cond.value;
+                                                                                    case '==': return actual === cond.value;
+                                                                                    case '>': return actual > cond.value;
+                                                                                    case '<': return actual < cond.value;
+                                                                                    default: return false;
+                                                                                }
+                                                                            });
+                                                                            funnelStatus = allPass ? 'pass' : 'fail';
+                                                                        }
+                                                                    }
+
+                                                                    if (isEditing) {
+                                                                        const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
+                                                                        const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
+
+                                                                        return (
+                                                                            <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
+                                                                                {linkedFunnel && (
+                                                                                    <td className="p-3 text-center">
+                                                                                        {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
+                                                                                        {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
+                                                                                        {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
+                                                                                    </td>
+                                                                                )}
+                                                                                <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
+                                                                                </td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
+                                                                                </td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
+                                                                                </td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
+                                                                                </td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
+                                                                                </td>
+                                                                                <td className="p-2">
+                                                                                    <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
+                                                                                </td>
+                                                                                <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
+                                                                                <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
+                                                                                <td className="p-3 text-center">
+                                                                                    <div className="flex items-center justify-center gap-2">
+                                                                                        <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
+                                                                                            {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                                                        </button>
+                                                                                        <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
+                                                                                            <X className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    }
+
+                                                                    const profit = Number(entry.commission_value) - Number(entry.investment);
+                                                                    const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
+                                                                    return (
+                                                                        <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
+                                                                            {linkedFunnel && (
+                                                                                <td className="p-3 text-center">
+                                                                                    {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
+                                                                                    {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
+                                                                                    {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
+                                                                                </td>
+                                                                            )}
+                                                                            <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
+                                                                            <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
+                                                                            <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
+                                                                            <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
+                                                                            <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
+                                                                            <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
+                                                                            <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
+                                                                            <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
+                                                                            <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
+                                                                            <td className="p-3 text-center">
+                                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                            {filteredEntries.length > 0 && (() => {
+                                                                const totals = filteredEntries.reduce((acc, entry) => {
+                                                                    acc.ad_clicks += Number(entry.ad_clicks || 0);
+                                                                    acc.shopee_clicks += Number(entry.shopee_clicks || 0);
+                                                                    acc.orders += Number(entry.orders || 0);
+                                                                    acc.commission += Number(entry.commission_value || 0);
+                                                                    acc.investment += Number(entry.investment || 0);
+                                                                    return acc;
+                                                                }, { ad_clicks: 0, shopee_clicks: 0, orders: 0, commission: 0, investment: 0 });
+
+                                                                const totalProfit = totals.commission - totals.investment;
+                                                                const totalRoi = totals.investment > 0 ? (totalProfit / totals.investment) * 100 : 0;
+                                                                const avgCpc = totals.ad_clicks > 0 ? (totals.investment / totals.ad_clicks) : 0;
+
+                                                                return (
+                                                                    <tfoot className="border-t-2 border-border-dark bg-background-dark font-bold text-sm">
+                                                                        <tr>
+                                                                            {linkedFunnel && <td className="p-3"></td>}
+                                                                            <td className="p-3 text-left text-white">TOTAL</td>
+                                                                            <td className="p-3 text-right text-neutral-300">{totals.ad_clicks}</td>
+                                                                            <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
+                                                                            <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
+                                                                            <td className="p-3 text-right text-blue-400">{totals.orders}</td>
+                                                                            <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
+                                                                            <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
+                                                                            <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
+                                                                            <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
+                                                                            <td className="p-3"></td>
+                                                                        </tr>
+                                                                    </tfoot>
+                                                                );
+                                                            })()}
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-8 text-center text-neutral-400 text-sm">
+                                                        Nenhum registro ainda. Adicione o primeiro abaixo.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        }
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Facebook Ads Sync Modal */}
+                            {selectedTrack && (
+                                <FacebookAdsSyncModal
+                                    isOpen={showSyncModal}
+                                    onClose={() => setShowSyncModal(false)}
+                                    trackId={selectedTrack.id}
+                                    trackName={selectedTrack.name}
+                                    onSyncComplete={() => {
+                                        fetchFbLinkedAds(selectedTrack.id);
+                                    }}
+                                />
+                            )}
+
+                            {/* Ad Preview Modal */}
+                            <AdPreviewModal
+                                isOpen={!!previewAdId}
+                                onClose={() => setPreviewAdId(null)}
+                                adId={previewAdId || ''}
+                                fbToken={fbToken}
+                            />
+
+                            {/* Manual Entry Modal */}
+                            {showManualEntry && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm overflow-hidden">
+                                    <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                                        <div className="flex items-center justify-between p-4 border-b border-border-dark">
+                                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                                <Plus className="w-5 h-5 text-primary" />
+                                                Registro Manual
+                                            </h2>
+                                            <button onClick={() => setShowManualEntry(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                        <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Data</label>
+                                                    <input type="date" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.date} onChange={e => setEntryForm({ ...entryForm, date: e.target.value })} />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Cliques Anúncio</label>
+                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.ad_clicks} onChange={e => setEntryForm({ ...entryForm, ad_clicks: e.target.value })} placeholder="0" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Cliques Shopee</label>
+                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.shopee_clicks} onChange={e => setEntryForm({ ...entryForm, shopee_clicks: e.target.value })} placeholder="0" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">CPC (R$)</label>
+                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.cpc} onChange={e => setEntryForm({ ...entryForm, cpc: e.target.value })} placeholder="0.00" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Qtd Pedidos</label>
+                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.orders} onChange={e => setEntryForm({ ...entryForm, orders: e.target.value })} placeholder="0" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Valor Comissão (R$)</label>
+                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.commission_value} onChange={e => setEntryForm({ ...entryForm, commission_value: e.target.value })} placeholder="0.00" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Investimento (R$)</label>
+                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.investment} onChange={e => setEntryForm({ ...entryForm, investment: e.target.value })} placeholder="0.00" />
+                                                </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <label className="text-xs text-text-secondary">Lucro / %</label>
+                                                    <div className="flex items-center gap-2 h-[46px]">
+                                                        <span className={`text-sm font-bold ${entryProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(entryProfit)}</span>
+                                                        <span className={`text-xs ${entryProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>({formatPct(entryProfitPct)}%)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-end gap-2 p-4 border-t border-border-dark">
+                                            <button onClick={() => setShowManualEntry(false)} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm">Cancelar</button>
+                                            <button onClick={() => { handleAddEntry(); setShowManualEntry(false); }} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-sm">
+                                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Salvar Registro
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </>
+            )
+            }
+
+            {/* KANBAN DETAIL MODAL */}
+            {
+                showKanbanModal && selectedTrack && viewMode === 'kanban' && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-start justify-center bg-background-dark/95 backdrop-blur-md overflow-y-auto"
+                        onClick={(e: React.MouseEvent) => { if (e.target === e.currentTarget) { setShowKanbanModal(false); setSelectedTrack(null); } }}
+                    >
+                        <div className="w-full max-w-5xl my-6 mx-4 bg-background-dark rounded-2xl border border-border-dark shadow-2xl shadow-black/50 p-4 sm:p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-white truncate flex-1 min-w-0 mr-4" title={selectedTrack.name}>
+                                    {selectedTrack.name}
+                                </h2>
+                                <button
+                                    onClick={() => { setShowKanbanModal(false); setSelectedTrack(null); }}
+                                    className="p-2.5 rounded-xl bg-surface-dark border border-border-dark text-neutral-400 hover:text-white hover:border-red-500/40 hover:bg-red-500/10 transition-all shrink-0"
+                                    title="Fechar"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="flex flex-col gap-5">
                                 <>
                                     {/* Track Header */}
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -4508,1468 +5808,94 @@ export function CreativeTrack() {
                                         }
                                     </div>
                                 </>
-                            )}
 
-                            {/* Facebook Ads Sync Modal */}
-                            {selectedTrack && (
-                                <FacebookAdsSyncModal
-                                    isOpen={showSyncModal}
-                                    onClose={() => setShowSyncModal(false)}
-                                    trackId={selectedTrack.id}
-                                    trackName={selectedTrack.name}
-                                    onSyncComplete={() => {
-                                        fetchFbLinkedAds(selectedTrack.id);
-                                    }}
+                                {/* Facebook Ads Sync Modal */}
+                                {selectedTrack && (
+                                    <FacebookAdsSyncModal
+                                        isOpen={showSyncModal}
+                                        onClose={() => setShowSyncModal(false)}
+                                        trackId={selectedTrack.id}
+                                        trackName={selectedTrack.name}
+                                        onSyncComplete={() => {
+                                            fetchFbLinkedAds(selectedTrack.id);
+                                        }}
+                                    />
+                                )}
+
+                                {/* Ad Preview Modal */}
+                                <AdPreviewModal
+                                    isOpen={!!previewAdId}
+                                    onClose={() => setPreviewAdId(null)}
+                                    adId={previewAdId || ''}
+                                    fbToken={fbToken}
                                 />
-                            )}
 
-                            {/* Ad Preview Modal */}
-                            <AdPreviewModal
-                                isOpen={!!previewAdId}
-                                onClose={() => setPreviewAdId(null)}
-                                adId={previewAdId || ''}
-                                fbToken={fbToken}
-                            />
-
-                            {/* Manual Entry Modal */}
-                            {showManualEntry && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm overflow-hidden">
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-                                        <div className="flex items-center justify-between p-4 border-b border-border-dark">
-                                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                                <Plus className="w-5 h-5 text-primary" />
-                                                Registro Manual
-                                            </h2>
-                                            <button onClick={() => setShowManualEntry(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
-                                                <X className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                        <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Data</label>
-                                                    <input type="date" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.date} onChange={e => setEntryForm({ ...entryForm, date: e.target.value })} />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Cliques Anúncio</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.ad_clicks} onChange={e => setEntryForm({ ...entryForm, ad_clicks: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Cliques Shopee</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.shopee_clicks} onChange={e => setEntryForm({ ...entryForm, shopee_clicks: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">CPC (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.cpc} onChange={e => setEntryForm({ ...entryForm, cpc: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Qtd Pedidos</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.orders} onChange={e => setEntryForm({ ...entryForm, orders: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Valor Comissão (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.commission_value} onChange={e => setEntryForm({ ...entryForm, commission_value: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Investimento (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.investment} onChange={e => setEntryForm({ ...entryForm, investment: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Lucro / %</label>
-                                                    <div className="flex items-center gap-2 h-[46px]">
-                                                        <span className={`text-sm font-bold ${entryProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(entryProfit)}</span>
-                                                        <span className={`text-xs ${entryProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>({formatPct(entryProfitPct)}%)</span>
+                                {/* Manual Entry Modal */}
+                                {showManualEntry && (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm overflow-hidden">
+                                        <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                                            <div className="flex items-center justify-between p-4 border-b border-border-dark">
+                                                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                                    <Plus className="w-5 h-5 text-primary" />
+                                                    Registro Manual
+                                                </h2>
+                                                <button onClick={() => setShowManualEntry(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                            <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Data</label>
+                                                        <input type="date" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.date} onChange={e => setEntryForm({ ...entryForm, date: e.target.value })} />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Cliques Anúncio</label>
+                                                        <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.ad_clicks} onChange={e => setEntryForm({ ...entryForm, ad_clicks: e.target.value })} placeholder="0" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Cliques Shopee</label>
+                                                        <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.shopee_clicks} onChange={e => setEntryForm({ ...entryForm, shopee_clicks: e.target.value })} placeholder="0" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">CPC (R$)</label>
+                                                        <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.cpc} onChange={e => setEntryForm({ ...entryForm, cpc: e.target.value })} placeholder="0.00" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Qtd Pedidos</label>
+                                                        <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.orders} onChange={e => setEntryForm({ ...entryForm, orders: e.target.value })} placeholder="0" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Valor Comissão (R$)</label>
+                                                        <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.commission_value} onChange={e => setEntryForm({ ...entryForm, commission_value: e.target.value })} placeholder="0.00" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Investimento (R$)</label>
+                                                        <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.investment} onChange={e => setEntryForm({ ...entryForm, investment: e.target.value })} placeholder="0.00" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs text-text-secondary">Lucro / %</label>
+                                                        <div className="flex items-center gap-2 h-[46px]">
+                                                            <span className={`text-sm font-bold ${entryProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(entryProfit)}</span>
+                                                            <span className={`text-xs ${entryProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>({formatPct(entryProfitPct)}%)</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center justify-end gap-2 p-4 border-t border-border-dark">
-                                            <button onClick={() => setShowManualEntry(false)} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm">Cancelar</button>
-                                            <button onClick={() => { handleAddEntry(); setShowManualEntry(false); }} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-sm">
-                                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Salvar Registro
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2 p-4 border-t border-border-dark">
+                                                <button onClick={() => setShowManualEntry(false)} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm">Cancelar</button>
+                                                <button onClick={() => { handleAddEntry(); setShowManualEntry(false); }} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-sm">
+                                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Salvar Registro
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
-                </>
-            )}
-
-            {/* KANBAN DETAIL MODAL */}
-            {showKanbanModal && selectedTrack && viewMode === 'kanban' && (
-                <div
-                    className="fixed inset-0 z-50 flex items-start justify-center bg-background-dark/95 backdrop-blur-md overflow-y-auto"
-                    onClick={(e: React.MouseEvent) => { if (e.target === e.currentTarget) { setShowKanbanModal(false); setSelectedTrack(null); } }}
-                >
-                    <div className="w-full max-w-5xl my-6 mx-4 bg-background-dark rounded-2xl border border-border-dark shadow-2xl shadow-black/50 p-4 sm:p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-white truncate flex-1 min-w-0 mr-4" title={selectedTrack.name}>
-                                {selectedTrack.name}
-                            </h2>
-                            <button
-                                onClick={() => { setShowKanbanModal(false); setSelectedTrack(null); }}
-                                className="p-2.5 rounded-xl bg-surface-dark border border-border-dark text-neutral-400 hover:text-white hover:border-red-500/40 hover:bg-red-500/10 transition-all shrink-0"
-                                title="Fechar"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="flex flex-col gap-5">
-                            <>
-                                {/* Track Header */}
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                    <div className="flex flex-col gap-3">
-                                        <div className="flex items-start gap-3">
-                                            <div className="flex flex-col gap-1">
-                                                {editingTrack ? (
-                                                    <input
-                                                        className="bg-background-dark border border-primary rounded-lg p-2 text-white text-lg sm:text-xl font-bold outline-none w-full"
-                                                        value={editName}
-                                                        onChange={e => setEditName(e.target.value)}
-                                                        autoFocus
-                                                    />
-                                                ) : (
-                                                    <div className="flex items-center gap-2 group">
-                                                        <h2 className={`text-lg sm:text-xl font-bold text-white transition-all ${hideSensitive ? 'blur-md select-none' : ''}`}>
-                                                            {selectedTrack.name}
-                                                        </h2>
-                                                        <div className="flex items-center gap-1">
-                                                            <button
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        await navigator.clipboard.writeText(selectedTrack.name);
-                                                                        showToast('Nome copiado para a área de transferência!', 'success');
-                                                                    } catch (err) {
-                                                                        showToast('Erro ao copiar nome.', 'error');
-                                                                    }
-                                                                }}
-                                                                className="p-1 rounded-md text-neutral-500 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                                                                title="Copiar Nome"
-                                                            >
-                                                                <Copy className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingTrack(true);
-                                                                    setEditName(selectedTrack.name);
-                                                                    setEditLink(selectedTrack.affiliate_link || '');
-                                                                    setEditSubIds(selectedTrack.sub_id
-                                                                        ? selectedTrack.sub_id.split(/[-,]/).map((s: string) => s.trim()).filter(Boolean)
-                                                                        : ['']);
-                                                                }}
-                                                                className="p-1 rounded-md text-neutral-500 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
-                                                                title="Editar Criativo"
-                                                            >
-                                                                <Pencil className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {selectedTrack.sub_id && !editingTrack && (
-                                                    <span className={`w-fit px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold font-mono transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
-                                                        {selectedTrack.sub_id}
-                                                    </span>
-                                                )}
-                                                {selectedTrack.affiliate_link && !editingTrack && (
-                                                    <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-surface-highlight/50 border border-border-dark rounded-lg w-fit">
-                                                        <span className={`text-[10px] sm:text-xs text-text-secondary font-mono truncate max-w-[150px] sm:max-w-[250px] transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
-                                                            {selectedTrack.affiliate_link}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleCopyTrackLink(selectedTrack.affiliate_link)}
-                                                            className="text-primary hover:text-primary-light transition-colors p-0.5"
-                                                            title="Copiar Link"
-                                                        >
-                                                            {trackLinkCopied ? <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> : <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
-                                                        </button>
-                                                        <a
-                                                            href={selectedTrack.affiliate_link}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-primary hover:text-primary-light transition-colors p-0.5"
-                                                            title="Acessar Link do Produto"
-                                                        >
-                                                            <ExternalLink className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                                        </a>
-
-                                                        {/* Link Verification Shield */}
-                                                        {(() => {
-                                                            const status = getLinkIntegrity(selectedTrack.affiliate_link, fbLinkedAds);
-                                                            if (status === 'valid') return (
-                                                                <div className="group relative flex items-center ml-1">
-                                                                    <div className="flex items-center text-green-500 cursor-help">
-                                                                        <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-green-500/10" />
-                                                                    </div>
-                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-neutral-900 border border-green-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
-                                                                        <span className="font-bold text-green-400 block mb-0.5">Link Verificado ✅</span>
-                                                                        O mesmo link configurado aqui está presente nos seus anúncios do Facebook.
-                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                            if (status === 'error') return (
-                                                                <div className="group relative flex items-center ml-1">
-                                                                    <div className="flex items-center text-red-500 cursor-help">
-                                                                        <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-red-500/10" />
-                                                                    </div>
-                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-neutral-900 border border-red-500/20 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl text-center leading-relaxed">
-                                                                        <span className="font-bold text-red-400 block mb-0.5">Links Divergentes! ⚠️</span>
-                                                                        O link desta track no MOP NÃO é o mesmo usado nos anúncios do Facebook. Verifique para não perder o rastreio.
-                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-900"></div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                            return null;
-                                                        })()}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {!editingTrack && (
-                                                <div className="flex items-center gap-2 ml-2">
-                                                    <button
-                                                        onClick={() => setHideSensitive(!hideSensitive)}
-                                                        className={`p-1.5 rounded-lg border transition-all ${hideSensitive
-                                                            ? 'bg-primary text-background-dark border-primary shadow-[0_0_10px_rgba(242,162,13,0.3)]'
-                                                            : 'bg-surface-highlight text-text-secondary border-border-dark hover:text-white'
-                                                            }`}
-                                                        title={hideSensitive ? "Mostrar dados sensíveis" : "Ocultar dados sensíveis"}
-                                                    >
-                                                        {hideSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {!editingTrack && selectedTrack && (
-                                            <div className="flex items-center gap-1 bg-background-dark/50 p-1 rounded-xl border border-border-dark w-fit">
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedTrack, 'rascunho')}
-                                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'rascunho'
-                                                        ? 'bg-white text-background-dark shadow-lg shadow-white/20'
-                                                        : 'text-neutral-500 hover:text-white hover:bg-white/10'
-                                                        }`}
-                                                    title="Marcar como Rascunho"
-                                                >
-                                                    <FileEdit className="w-3.5 h-3.5" /> Rascunho
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedTrack, 'ativo')}
-                                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'ativo'
-                                                        ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
-                                                        : 'text-neutral-500 hover:text-green-400 hover:bg-green-500/10'
-                                                        }`}
-                                                    title="Ativar"
-                                                >
-                                                    <PlayCircle className="w-3.5 h-3.5" /> Ativo
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedTrack, 'validado')}
-                                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'validado'
-                                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                                                        : 'text-neutral-500 hover:text-blue-400 hover:bg-blue-500/10'
-                                                        }`}
-                                                    title="Validado"
-                                                >
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Validado
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(selectedTrack, 'desativado')}
-                                                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${selectedTrack.status === 'desativado'
-                                                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
-                                                        : 'text-neutral-500 hover:text-red-400 hover:bg-red-500/10'
-                                                        }`}
-                                                    title="Desativar"
-                                                >
-                                                    <StopCircle className="w-3.5 h-3.5" /> Off
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {editingTrack ? (
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => setEditingTrack(false)} className="px-3 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm"><X className="w-4 h-4" /></button>
-                                                <button onClick={handleUpdateTrack} disabled={saving} className="bg-primary text-background-dark font-bold px-4 py-2 rounded-lg hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2 text-sm"><Save className="w-4 h-4" /> Salvar</button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <button
-                                                    onClick={() => setShowSyncModal(true)}
-                                                    className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center gap-1"
-                                                >
-                                                    <Link2 className="w-4 h-4" /> Vincular Anúncios
-                                                </button>
-                                                <button
-                                                    onClick={() => setShowFunnelPicker(!showFunnelPicker)}
-                                                    className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors ${linkedFunnel
-                                                        ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
-                                                        : 'text-neutral-400 hover:text-white hover:bg-white/10'
-                                                        }`}
-                                                >
-                                                    <Filter className="w-4 h-4" /> {linkedFunnel ? linkedFunnel.name : 'Vincular Funil'}
-                                                </button>
-
-
-                                                <button
-                                                    onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
-                                                    disabled={saving}
-                                                    className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
-                                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
-                                                        : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
-                                                        }`}
-                                                >
-                                                    {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                                                    {selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleDeleteTrack(selectedTrack)}
-                                                    disabled={saving}
-                                                    className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50 ${selectedTrack.is_archived
-                                                        ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
-                                                        : 'text-neutral-500 cursor-not-allowed'
-                                                        }`}
-                                                    title={selectedTrack.is_archived ? 'Excluir permanentemente' : 'Arquive antes de excluir'}
-                                                >
-                                                    <Trash2 className="w-4 h-4" /> Excluir
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Tabs Navigation */}
-                                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border-dark scrollbar-track-transparent mt-2">
-                                    <button
-                                        onClick={() => setActiveTab('metrics')}
-                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'metrics' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
-                                    >
-                                        <BarChart3 className="w-4 h-4" /> Métricas
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('product')}
-                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'product' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
-                                    >
-                                        <PackageSearch className="w-4 h-4" /> Dados do Produto
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('custom')}
-                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'custom' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
-                                    >
-                                        <Tag className="w-4 h-4" /> Campos
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('conversions')}
-                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'conversions' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
-                                    >
-                                        <ShoppingCart className="w-4 h-4" /> Conversões
-                                    </button>
-                                </div>
-
-                                <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    {/* Funnel Picker */}
-                                    {showFunnelPicker && (
-                                        <div className="bg-surface-dark border border-primary/30 rounded-2xl p-4">
-                                            <h4 className="text-xs font-bold text-text-secondary mb-3">Vincular Funil</h4>
-                                            {userFunnels.length === 0 ? (
-                                                <p className="text-xs text-text-secondary">Nenhum funil criado. Acesse a aba Funil para criar.</p>
-                                            ) : (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {linkedFunnel && (
-                                                        <button
-                                                            onClick={async () => {
-                                                                await supabase.from('creative_tracks').update({ funnel_id: null }).eq('id', selectedTrack!.id);
-                                                                setLinkedFunnel(null);
-                                                                setSelectedTrack({ ...selectedTrack!, funnel_id: null });
-                                                                setShowFunnelPicker(false);
-                                                                showToast('Funil desvinculado.');
-                                                            }}
-                                                            className="px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
-                                                        >
-                                                            Desvincular
-                                                        </button>
-                                                    )}
-                                                    {userFunnels.map(f => (
-                                                        <button
-                                                            key={f.id}
-                                                            onClick={async () => {
-                                                                await supabase.from('creative_tracks').update({ funnel_id: f.id }).eq('id', selectedTrack!.id);
-                                                                setLinkedFunnel(f);
-                                                                setSelectedTrack({ ...selectedTrack!, funnel_id: f.id });
-                                                                setShowFunnelPicker(false);
-                                                                showToast(`Funil "${f.name}" vinculado!`);
-                                                            }}
-                                                            className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${linkedFunnel?.id === f.id
-                                                                ? 'border-primary bg-primary/10 text-primary font-bold'
-                                                                : 'border-border-dark text-text-secondary hover:border-primary/50 hover:text-white'
-                                                                }`}
-                                                        >
-                                                            {f.name} ({(f.days || []).length}d)
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Edit Fields */}
-                                    {editingTrack && (
-                                        <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="flex flex-col gap-1">
-                                                <label className="text-xs text-text-secondary">Link de Afiliado</label>
-                                                <input className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={editLink} onChange={e => setEditLink(e.target.value)} placeholder="https://..." />
-                                            </div>
-                                            <div className="flex flex-col gap-1 sm:col-span-2">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="text-xs text-text-secondary">Sub IDs (separados por -)</label>
-                                                    {editSubIds.length < 5 && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setEditSubIds([...editSubIds, ''])}
-                                                            className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
-                                                        >
-                                                            <Plus className="w-3 h-3" /> Adicionar Sub ID
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    {editSubIds.map((sid, idx) => (
-                                                        <div key={idx} className="flex items-center gap-1">
-                                                            {idx > 0 && <span className="text-text-secondary text-sm font-bold">-</span>}
-                                                            <input
-                                                                className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm w-40"
-                                                                value={sid}
-                                                                onChange={e => {
-                                                                    const updated = [...editSubIds];
-                                                                    updated[idx] = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
-                                                                    setEditSubIds(updated);
-                                                                }}
-                                                                placeholder={`Sub ID ${idx + 1}`}
-                                                            />
-                                                            {editSubIds.length > 1 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setEditSubIds(editSubIds.filter((_, i) => i !== idx))}
-                                                                    className="text-neutral-500 hover:text-red-400 transition-colors p-0.5"
-                                                                >
-                                                                    <X className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="flex items-start gap-1.5 mt-1 text-amber-400/80 bg-amber-500/5 border border-amber-500/10 rounded-lg px-2.5 py-2">
-                                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                                    <span className="text-[11px] leading-relaxed">Alterar os Sub IDs pode desvincular conversões já sincronizadas com a Shopee e/ou Meta Ads. Recomenda-se gerar um novo link após a alteração.</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                </div>
-
-                                <div className={activeTab === 'product' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    {/* Product Details Section */}
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-4">
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
-                                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                                <PackageSearch className="w-4 h-4 text-orange-400" />
-                                                Dados do Produto {!selectedTrack.product_name && <span className="text-xs font-normal text-text-secondary">(Opcional)</span>}
-                                            </h3>
-                                            {!editingProduct && (
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => { setFetchProductError(null); handleFetchProductData(); }}
-                                                        disabled={fetchingProductData || !selectedTrack.affiliate_link}
-                                                        className="px-3 py-1.5 rounded-lg text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 border border-orange-500/20 transition-colors text-xs flex items-center gap-1.5 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {fetchingProductData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                                        {fetchingProductData ? 'Buscando...' : 'Buscar Dados Shopee'}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setEditingProduct(true)}
-                                                        className="px-3 py-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs flex items-center gap-1"
-                                                    >
-                                                        <Pencil className="w-3.5 h-3.5" /> Editar Dados
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {fetchProductError && (
-                                            <div className="mb-3 bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-lg flex gap-2 text-xs">
-                                                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                                <span>{fetchProductError}</span>
-                                            </div>
-                                        )}
-
-                                        {editingProduct ? (
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Preço do Produto (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} placeholder="Ex: 99.90" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Valor do Frete (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.shipping} onChange={e => setProductForm({ ...productForm, shipping: e.target.value })} placeholder="Ex: 15.00" disabled={productForm.free_shipping} />
-                                                </div>
-                                                <div className="flex flex-col gap-1 justify-center pt-5">
-                                                    <label className="flex items-center gap-2 text-sm text-white cursor-pointer select-none">
-                                                        <input type="checkbox" className="w-4 h-4 rounded border-border-dark bg-background-dark checked:bg-primary accent-primary" checked={productForm.free_shipping} onChange={e => setProductForm({ ...productForm, free_shipping: e.target.checked, shipping: e.target.checked ? '0' : productForm.shipping })} />
-                                                        Frete Grátis
-                                                    </label>
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Quantidade Vendida</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.sold} onChange={e => setProductForm({ ...productForm, sold: e.target.value })} placeholder="Ex: 1500" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Quantidade de Avaliações</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.reviews} onChange={e => setProductForm({ ...productForm, reviews: e.target.value })} placeholder="Ex: 350" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Nota de Avaliação (1.0 - 5.0)</label>
-                                                    <input type="number" step="0.1" min="1" max="5" className="bg-background-dark border border-border-dark rounded-lg p-2.5 text-white outline-none focus:border-primary transition-colors text-sm" value={productForm.rating} onChange={e => setProductForm({ ...productForm, rating: e.target.value })} placeholder="Ex: 4.8" />
-                                                </div>
-
-                                                <div className="col-span-full flex items-center justify-end gap-2 mt-2">
-                                                    <button onClick={() => {
-                                                        setEditingProduct(false);
-                                                        setProductForm({
-                                                            price: selectedTrack.product_price?.toString() || '',
-                                                            shipping: selectedTrack.product_shipping?.toString() || '',
-                                                            free_shipping: !!selectedTrack.product_free_shipping,
-                                                            reviews: selectedTrack.product_reviews?.toString() || '',
-                                                            sold: selectedTrack.product_sold?.toString() || '',
-                                                            rating: selectedTrack.product_rating?.toString() || ''
-                                                        });
-                                                    }} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-xs">Cancelar</button>
-                                                    <button onClick={handleUpdateProduct} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-xs">
-                                                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Salvar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : selectedTrack.product_name ? (
-                                            /* ── Rich API Data View ── */
-                                            <div className="flex flex-col gap-4">
-                                                {/* Product header: image + name + shop */}
-                                                <div className="flex gap-4">
-                                                    {selectedTrack.product_image_url ? (
-                                                        <img
-                                                            src={selectedTrack.product_image_url}
-                                                            alt={selectedTrack.product_name}
-                                                            className="w-24 h-24 rounded-xl object-cover border border-border-dark flex-shrink-0"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-24 h-24 rounded-xl bg-background-dark border border-border-dark flex items-center justify-center flex-shrink-0">
-                                                            <ImageIcon className="w-8 h-8 text-neutral-600" />
-                                                        </div>
-                                                    )}
-                                                    <div className="flex flex-col gap-1.5 min-w-0">
-                                                        <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
-                                                            {selectedTrack.product_name}
-                                                        </h4>
-                                                        {selectedTrack.product_shop_name && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Store className="w-3.5 h-3.5 text-neutral-500" />
-                                                                <span className="text-xs text-neutral-400">{selectedTrack.product_shop_name}</span>
-                                                                {selectedTrack.product_shop_rating != null && (
-                                                                    <span className="text-xs text-yellow-400 flex items-center gap-0.5 ml-1">
-                                                                        <Star className="w-3 h-3 fill-yellow-400" /> {selectedTrack.product_shop_rating}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {selectedTrack.product_link && (
-                                                            <a
-                                                                href={selectedTrack.product_link}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
-                                                            >
-                                                                <ExternalLink className="w-3 h-3" /> Ver na Shopee
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Data grid */}
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                                                    {/* Price */}
-                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Preço</span>
-                                                        <span className="text-sm font-bold text-primary">
-                                                            R$ {selectedTrack.product_price != null ? formatBRL(selectedTrack.product_price) : '--'}
-                                                        </span>
-                                                        {selectedTrack.product_price_min != null && selectedTrack.product_price_max != null && selectedTrack.product_price_min !== selectedTrack.product_price_max && (
-                                                            <span className="text-[10px] text-neutral-500 block">
-                                                                R$ {formatBRL(selectedTrack.product_price_min)} ~ R$ {formatBRL(selectedTrack.product_price_max)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Discount */}
-                                                    {selectedTrack.product_discount_rate != null && selectedTrack.product_discount_rate > 0 && (
-                                                        <div className="bg-background-dark/50 border border-red-500/20 rounded-xl px-3 py-2.5">
-                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Desconto</span>
-                                                            <span className="text-sm font-bold text-red-400">-{selectedTrack.product_discount_rate}%</span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Commission Total */}
-                                                    <div className="bg-background-dark/50 border border-green-500/20 rounded-xl px-3 py-2.5">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Comissão</span>
-                                                        <span className="text-sm font-bold text-green-400">
-                                                            {selectedTrack.product_commission != null ? `R$ ${formatBRL(selectedTrack.product_commission)}` : '--'}
-                                                        </span>
-                                                        {selectedTrack.product_commission_rate != null && (
-                                                            <span className="text-[10px] text-green-400/60 block">
-                                                                {formatPct(selectedTrack.product_commission_rate * 100)}% total
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Seller Commission Rate */}
-                                                    {selectedTrack.product_seller_commission_rate != null && (
-                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Vendedor</span>
-                                                            <span className="text-sm font-bold text-white">
-                                                                {formatPct(selectedTrack.product_seller_commission_rate * 100)}%
-                                                            </span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Shopee Commission Rate */}
-                                                    {selectedTrack.product_shopee_commission_rate != null && (
-                                                        <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                            <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Com. Shopee</span>
-                                                            <span className="text-sm font-bold text-white">
-                                                                {formatPct(selectedTrack.product_shopee_commission_rate * 100)}%
-                                                            </span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Rating */}
-                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Avaliação</span>
-                                                        <span className="text-sm font-bold text-white flex items-center gap-1">
-                                                            {selectedTrack.product_rating != null ? (
-                                                                <>
-                                                                    <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                                                                    {selectedTrack.product_rating}
-                                                                    {selectedTrack.product_reviews != null && (
-                                                                        <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews})</span>
-                                                                    )}
-                                                                </>
-                                                            ) : '--'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Sales */}
-                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Vendidos</span>
-                                                        <span className="text-sm font-bold text-white">
-                                                            {selectedTrack.product_sold != null ? selectedTrack.product_sold.toLocaleString('pt-BR') : '--'}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Shipping */}
-                                                    <div className="bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2.5">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider block">Frete</span>
-                                                        <span className="text-sm font-bold text-white">
-                                                            {selectedTrack.product_free_shipping ? (
-                                                                <span className="text-green-400">Grátis</span>
-                                                            ) : selectedTrack.product_shipping != null ? (
-                                                                `R$ ${formatBRL(selectedTrack.product_shipping)}`
-                                                            ) : (
-                                                                <span className="text-neutral-500 font-normal text-xs">Manual</span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-
-                                                {/* Fetched at timestamp */}
-                                                {selectedTrack.product_fetched_at && (
-                                                    <p className="text-[10px] text-neutral-600 text-right mt-2">
-                                                        Dados obtidos em {format(new Date(selectedTrack.product_fetched_at), 'dd/MM/yyyy HH:mm')}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            /* ── Basic Manual View (old tracks without API data) ── */
-                                            <div className="flex flex-wrap gap-4">
-                                                <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                                    <Tag className="w-4 h-4 text-text-secondary" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</span>
-                                                        <span className="text-sm font-bold text-white transition-all">
-                                                            {selectedTrack.product_price != null ? `R$ ${formatBRL(selectedTrack.product_price)}` : <span className="text-neutral-500 font-normal">Não def.</span>}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                                    <Truck className="w-4 h-4 text-text-secondary" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Frete</span>
-                                                        <span className="text-sm font-bold text-white transition-all">
-                                                            {selectedTrack.product_free_shipping ? (
-                                                                <span className="text-green-400">Grátis</span>
-                                                            ) : selectedTrack.product_shipping != null ? (
-                                                                `R$ ${formatBRL(selectedTrack.product_shipping)}`
-                                                            ) : (
-                                                                <span className="text-neutral-500 font-normal">Não def.</span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                                    <PackageSearch className="w-4 h-4 text-text-secondary" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Vendidos</span>
-                                                        <span className="text-sm font-bold text-white transition-all">
-                                                            {selectedTrack.product_sold != null ? `${selectedTrack.product_sold} un.` : <span className="text-neutral-500 font-normal">Não def.</span>}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 bg-background-dark/50 border border-border-dark rounded-xl px-3 py-2">
-                                                    <Star className="w-4 h-4 text-text-secondary" />
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Avaliação</span>
-                                                        <span className="text-sm font-bold text-white transition-all">
-                                                            {selectedTrack.product_rating != null ? (
-                                                                <span className="flex items-center gap-1">
-                                                                    {selectedTrack.product_rating} <span className="text-neutral-500 text-xs font-normal">({selectedTrack.product_reviews || 0})</span>
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-neutral-500 font-normal">Não def.</span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                </div>
-
-
-                                <div className={activeTab === 'custom' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl p-6">
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div className="flex flex-col gap-1">
-                                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                                    <Tag className="w-5 h-5 text-primary" /> Campos Personalizados
-                                                </h3>
-                                                <p className="text-xs text-text-secondary">Defina informações extras chave-valor para este criativo.</p>
-                                            </div>
-                                            {!editingCustomFields ? (
-                                                <button
-                                                    onClick={() => {
-                                                        const fields = Object.entries(selectedTrack?.custom_fields || {}).map(([key, value]) => ({ key, value }));
-                                                        setTabCustomFields(fields.length > 0 ? fields : []);
-                                                        setEditingCustomFields(true);
-                                                    }}
-                                                    className="bg-primary/10 text-primary border border-primary/20 px-4 py-2 rounded-xl font-bold hover:bg-primary/20 transition-all text-sm flex items-center gap-2"
-                                                >
-                                                    <Edit2 className="w-4 h-4" /> Editar Campos
-                                                </button>
-                                            ) : (
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setEditingCustomFields(false)}
-                                                        className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
-                                                    >
-                                                        Cancelar
-                                                    </button>
-                                                    <button
-                                                        onClick={handleUpdateCustomFields}
-                                                        disabled={saving}
-                                                        className="bg-primary text-background-dark font-bold px-4 py-2 rounded-xl hover:bg-opacity-90 disabled:opacity-50 flex items-center gap-2 text-sm shadow-lg shadow-primary/10"
-                                                    >
-                                                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {!editingCustomFields ? (
-                                            <div className="flex flex-col gap-3">
-                                                {selectedTrack?.custom_fields && Object.keys(selectedTrack.custom_fields).length > 0 ? (
-                                                    Object.entries(selectedTrack.custom_fields).map(([k, v]) => (
-                                                        <div key={k} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-background-dark/50 border border-border-dark rounded-xl px-4 py-3 group hover:border-primary/30 transition-all">
-                                                            <div className="flex-shrink-0 w-full sm:w-32 py-1 px-2.5 bg-white/5 rounded-lg border border-white/10 uppercase text-[10px] font-bold text-neutral-400">
-                                                                {k}
-                                                            </div>
-                                                            <div className="text-sm text-white font-bold break-all flex-1">
-                                                                {v}
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="col-span-full py-12 flex flex-col items-center justify-center bg-background-dark/30 rounded-2xl border border-dashed border-border-dark">
-                                                        <Tag className="w-8 h-8 text-neutral-700 mb-3" />
-                                                        <p className="text-sm text-neutral-500">Nenhum campo personalizado definido.</p>
-                                                        <button
-                                                            onClick={() => {
-                                                                setTabCustomFields([]);
-                                                                setEditingCustomFields(true);
-                                                            }}
-                                                            className="mt-4 text-xs text-primary hover:underline font-bold"
-                                                        >
-                                                            + Adicionar Primeiro Campo
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col gap-3">
-                                                {tabCustomFields.map((field, idx) => (
-                                                    <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Nome do Campo</label>
-                                                                <input
-                                                                    placeholder="Ex: Campanha"
-                                                                    value={field.key}
-                                                                    onChange={(e) => handleTabCustomFieldChange(idx, 'key', e.target.value)}
-                                                                    className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
-                                                                />
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[10px] text-text-secondary uppercase font-bold px-1">Valor</label>
-                                                                <input
-                                                                    placeholder="Valor"
-                                                                    value={field.value}
-                                                                    onChange={(e) => handleTabCustomFieldChange(idx, 'value', e.target.value)}
-                                                                    className="bg-background-dark border border-border-dark rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary transition-all outline-none"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleTabRemoveCustomField(idx)}
-                                                            className="mt-6 p-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                                                            title="Remover"
-                                                        >
-                                                            <X className="w-5 h-5" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-
-                                                <button
-                                                    onClick={handleTabAddCustomField}
-                                                    disabled={tabCustomFields.length >= 10}
-                                                    className="mt-2 w-fit flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 transition-all border border-dashed border-primary/30"
-                                                >
-                                                    <Plus className="w-4 h-4" /> Adicionar Novo Campo
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    {/* FB Sync Buttons */}
-                                    {fbLinkedAds.length > 0 && (
-                                        <div className="bg-surface-dark border border-blue-500/20 rounded-2xl p-4">
-                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                                <div>
-                                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                                        <Link2 className="w-4 h-4 text-blue-400" />
-                                                        Facebook Ads ({fbLinkedAds.length} anúncio{fbLinkedAds.length > 1 ? 's' : ''} vinculado{fbLinkedAds.length > 1 ? 's' : ''})
-                                                    </h3>
-                                                    <div className={`mt-2 flex flex-wrap gap-2 transition-all ${hideSensitive ? 'blur-sm select-none' : ''}`}>
-                                                        {fbLinkedAds.map(a => (
-                                                            <div key={a.ad_id} className="flex flex-col bg-background-dark/50 border border-border-dark rounded-lg px-2 py-1.5 min-w-[150px]">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-xs text-white font-medium truncate max-w-[200px]" title={a.ad_name || a.ad_id}>
-                                                                        {a.ad_name || a.ad_id}
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={() => setPreviewAdId(a.ad_id)}
-                                                                        className="p-1 hover:bg-white/10 rounded-md text-primary transition-colors ml-2"
-                                                                        title="Ver Criativo"
-                                                                    >
-                                                                        <Eye className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </div>
-                                                                {a.ad_link && (
-                                                                    <a
-                                                                        href={a.ad_link}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-1.5 mt-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors w-full group"
-                                                                        title={a.ad_link}
-                                                                    >
-                                                                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                                                        <span className="truncate flex-1">{a.ad_link}</span>
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => handleSyncFb('today')}
-                                                        disabled={syncingFb}
-                                                        className="flex items-center gap-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 px-3 py-2 rounded-lg font-bold hover:bg-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                                                    >
-                                                        {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
-                                                        Sync Hoje
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleSyncFb('all')}
-                                                        disabled={syncingFb}
-                                                        className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-2 rounded-lg font-bold hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                                                    >
-                                                        {syncingFb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                                        Sync Geral
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* KPIs Dashboard */}
-                                    {loadingEntries ? (
-                                        <div className="flex justify-center py-8">
-                                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                        </div>
-                                    ) : kpis ? (
-                                        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleTrackKpiDragEnd}>
-                                            <SortableContext items={trackKpiOrder} strategy={rectSortingStrategy}>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                    {trackKpiOrder.map((id) => {
-                                                        const kpiMap: Record<string, any> = {
-                                                            profit: { label: 'Lucro Total', value: `R$ ${formatBRL(kpis.totalProfit)}`, icon: DollarSign, color: kpis.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
-                                                            orders: { label: 'Pedidos Totais', value: kpis.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
-                                                            completed: { label: 'Pedidos Concluídos', value: `${kpis.completedOrders} (R$ ${formatBRL(kpis.completedValue)})`, icon: CheckCircle2, color: 'text-green-400' },
-                                                            pending: { label: 'Pedidos Pendentes', value: `${kpis.pendingOrders} (R$ ${formatBRL(kpis.pendingValue)})`, icon: Clock, color: 'text-yellow-400' },
-                                                            cancelled: { label: 'Pedidos Cancelados', value: `${kpis.cancelledOrders} (R$ ${formatBRL(kpis.cancelledValue)})`, icon: XCircle, color: 'text-red-400' },
-                                                            avgOrders: { label: 'Média Pedidos/Dia', value: kpis.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
-                                                            commission: { label: 'Total Comissões', value: `R$ ${formatBRL(kpis.totalCommission)}`, icon: TrendingUp, color: 'text-primary' },
-                                                            investment: { label: 'Total Investimento', value: `R$ ${formatBRL(kpis.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
-                                                            profitPct: { label: 'Lucro Médio', value: `${formatPct(kpis.profitPct)}%`, icon: Percent, color: kpis.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
-                                                            shopeeClicks: { label: 'Cliques Shopee', value: kpis.totalShopeeClicks.toString(), icon: MousePointerClick, color: 'text-cyan-400' },
-                                                            adClicks: { label: 'Cliques Anúncio', value: kpis.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
-                                                            cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(kpis.totalCpc)}`, icon: MousePointerClick, color: 'text-amber-400' },
-                                                        };
-                                                        const kpi = kpiMap[id];
-                                                        if (!kpi) return null;
-                                                        return <SortableKpiCard key={id} id={id} kpi={kpi} />;
-                                                    })}
-                                                </div>
-                                            </SortableContext>
-                                        </DndContext>
-                                    ) : (
-                                        <div className="text-center py-6 bg-surface-dark rounded-2xl border border-border-dark text-neutral-400 text-sm">
-                                            Nenhum registro ainda. Adicione o primeiro abaixo.
-                                        </div>
-                                    )}
-
-                                    {/* Video KPIs */}
-                                    {videoKpis && (
-                                        <div className="mt-3">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Video className="w-4 h-4 text-violet-400" />
-                                                <span className="text-sm font-semibold text-white">Métricas de Vídeo</span>
-                                                <span className="text-[10px] text-text-secondary bg-violet-500/10 px-2 py-0.5 rounded-full">Termômetro do Criativo</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                                {[
-                                                    { label: 'ThruPlay', value: videoKpis.totalThruplay.toLocaleString('pt-BR'), color: 'text-violet-400', hint: 'Assistiu 15s ou mais (ou o vídeo inteiro se for menor que 15s)' },
-                                                    { label: '25% Assistido', value: videoKpis.totalP25.toLocaleString('pt-BR'), color: 'text-blue-400', hint: 'Assistiu pelo menos 25% do vídeo' },
-                                                    { label: '50% Assistido', value: videoKpis.totalP50.toLocaleString('pt-BR'), color: 'text-cyan-400', hint: 'Assistiu pelo menos metade do vídeo' },
-                                                    { label: '95% Assistido', value: videoKpis.totalP95.toLocaleString('pt-BR'), color: 'text-emerald-400', hint: 'Assistiu quase o vídeo inteiro (95%)' },
-                                                    { label: 'Retenção (95/25)', value: `${videoKpis.retentionRate.toFixed(1)}%`, color: videoKpis.retentionRate >= 30 ? 'text-green-400' : 'text-amber-400', hint: 'De quem assistiu 25%, quantos foram até 95%' },
-                                                ].map((kpi, i) => (
-                                                    <div key={i} className="bg-surface-dark border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-1.5">
-                                                        <span className="text-xs text-text-secondary">{kpi.label}</span>
-                                                        <span className={`text-lg font-bold ${kpi.color}`}>{kpi.value}</span>
-                                                        <span className="text-[10px] leading-tight text-neutral-500">{kpi.hint}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                </div>
-
-                                <div className={activeTab === 'conversions' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    {/* ══════ Shopee Conversions Section ══════ */}
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
-                                        <div className="p-4 border-b border-border-dark flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2">
-                                                <ShoppingCart size={16} className="text-orange-400" />
-                                                <h3 className="text-sm font-bold text-white">
-                                                    Conversões Shopee ({filteredConversions.length})
-                                                </h3>
-                                            </div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <button
-                                                    onClick={handleSyncConversions}
-                                                    disabled={syncingConversions}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-400 border border-orange-400/30 hover:bg-orange-400/10 transition-all disabled:opacity-50"
-                                                >
-                                                    {syncingConversions ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                                    Sync Conversões
-                                                </button>
-                                                <button
-                                                    onClick={handleSyncValidated}
-                                                    disabled={syncingValidated}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 transition-all disabled:opacity-50"
-                                                >
-                                                    {syncingValidated ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                                                    Sync Validadas
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Conversion KPIs */}
-                                        {filteredConversions.length > 0 && (() => {
-                                            const totalNetComm = filteredConversions.reduce((s, c) => s + (c.item_total_commission || 0), 0);
-                                            const validatedComm = filteredConversions.filter(c => c.is_validated).reduce((s, c) => s + (c.item_total_commission || 0), 0);
-                                            const totalOrders = new Set(filteredConversions.map(c => c.order_id).filter(Boolean)).size;
-                                            const validatedOrders = new Set(filteredConversions.filter(c => c.is_validated).map(c => c.order_id).filter(Boolean)).size;
-                                            const fraudCount = filteredConversions.filter(c => c.fraud_status && c.fraud_status !== 'NONE' && c.fraud_status !== '').length;
-                                            const fraudPct = filteredConversions.length > 0 ? ((fraudCount / filteredConversions.length) * 100) : 0;
-                                            const directCount = filteredConversions.filter(c => c.attribution_type === 'DIRECT' || c.attribution_type === 'direct').length;
-                                            const indirectCount = filteredConversions.filter(c => c.attribution_type !== 'DIRECT' && c.attribution_type !== 'direct' && c.attribution_type).length;
-
-                                            return (
-                                                <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                    <div className="bg-background-dark border border-orange-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Comissão Total</span>
-                                                        <span className="text-base sm:text-lg font-bold text-orange-400">{formatBRL(totalNetComm)}</span>
-                                                        {validatedComm > 0 && (
-                                                            <span className="text-[10px] text-emerald-400">✅ {formatBRL(validatedComm)} validada</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="bg-background-dark border border-blue-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Pedidos</span>
-                                                        <span className="text-base sm:text-lg font-bold text-blue-400">{totalOrders}</span>
-                                                        {validatedOrders > 0 && (
-                                                            <span className="text-[10px] text-emerald-400">✅ {validatedOrders} validados</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="bg-background-dark border border-red-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Taxa Fraude</span>
-                                                        <span className={`text-base sm:text-lg font-bold ${fraudPct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                            {fraudPct.toFixed(1)}%
-                                                        </span>
-                                                        <span className="text-[10px] text-text-secondary">{fraudCount} suspeito(s)</span>
-                                                    </div>
-                                                    <div className="bg-background-dark border border-violet-500/20 rounded-xl p-3 flex flex-col gap-1">
-                                                        <span className="text-[10px] text-text-secondary uppercase tracking-wider">Atribuição</span>
-                                                        <div className="flex items-baseline gap-2">
-                                                            <span className="text-sm font-bold text-green-400">{directCount}D</span>
-                                                            <span className="text-[10px] text-text-secondary">vs</span>
-                                                            <span className="text-sm font-bold text-amber-400">{indirectCount}I</span>
-                                                        </div>
-                                                        <span className="text-[10px] text-text-secondary">Diretas vs Indiretas</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-
-                                        {/* Conversion List */}
-                                        {filteredConversions.length > 0 ? (
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full w-full text-xs">
-                                                    <thead>
-                                                        <tr className="border-t border-border-dark bg-background-dark">
-                                                            <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Data</th>
-                                                            <th className="px-3 py-2 text-left text-text-secondary font-medium whitespace-nowrap">Produto</th>
-                                                            <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Qtd</th>
-                                                            <th className="px-3 py-2 text-right text-text-secondary font-medium whitespace-nowrap">Comissão</th>
-                                                            <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Status</th>
-                                                            <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Tipo</th>
-                                                            <th className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">Validado</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {filteredConversions.slice(0, 50).map((conv) => (
-                                                            <tr key={conv.id} className="border-t border-border-dark/50 hover:bg-surface-dark/50 transition-colors">
-                                                                <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
-                                                                    {conv.purchase_time ? format(new Date(conv.purchase_time), 'dd/MM HH:mm') : '—'}
-                                                                </td>
-                                                                <td className="px-3 py-2 text-white min-w-0">
-                                                                    <div className="flex items-center gap-2 min-w-0">
-                                                                        {conv.image_url && (
-                                                                            <img src={conv.image_url} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" />
-                                                                        )}
-                                                                        <span className="truncate max-w-[180px]">{conv.item_name || `Item #${conv.item_id}`}</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-3 py-2 text-right text-white whitespace-nowrap">{conv.qty}</td>
-                                                                <td className="px-3 py-2 text-right font-medium text-orange-400 whitespace-nowrap">
-                                                                    {formatBRL(conv.item_total_commission)}
-                                                                </td>
-                                                                <td className="px-3 py-2 text-center whitespace-nowrap">
-                                                                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${['PAID', 'VALIDATED', 'COMPLETED'].includes(conv.conversion_status || '')
-                                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                                        : ['CANCELLED', 'INVALID', 'FAILED', 'UNPAID'].includes(conv.conversion_status || '')
-                                                                            ? 'bg-red-500/20 text-red-400'
-                                                                            : 'bg-amber-500/20 text-amber-400'
-                                                                        }`}>
-                                                                        {conv.conversion_status || 'PENDING'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-2 text-center whitespace-nowrap">
-                                                                    <span className={`text-[10px] ${conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct'
-                                                                        ? 'text-green-400' : 'text-amber-400'
-                                                                        }`}>
-                                                                        {conv.attribution_type === 'DIRECT' || conv.attribution_type === 'direct' ? 'Direta' : conv.attribution_type || '—'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-3 py-2 text-center">
-                                                                    {conv.is_validated ? (
-                                                                        <ShieldCheck size={14} className="text-emerald-400 mx-auto" />
-                                                                    ) : conv.fraud_status && conv.fraud_status !== 'NONE' && conv.fraud_status !== '' ? (
-                                                                        <AlertTriangle size={14} className="text-red-400 mx-auto" />
-                                                                    ) : (
-                                                                        <span className="text-text-secondary">—</span>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                                {filteredConversions.length > 50 && (
-                                                    <div className="p-3 text-center text-xs text-text-secondary border-t border-border-dark/50">
-                                                        Mostrando 50 de {filteredConversions.length} conversões
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="p-6 text-center text-sm text-text-secondary">
-                                                Nenhuma conversão sincronizada. Use os botões acima para buscar dados da API Shopee.
-                                            </div>
-                                        )}
-                                    </div>
-
-                                </div>
-
-                                <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
-                                    {/* Entries Table */}
-                                    {
-                                        <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
-                                            <div className="p-4 border-b border-border-dark flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <h3 className="text-sm font-bold text-white">Histórico ({filteredEntries.length} registros)</h3>
-                                                    <span className="hidden sm:inline-block text-xs font-normal text-text-secondary bg-background-dark px-2.5 py-1 rounded-md border border-border-dark">
-                                                        Dê 2 cliques na linha para editar
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    onClick={() => setShowManualEntry(true)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-all"
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" /> Registro Manual
-                                                </button>
-                                            </div>
-                                            {filteredEntries.length > 0 ? (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-sm">
-                                                        <thead>
-                                                            <tr className="border-b border-border-dark text-text-secondary text-xs">
-                                                                {linkedFunnel && <th className="text-center p-3 w-10" title="Status do Funil"><Filter className="w-3.5 h-3.5 mx-auto" /></th>}
-                                                                <th className="text-left p-3">Data</th>
-                                                                <th className="text-right p-3">Cliq. Anúncio</th>
-                                                                <th className="text-right p-3">Cliq. Shopee</th>
-                                                                <th className="text-right p-3">CPC</th>
-                                                                <th className="text-right p-3">Pedidos</th>
-                                                                <th className="text-right p-3">Comissão</th>
-                                                                <th className="text-right p-3">Investimento</th>
-                                                                <th className="text-right p-3">Lucro</th>
-                                                                <th className="text-right p-3">%</th>
-                                                                <th className="text-center p-3"></th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-border-dark/30">
-                                                            {filteredEntries.map(entry => {
-                                                                const isEditing = editingEntryId === entry.id;
-
-                                                                // Funnel evaluation
-                                                                const entryIndex = entries.indexOf(entry);
-                                                                const dayNumber = entries.length - entryIndex; // Day 1 = oldest entry
-                                                                let funnelStatus: 'pass' | 'fail' | 'none' = 'none';
-                                                                if (linkedFunnel) {
-                                                                    const funnelDay = linkedFunnel.days?.find(d => d.day === dayNumber);
-                                                                    const maxFunnelDay = Math.max(...(linkedFunnel.days || []).map(d => d.day), 0);
-
-                                                                    // Use maintenance groups for days beyond configured ones
-                                                                    const mConds = linkedFunnel.maintenance_conditions;
-                                                                    const maintenanceGroups = (Array.isArray(mConds) && mConds.length > 0 && typeof mConds[0] === 'object' && 'id' in mConds[0])
-                                                                        ? (mConds as FunnelConditionGroup[])
-                                                                        : null;
-
-                                                                    const groupsToEval = funnelDay?.condition_groups?.length
-                                                                        ? funnelDay.condition_groups
-                                                                        : (dayNumber > maxFunnelDay && maintenanceGroups)
-                                                                            ? maintenanceGroups
-                                                                            : null;
-
-                                                                    // Fallback for legacy structure if present
-                                                                    const legacyConditions = funnelDay?.conditions || (dayNumber > maxFunnelDay && !maintenanceGroups ? (mConds as FunnelCondition[]) : null);
-
-                                                                    const eProfit = Number(entry.commission_value) - Number(entry.investment);
-                                                                    const eRoi = Number(entry.investment) > 0 ? (eProfit / Number(entry.investment)) * 100 : 0;
-                                                                    const metricMap: Record<string, number> = {
-                                                                        ad_clicks: Number(entry.ad_clicks),
-                                                                        shopee_clicks: Number(entry.shopee_clicks),
-                                                                        cpc: Number(entry.cpc),
-                                                                        orders: Number(entry.orders),
-                                                                        commission_value: Number(entry.commission_value),
-                                                                        investment: Number(entry.investment),
-                                                                        profit: eProfit,
-                                                                        roi_percentage: eRoi,
-                                                                    };
-
-                                                                    if (groupsToEval && groupsToEval.length > 0) {
-                                                                        // LOGIC OR: If ANY group matches its internal conditions, the day passes
-                                                                        const anyGroupPass = groupsToEval.some(group => {
-                                                                            if (!group.conditions || group.conditions.length === 0) return false;
-                                                                            // LOGIC AND: All conditions in a group must match
-                                                                            return group.conditions.every(cond => {
-                                                                                const actual = metricMap[cond.metric] ?? 0;
-                                                                                switch (cond.operator) {
-                                                                                    case '<=': return actual <= cond.value;
-                                                                                    case '>=': return actual >= cond.value;
-                                                                                    case '==': return actual === cond.value;
-                                                                                    case '>': return actual > cond.value;
-                                                                                    case '<': return actual < cond.value;
-                                                                                    default: return false;
-                                                                                }
-                                                                            });
-                                                                        });
-                                                                        funnelStatus = anyGroupPass ? 'pass' : 'fail';
-                                                                    } else if (legacyConditions && legacyConditions.length > 0) {
-                                                                        // Backward compatibility for legacy funnels
-                                                                        const allPass = legacyConditions.every(cond => {
-                                                                            const actual = metricMap[cond.metric] ?? 0;
-                                                                            switch (cond.operator) {
-                                                                                case '<=': return actual <= cond.value;
-                                                                                case '>=': return actual >= cond.value;
-                                                                                case '==': return actual === cond.value;
-                                                                                case '>': return actual > cond.value;
-                                                                                case '<': return actual < cond.value;
-                                                                                default: return false;
-                                                                            }
-                                                                        });
-                                                                        funnelStatus = allPass ? 'pass' : 'fail';
-                                                                    }
-                                                                }
-
-                                                                if (isEditing) {
-                                                                    const editProfit = (parseFloat(inlineEditForm.commission_value) || 0) - (parseFloat(inlineEditForm.investment) || 0);
-                                                                    const editPct = (parseFloat(inlineEditForm.investment) || 0) > 0 ? (editProfit / (parseFloat(inlineEditForm.investment) || 1)) * 100 : 0;
-
-                                                                    return (
-                                                                        <tr key={entry.id} className="border-b border-border-dark/50 bg-primary/5">
-                                                                            {linkedFunnel && (
-                                                                                <td className="p-3 text-center">
-                                                                                    {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
-                                                                                    {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
-                                                                                    {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
-                                                                                </td>
-                                                                            )}
-                                                                            <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.ad_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, ad_clicks: e.target.value })} />
-                                                                            </td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.shopee_clicks} onChange={e => setInlineEditForm({ ...inlineEditForm, shopee_clicks: e.target.value })} />
-                                                                            </td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" step="0.01" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-white outline-none focus:border-primary text-right text-sm" value={inlineEditForm.cpc} onChange={e => setInlineEditForm({ ...inlineEditForm, cpc: e.target.value })} />
-                                                                            </td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" className="w-full min-w-[70px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-blue-400 font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.orders} onChange={e => setInlineEditForm({ ...inlineEditForm, orders: e.target.value })} />
-                                                                            </td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-primary font-semibold outline-none focus:border-primary text-right text-sm" value={inlineEditForm.commission_value} onChange={e => setInlineEditForm({ ...inlineEditForm, commission_value: e.target.value })} />
-                                                                            </td>
-                                                                            <td className="p-2">
-                                                                                <input type="number" step="0.01" className="w-full min-w-[80px] bg-background-dark border border-border-dark rounded px-2 py-1.5 text-orange-400 outline-none focus:border-primary text-right text-sm" value={inlineEditForm.investment} onChange={e => setInlineEditForm({ ...inlineEditForm, investment: e.target.value })} />
-                                                                            </td>
-                                                                            <td className={`p-3 text-right font-bold ${editProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(editProfit)}</td>
-                                                                            <td className={`p-3 text-right text-xs ${editPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(editPct)}%</td>
-                                                                            <td className="p-3 text-center">
-                                                                                <div className="flex items-center justify-center gap-2">
-                                                                                    <button onClick={() => handleSaveInlineEdit(entry)} disabled={saving} className="p-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" title="Salvar">
-                                                                                        {saving && editingEntryId === entry.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                                                    </button>
-                                                                                    <button onClick={() => setEditingEntryId(null)} className="p-1 rounded bg-surface-highlight text-text-secondary hover:text-white transition-colors" title="Cancelar">
-                                                                                        <X className="w-4 h-4" />
-                                                                                    </button>
-                                                                                </div>
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                }
-
-                                                                const profit = Number(entry.commission_value) - Number(entry.investment);
-                                                                const pct = Number(entry.investment) > 0 ? (profit / Number(entry.investment)) * 100 : 0;
-                                                                return (
-                                                                    <tr key={entry.id} onDoubleClick={() => startInlineEdit(entry)} className="border-b border-border-dark/50 hover:bg-white/5 transition-colors cursor-pointer" title="Dê um duplo clique para editar">
-                                                                        {linkedFunnel && (
-                                                                            <td className="p-3 text-center">
-                                                                                {funnelStatus === 'pass' && <Filter className="w-4 h-4 text-green-400 mx-auto" />}
-                                                                                {funnelStatus === 'fail' && <Filter className="w-4 h-4 text-red-400 mx-auto" />}
-                                                                                {funnelStatus === 'none' && <Filter className="w-4 h-4 text-neutral-600 mx-auto" />}
-                                                                            </td>
-                                                                        )}
-                                                                        <td className="p-3 text-white whitespace-nowrap">{format(new Date(entry.date + 'T12:00:00'), 'dd/MM/yyyy')}</td>
-                                                                        <td className="p-3 text-right text-neutral-300">{entry.ad_clicks}</td>
-                                                                        <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
-                                                                        <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
-                                                                        <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
-                                                                        <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
-                                                                        <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
-                                                                        <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
-                                                                        <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
-                                                                        <td className="p-3 text-center">
-                                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }} className="text-red-400/50 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                        {filteredEntries.length > 0 && (() => {
-                                                            const totals = filteredEntries.reduce((acc, entry) => {
-                                                                acc.ad_clicks += Number(entry.ad_clicks || 0);
-                                                                acc.shopee_clicks += Number(entry.shopee_clicks || 0);
-                                                                acc.orders += Number(entry.orders || 0);
-                                                                acc.commission += Number(entry.commission_value || 0);
-                                                                acc.investment += Number(entry.investment || 0);
-                                                                return acc;
-                                                            }, { ad_clicks: 0, shopee_clicks: 0, orders: 0, commission: 0, investment: 0 });
-
-                                                            const totalProfit = totals.commission - totals.investment;
-                                                            const totalRoi = totals.investment > 0 ? (totalProfit / totals.investment) * 100 : 0;
-                                                            const avgCpc = totals.ad_clicks > 0 ? (totals.investment / totals.ad_clicks) : 0;
-
-                                                            return (
-                                                                <tfoot className="border-t-2 border-border-dark bg-background-dark font-bold text-sm">
-                                                                    <tr>
-                                                                        {linkedFunnel && <td className="p-3"></td>}
-                                                                        <td className="p-3 text-left text-white">TOTAL</td>
-                                                                        <td className="p-3 text-right text-neutral-300">{totals.ad_clicks}</td>
-                                                                        <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
-                                                                        <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
-                                                                        <td className="p-3 text-right text-blue-400">{totals.orders}</td>
-                                                                        <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
-                                                                        <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
-                                                                        <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
-                                                                        <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
-                                                                        <td className="p-3"></td>
-                                                                    </tr>
-                                                                </tfoot>
-                                                            );
-                                                        })()}
-                                                    </table>
-                                                </div>
-                                            ) : (
-                                                <div className="p-8 text-center text-neutral-400 text-sm">
-                                                    Nenhum registro ainda. Adicione o primeiro abaixo.
-                                                </div>
-                                            )}
-                                        </div>
-                                    }
-                                </div>
-                            </>
-
-                            {/* Facebook Ads Sync Modal */}
-                            {selectedTrack && (
-                                <FacebookAdsSyncModal
-                                    isOpen={showSyncModal}
-                                    onClose={() => setShowSyncModal(false)}
-                                    trackId={selectedTrack.id}
-                                    trackName={selectedTrack.name}
-                                    onSyncComplete={() => {
-                                        fetchFbLinkedAds(selectedTrack.id);
-                                    }}
-                                />
-                            )}
-
-                            {/* Ad Preview Modal */}
-                            <AdPreviewModal
-                                isOpen={!!previewAdId}
-                                onClose={() => setPreviewAdId(null)}
-                                adId={previewAdId || ''}
-                                fbToken={fbToken}
-                            />
-
-                            {/* Manual Entry Modal */}
-                            {showManualEntry && (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background-dark/80 backdrop-blur-sm overflow-hidden">
-                                    <div className="bg-surface-dark border border-border-dark rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-                                        <div className="flex items-center justify-between p-4 border-b border-border-dark">
-                                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                                <Plus className="w-5 h-5 text-primary" />
-                                                Registro Manual
-                                            </h2>
-                                            <button onClick={() => setShowManualEntry(false)} className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors">
-                                                <X className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                        <div className="p-4 space-y-3 overflow-y-auto flex-1 custom-scrollbar">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Data</label>
-                                                    <input type="date" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.date} onChange={e => setEntryForm({ ...entryForm, date: e.target.value })} />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Cliques Anúncio</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.ad_clicks} onChange={e => setEntryForm({ ...entryForm, ad_clicks: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Cliques Shopee</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.shopee_clicks} onChange={e => setEntryForm({ ...entryForm, shopee_clicks: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">CPC (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.cpc} onChange={e => setEntryForm({ ...entryForm, cpc: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Qtd Pedidos</label>
-                                                    <input type="number" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.orders} onChange={e => setEntryForm({ ...entryForm, orders: e.target.value })} placeholder="0" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Valor Comissão (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.commission_value} onChange={e => setEntryForm({ ...entryForm, commission_value: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Investimento (R$)</label>
-                                                    <input type="number" step="0.01" className="bg-background-dark border border-border-dark rounded-lg p-3 text-white outline-none focus:border-primary transition-colors text-sm" value={entryForm.investment} onChange={e => setEntryForm({ ...entryForm, investment: e.target.value })} placeholder="0.00" />
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <label className="text-xs text-text-secondary">Lucro / %</label>
-                                                    <div className="flex items-center gap-2 h-[46px]">
-                                                        <span className={`text-sm font-bold ${entryProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(entryProfit)}</span>
-                                                        <span className={`text-xs ${entryProfitPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>({formatPct(entryProfitPct)}%)</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-end gap-2 p-4 border-t border-border-dark">
-                                            <button onClick={() => setShowManualEntry(false)} className="px-4 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors text-sm">Cancelar</button>
-                                            <button onClick={() => { handleAddEntry(); setShowManualEntry(false); }} disabled={saving} className="bg-primary text-background-dark font-bold px-5 py-2 rounded-lg hover:brightness-110 disabled:opacity-50 flex items-center gap-2 text-sm">
-                                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Salvar Registro
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

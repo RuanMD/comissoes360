@@ -1,11 +1,90 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMetrics } from '../hooks/useMetrics';
 import { DateFilter } from '../components/ui/DateFilter';
-import { Filter, MousePointerClick, ShoppingBag, DollarSign, TrendingDown } from 'lucide-react';
+import {
+    Filter, MousePointerClick, DollarSign, TrendingDown, Clock,
+    ArrowUpDown, ShoppingCart, CheckCircle2, XCircle, BarChart3, TrendingUp,
+    PiggyBank, Percent, Target
+} from 'lucide-react';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortableKpiCard } from '../components/dashboard/SortableKpiCard';
 
 export function FunnelAnalysis() {
     const metrics = useMetrics();
-    const [activeTab, setActiveTab] = useState<'subid' | 'channel' | 'category'>('subid');
+    const [activeTab, setActiveTab] = useState<'subid' | 'channel' | 'category' | 'hour'>('subid');
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortedData = <T extends Record<string, any>>(data: T[]) => {
+        if (!sortConfig) return data;
+        const sortedData = [...data].sort((a, b) => {
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+
+            // Specific parsing for formatted conversion percentages (e.g. "5,56%")
+            if (typeof valA === 'string' && valA.includes('%')) {
+                valA = parseFloat(valA.replace(',', '.').replace('%', ''));
+                valB = parseFloat((valB as string).replace(',', '.').replace('%', ''));
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sortedData;
+    };
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const DEFAULT_GLOBAL_KPI_ORDER = [
+        'profit', 'orders', 'completed', 'pending', 'cancelled', 'avgOrders',
+        'commission', 'investment', 'profitPct', 'shopeeClicks', 'adClicks', 'cpc'
+    ];
+
+    const [globalKpiOrder, setGlobalKpiOrder] = useState<string[]>(() => {
+        const saved = localStorage.getItem('shopee_analisar_global_kpi_order');
+        return saved ? JSON.parse(saved) : DEFAULT_GLOBAL_KPI_ORDER;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('shopee_analisar_global_kpi_order', JSON.stringify(globalKpiOrder));
+    }, [globalKpiOrder]);
+
+    const handleDragEnd = (event: any) => {
+        const { active, over } = event;
+        if (active.id !== over?.id) {
+            setGlobalKpiOrder((items) => {
+                const oldIndex = items.indexOf(active.id);
+                const newIndex = items.indexOf(over.id);
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
+
+    const formatBRL = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     if (metrics.isEmpty) {
         return (
@@ -18,7 +97,22 @@ export function FunnelAnalysis() {
             </div>
         );
     }
+    const formatPct = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    const kpiDefinitions: Record<string, any> = {
+        profit: { label: 'Lucro Total', value: `R$ ${formatBRL(metrics.totalProfit)}`, icon: DollarSign, color: metrics.totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+        orders: { label: 'Pedidos Totais', value: metrics.totalOrders.toString(), icon: ShoppingCart, color: 'text-blue-400' },
+        completed: { label: 'Pedidos Concluídos', value: `${metrics.funnelStats.completed} (R$ ${formatBRL(metrics.funnelStats.completedValue)})`, icon: CheckCircle2, color: 'text-green-400' },
+        pending: { label: 'Pedidos Pendentes', value: `${metrics.funnelStats.pending} (R$ ${formatBRL(metrics.funnelStats.pendingValue)})`, icon: Clock, color: 'text-yellow-400' },
+        cancelled: { label: 'Pedidos Cancelados', value: `${metrics.funnelStats.cancelled} (R$ ${formatBRL(metrics.funnelStats.cancelledValue)})`, icon: XCircle, color: 'text-red-400' },
+        avgOrders: { label: 'Média Pedidos/Dia', value: metrics.avgOrdersPerDay.toFixed(1), icon: BarChart3, color: 'text-purple-400' },
+        commission: { label: 'Total Comissões', value: `R$ ${formatBRL(metrics.totalNetCommission)}`, icon: TrendingUp, color: 'text-primary' },
+        investment: { label: 'Total Investimento', value: `R$ ${formatBRL(metrics.totalInvestment)}`, icon: PiggyBank, color: 'text-orange-400' },
+        profitPct: { label: 'Lucro Médio', value: `${formatPct(metrics.profitPct)}%`, icon: Percent, color: metrics.profitPct >= 0 ? 'text-green-400' : 'text-red-400' },
+        shopeeClicks: { label: 'Cliques Shopee', value: metrics.totalClicks.toLocaleString('pt-BR'), icon: MousePointerClick, color: 'text-cyan-400' },
+        adClicks: { label: 'Cliques Anúncio', value: metrics.totalAdClicks.toLocaleString('pt-BR'), icon: Target, color: 'text-pink-400' },
+        cpc: { label: 'CPC Médio', value: `R$ ${formatBRL(metrics.cpc)}`, icon: MousePointerClick, color: 'text-amber-400' }
+    };
 
     const funnelSteps = [
         { label: 'Cliques Anúncio', value: metrics.totalAdClicks || 0, color: '#6366f1' },
@@ -86,56 +180,22 @@ export function FunnelAnalysis() {
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <MousePointerClick className="w-4 h-4 text-[#6366f1]" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Cliques Ads</p>
+            {/* Sortable KPI Cards */}
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+            >
+                <SortableContext items={globalKpiOrder} strategy={rectSortingStrategy}>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                        {globalKpiOrder.map((id) => {
+                            const kpi = kpiDefinitions[id];
+                            if (!kpi) return null;
+                            return <SortableKpiCard key={id} id={id} kpi={kpi} compact />;
+                        })}
                     </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalAdClicks || 0}</p>
-                </div>
-
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <MousePointerClick className="w-4 h-4 text-[#3b82f6]" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Cliques Shopee</p>
-                    </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalClicks}</p>
-                </div>
-
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <ShoppingBag className="w-4 h-4 text-primary" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Pedidos</p>
-                    </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">{metrics.totalOrders}</p>
-                </div>
-
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-red-400" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">Investimento</p>
-                    </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.totalInvestment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                </div>
-
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-[#22c55e]" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">CPC Médio</p>
-                    </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.cpc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-
-                <div className="flex flex-col p-4 rounded-2xl bg-surface-dark border border-border-dark">
-                    <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-[#22c55e]" />
-                        <p className="text-text-secondary text-xs font-medium uppercase tracking-wider">EPC</p>
-                    </div>
-                    <p className="text-white text-2xl font-bold tracking-tight">R$ {metrics.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-            </div>
+                </SortableContext>
+            </DndContext>
 
             <div className="flex gap-2">
                 <button
@@ -156,6 +216,13 @@ export function FunnelAnalysis() {
                 >
                     Funil por Categoria
                 </button>
+                <button
+                    onClick={() => setActiveTab('hour')}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTab === 'hour' ? 'bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/30' : 'text-text-secondary hover:text-white bg-surface-dark border border-border-dark'}`}
+                >
+                    <Clock className="w-4 h-4" />
+                    Funil por Horário
+                </button>
             </div>
 
             {/* Funnel by Sub_ID */}
@@ -169,18 +236,34 @@ export function FunnelAnalysis() {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-background-dark/50 border-b border-border-dark">
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap">Sub_ID</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Ads</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques Shopee</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Pedidos</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Conversão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Investimento</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Comissão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">ROAS</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap cursor-pointer hover:text-white" onClick={() => requestSort('subId')}>
+                                        <div className="flex items-center gap-1">Sub_ID <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('adClicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Ads <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('clicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Shopee <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
+                                        <div className="flex items-center justify-end gap-1">Pedidos <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('conversion')}>
+                                        <div className="flex items-center justify-end gap-1">Conversão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('investment')}>
+                                        <div className="flex items-center justify-end gap-1">Investimento <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('commission')}>
+                                        <div className="flex items-center justify-end gap-1">Comissão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('roas')}>
+                                        <div className="flex items-center justify-end gap-1">ROAS <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border-dark">
-                                {metrics.funnelBySubId.map((item, idx) => (
+                                {getSortedData(metrics.funnelBySubId).map((item, idx) => (
                                     <tr key={idx} className="hover:bg-background-dark/30 transition-colors">
                                         <td className="p-4 text-sm text-white">
                                             {item.subId === 'Sem Sub_id' ? (
@@ -220,56 +303,88 @@ export function FunnelAnalysis() {
                                     <tr><td colSpan={7} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
                                 )}
                             </tbody>
-                            {metrics.funnelBySubId.length > 0 && (
-                                <tfoot>
-                                    <tr className="bg-primary/5 border-t-2 border-primary/30">
-                                        <td className="p-4 text-sm font-bold text-white">Total</td>
-                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">
-                                            {metrics.funnelBySubId.reduce((s, i) => s + i.clicks, 0)}
-                                        </td>
-                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">
-                                            {metrics.funnelBySubId.reduce((s, i) => s + i.orders, 0)}
-                                        </td>
-                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">{metrics.conversionRate}%</td>
-                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">
-                                            R$ {metrics.totalOrderValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="p-4 text-sm text-primary font-bold text-right font-mono">
-                                            R$ {metrics.totalNetCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="p-4 text-sm text-[#22c55e] font-bold text-right font-mono">
-                                            R$ {metrics.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            )}
+                            {metrics.funnelBySubId.length > 0 && (() => {
+                                const tAdClicks = metrics.funnelBySubId.reduce((s, i) => s + ((i as any).adClicks || 0), 0);
+                                const tClicks = metrics.funnelBySubId.reduce((s, i) => s + i.clicks, 0);
+                                const tOrders = metrics.funnelBySubId.reduce((s, i) => s + i.orders, 0);
+                                const tInvest = metrics.funnelBySubId.reduce((s, i) => s + ((i as any).investment || 0), 0);
+                                const tComm = metrics.funnelBySubId.reduce((s, i) => s + i.commission, 0);
+                                const tConv = tClicks > 0 ? (tOrders / tClicks) * 100 : 0;
+                                const tRoas = tInvest > 0 ? tComm / tInvest : 0;
+
+                                return (
+                                    <tfoot>
+                                        <tr className="bg-primary/5 border-t-2 border-primary/30">
+                                            <td className="p-4 text-sm font-bold text-white">Total</td>
+                                            <td className="p-4 text-sm text-white text-right font-mono font-bold">
+                                                {tAdClicks}
+                                            </td>
+                                            <td className="p-4 text-sm text-white text-right font-mono font-bold">
+                                                {tClicks}
+                                            </td>
+                                            <td className="p-4 text-sm text-white text-right font-mono font-bold">
+                                                {tOrders}
+                                            </td>
+                                            <td className="p-4 text-sm text-white text-right font-mono font-bold">
+                                                {tConv.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                                            </td>
+                                            <td className="p-4 text-sm text-white text-right font-mono font-bold">
+                                                R$ {tInvest.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-4 text-sm text-primary font-bold text-right font-mono">
+                                                R$ {tComm.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className={`p-4 text-sm text-right font-mono font-bold ${tRoas >= 1 ? 'text-green-500' : 'text-red-400'}`}>
+                                                {tRoas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                );
+                            })()}
                         </table>
                     </div>
                 </div>
             )}
 
-            {/* Funnel by Channel */}
+            {/* Funnel by Channel — Enriched with Ads/Investment/ROAS */}
             {activeTab === 'channel' && (
                 <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
                     <div className="p-5 border-b border-border-dark">
                         <h3 className="text-lg font-bold text-white">Funil por Canal</h3>
-                        <p className="text-text-secondary text-sm">Performance por fonte de tráfego</p>
+                        <p className="text-text-secondary text-sm">Performance por fonte de tráfego com dados de investimento</p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-background-dark/50 border-b border-border-dark">
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap">Canal</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Cliques</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Pedidos</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Conversão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Receita</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">Comissão</th>
-                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right">EPC</th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap cursor-pointer hover:text-white" onClick={() => requestSort('channel')}>
+                                        <div className="flex items-center gap-1">Canal <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('adClicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Ads <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('clicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Shopee <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
+                                        <div className="flex items-center justify-end gap-1">Pedidos <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('conversion')}>
+                                        <div className="flex items-center justify-end gap-1">Conversão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('investment')}>
+                                        <div className="flex items-center justify-end gap-1">Investimento <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('commission')}>
+                                        <div className="flex items-center justify-end gap-1">Comissão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('roas')}>
+                                        <div className="flex items-center justify-end gap-1">ROAS <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border-dark">
-                                {metrics.funnelByChannel.map((item, idx) => (
+                                {getSortedData(metrics.funnelByChannel).map((item, idx) => (
                                     <tr key={idx} className="hover:bg-background-dark/30 transition-colors">
                                         <td className="p-4 text-sm text-white">
                                             <div className="flex items-center gap-2">
@@ -277,22 +392,23 @@ export function FunnelAnalysis() {
                                                 {item.channel}
                                             </div>
                                         </td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{(item as any).adClicks || 0}</td>
                                         <td className="p-4 text-sm text-white text-right font-mono">{item.clicks}</td>
                                         <td className="p-4 text-sm text-white text-right font-mono">{item.orders}</td>
                                         <td className="p-4 text-sm text-right font-mono">{item.conversion}%</td>
-                                        <td className="p-4 text-sm text-white text-right font-mono">
-                                            R$ {item.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        <td className="p-4 text-sm text-red-400 text-right font-mono">
+                                            R$ {((item as any).investment || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </td>
                                         <td className="p-4 text-sm text-primary font-bold text-right font-mono">
                                             R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </td>
-                                        <td className="p-4 text-sm text-[#22c55e] text-right font-mono">
-                                            R$ {item.epc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        <td className={`p-4 text-sm text-right font-mono font-bold ${((item as any).roas || 0) >= 1 ? 'text-green-500' : ((item as any).investment > 0 ? 'text-red-400' : 'text-text-secondary')}`}>
+                                            {((item as any).investment > 0 ? ((item as any).roas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'x' : '—')}
                                         </td>
                                     </tr>
                                 ))}
                                 {metrics.funnelByChannel.length === 0 && (
-                                    <tr><td colSpan={7} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
+                                    <tr><td colSpan={8} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -342,6 +458,70 @@ export function FunnelAnalysis() {
                                 ))}
                                 {(metrics as any).funnelByCategory.length === 0 && (
                                     <tr><td colSpan={8} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Funnel by Hour */}
+            {activeTab === 'hour' && (
+                <div className="bg-surface-dark border border-border-dark rounded-2xl overflow-hidden">
+                    <div className="p-5 border-b border-border-dark">
+                        <h3 className="text-lg font-bold text-white">Funil por Horário</h3>
+                        <p className="text-text-secondary text-sm">Performance por hora do dia — descubra quando seu tráfego mais converte</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-background-dark/50 border-b border-border-dark">
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap cursor-pointer hover:text-white" onClick={() => requestSort('hour')}>
+                                        <div className="flex items-center gap-1">Horário <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('adClicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Ads <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('clicks')}>
+                                        <div className="flex items-center justify-end gap-1">Cliques Shopee <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('orders')}>
+                                        <div className="flex items-center justify-end gap-1">Pedidos <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('conversion')}>
+                                        <div className="flex items-center justify-end gap-1">Conversão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('investment')}>
+                                        <div className="flex items-center justify-end gap-1">Investimento <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                    <th className="p-4 text-sm font-medium text-text-secondary whitespace-nowrap text-right cursor-pointer hover:text-white" onClick={() => requestSort('commission')}>
+                                        <div className="flex items-center justify-end gap-1">Comissão <ArrowUpDown className="w-3 h-3" /></div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border-dark">
+                                {getSortedData(metrics.funnelByHour).map((item: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-background-dark/30 transition-colors">
+                                        <td className="p-4 text-sm text-white">
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="w-4 h-4 text-[#22c55e] flex-shrink-0" />
+                                                <span className="font-mono font-bold">{item.hour}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{item.adClicks}</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono">{item.clicks}</td>
+                                        <td className="p-4 text-sm text-white text-right font-mono font-bold">{item.orders}</td>
+                                        <td className="p-4 text-sm text-right font-mono text-blue-400">{item.conversion}%</td>
+                                        <td className="p-4 text-sm text-red-400 text-right font-mono">
+                                            R$ {item.investment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-4 text-sm text-primary font-bold text-right font-mono">
+                                            R$ {item.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {(!(metrics as any).funnelByHour || (metrics as any).funnelByHour.length === 0) && (
+                                    <tr><td colSpan={7} className="p-8 text-center text-text-secondary">Nenhum dado encontrado.</td></tr>
                                 )}
                             </tbody>
                         </table>

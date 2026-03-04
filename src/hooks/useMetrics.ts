@@ -43,8 +43,7 @@ export function useMetrics() {
 
                 const { data: trackData, error: trackError } = await supabase
                     .from('creative_tracks')
-                    .select('*, creative_track_entries(*)')
-                    .eq('is_archived', false);
+                    .select('*, creative_track_entries(*)');
 
                 if (!convError && convData) {
                     setDbConversions(convData);
@@ -195,6 +194,38 @@ export function useMetrics() {
 
         return Array.from(unifiedMap.values());
     }, [commissionData, dbConversions, dateFilter, customRange]);
+    // Helper for robust Sub_ID normalization: removes double hyphens, trailing/leading hyphens, and trims
+    const normalizeSubId = (sid: any): string => {
+        if (!sid || typeof sid !== 'string') return 'Sem Sub_id';
+        const normalized = sid.split('-').filter(Boolean).join('-').trim();
+        return normalized === '' ? 'Sem Sub_id' : normalized;
+    };
+
+    // Helper for fuzzy matching Sub_IDs (handles plurals like INTERESSE vs INTERESSES)
+    const isSubIdMatch = (s1: string, s2: string): boolean => {
+        const n1 = normalizeSubId(s1);
+        const n2 = normalizeSubId(s2);
+        if (n1 === 'Sem Sub_id' || n2 === 'Sem Sub_id') return n1 === n2;
+        if (n1 === n2) return true;
+
+        // Strip plurals 's' at the end of tokens OR before digits to handle INTERESSE/INTERESSES/INTERESSES01
+        const simplify = (s: string) => {
+            const low = s.toLowerCase();
+            // Remove 's' if it's at the end of a word segment OR before a digit
+            // segments are separated by non-alphanumerics (usually '-')
+            return low.replace(/([a-z]{3,})s(?=\d|-|$)/g, '$1')
+                .split('-')
+                .filter(Boolean)
+                .join('-');
+        };
+
+        const sim1 = simplify(n1);
+        const sim2 = simplify(n2);
+        if (sim1 === sim2) return true;
+
+        // Fallback: one contains the other (basic fuzzy)
+        return n1.includes(n2) || n2.includes(n1);
+    };
 
     // 3. Correlate Data and Calculate Metrics
     const metrics = useMemo(() => {
@@ -215,6 +246,9 @@ export function useMetrics() {
         let cancelledCount = 0;
         let pendingCount = 0;
         let completedCount = 0;
+        let cancelledValue = 0;
+        let pendingValue = 0;
+        let completedValue = 0;
         let newBuyersCount = 0;
         let existingBuyersCount = 0;
         let shopeeCommissionTotal = 0;
@@ -230,7 +264,9 @@ export function useMetrics() {
             subId: string,
             status: string,
             type: string,
-            commission: number
+            commission: number,
+            category: string,
+            revenue: number
         }> = [];
 
         const subIdStats: Record<string, { clicks: number, adClicks: number, investment: number, orders: number, commission: number, channels: Set<string> }> = {};
@@ -249,15 +285,13 @@ export function useMetrics() {
         unifiedCommission.forEach(item => {
             if (item._isFromDb && item['Canal'] && item['Canal'] !== 'Desconhecido') {
                 const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                const canonical = parts.join('-') || 'Sem Sub_id';
+                const canonical = normalizeSubId(parts.join('-'));
                 if (canonical !== 'Sem Sub_id') {
-                    // Fuzzy match to the actual track sub_id
-                    const matchedTrack = dbTracks.find(t =>
-                        t.sub_id && (t.sub_id === canonical || canonical.includes(t.sub_id) || t.sub_id.includes(canonical))
-                    );
+                    // Try to find a track that matches this canonical
+                    const matchedTrack = dbTracks.find(t => isSubIdMatch(t.sub_id, canonical));
 
                     if (matchedTrack) {
-                        subIdToChannel.set(matchedTrack.sub_id, item['Canal']);
+                        subIdToChannel.set(normalizeSubId(matchedTrack.sub_id), item['Canal']);
                     } else {
                         subIdToChannel.set(canonical, item['Canal']);
                     }
@@ -266,8 +300,7 @@ export function useMetrics() {
         });
 
         filteredClicks.forEach(click => {
-            const rawSubId = click['Sub_id'] || '';
-            const canonical = (rawSubId.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : rawSubId.split('-').filter(Boolean).join('-');
+            const canonical = normalizeSubId(click['Sub_id']);
             clickSubIds.add(canonical);
             const ref = click['Referenciador'] || 'Desconhecido';
             if (ref && ref !== 'Desconhecido') {
@@ -313,45 +346,74 @@ export function useMetrics() {
         }
 
         dbTracks.forEach(track => {
-            const subId = track.sub_id || 'Sem Sub_id';
+            const subId = normalizeSubId(track.sub_id);
             const entries = track.creative_track_entries || [];
 
             entries.forEach((entry: any) => {
                 const entryDateKey = entry.date;
-                // Merge if CSV has no clicks for this subId on this date
-                if (!csvClickDatesBySubId[subId] || !csvClickDatesBySubId[subId].has(entryDateKey)) {
-                    // entry.date is 'YYYY-MM-DD'. Parse carefully to avoid timezone shift
-                    const [y, m, d] = entryDateKey.split('-');
-                    const entryDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
+                const [y, m, d] = entryDateKey.split('-');
+                const entryDateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
 
-                    let inDateRange = true;
-                    if (dateFilter !== 'all') {
-                        inDateRange = isWithinInterval(entryDateObj, { start: startBound, end: endBound });
-                    }
+                let inDateRange = true;
+                if (dateFilter !== 'all') {
+                    inDateRange = isWithinInterval(entryDateObj, { start: startBound, end: endBound });
+                }
+                if (!inDateRange) return;
 
-                    if (inDateRange && entry.shopee_clicks > 0) {
-                        const channel = track.channel || subIdToChannel.get(subId) || 'Desconhecido';
+                const channel = track.channel || subIdToChannel.get(subId) || 'Desconhecido';
 
-                        clickSubIds.add(subId);
-                        totalClicks += entry.shopee_clicks;
-                        totalAdClicks += (entry.ad_clicks || 0);
-                        totalInvestment += (entry.investment || 0);
+                // FIX: Always add ad_clicks and investment — they come exclusively from track entries, never from CSV
+                const adClicks = entry.ad_clicks || 0;
+                const investment = entry.investment || 0;
+                if (adClicks > 0 || investment > 0) {
+                    clickSubIds.add(subId);
+                    totalAdClicks += adClicks;
+                    totalInvestment += investment;
 
-                        if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
-                        subIdStats[subId].clicks += entry.shopee_clicks;
-                        subIdStats[subId].adClicks += (entry.ad_clicks || 0);
-                        subIdStats[subId].investment += (entry.investment || 0);
-                        subIdStats[subId].channels.add(channel);
+                    if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
+                    subIdStats[subId].adClicks += adClicks;
+                    subIdStats[subId].investment += investment;
+                    subIdStats[subId].channels.add(channel);
 
-                        if (!subIdDetails[subId]) subIdDetails[subId] = { products: {}, channelBreakdown: {}, orders: [] };
-                        if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
-                        subIdDetails[subId].channelBreakdown[channel].clicks += entry.shopee_clicks;
+                    if (!subIdDetails[subId]) subIdDetails[subId] = { products: {}, channelBreakdown: {}, orders: [] };
+                    if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
+                    subIdDetails[subId].channelBreakdown[channel].adClicks += adClicks;
+                    subIdDetails[subId].channelBreakdown[channel].investment += investment;
 
-                        if (!channelStats[channel]) channelStats[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
-                        channelStats[channel].clicks += entry.shopee_clicks;
-                    }
+                    if (!channelStats[channel]) channelStats[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
+                    channelStats[channel].adClicks += adClicks;
+                    channelStats[channel].investment += investment;
+                }
+
+                // FIX: Only add Shopee clicks when CSV doesn't already have them for this SubID/date (avoid double-counting)
+                const shopeeClicks = entry.shopee_clicks || 0;
+                if (shopeeClicks > 0 && (!csvClickDatesBySubId[subId] || !csvClickDatesBySubId[subId].has(entryDateKey))) {
+                    clickSubIds.add(subId);
+                    totalClicks += shopeeClicks;
+
+                    if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
+                    subIdStats[subId].clicks += shopeeClicks;
+                    subIdStats[subId].channels.add(channel);
+
+                    if (!subIdDetails[subId]) subIdDetails[subId] = { products: {}, channelBreakdown: {}, orders: [] };
+                    if (!subIdDetails[subId].channelBreakdown[channel]) subIdDetails[subId].channelBreakdown[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
+                    subIdDetails[subId].channelBreakdown[channel].clicks += shopeeClicks;
+
+                    if (!channelStats[channel]) channelStats[channel] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
+                    channelStats[channel].clicks += shopeeClicks;
                 }
             });
+        });
+
+        // === UNIFIED DATA ENGINE v2 — STEP A: Snapshot Traffic Before Orders ===
+        const trafficBySubId: Record<string, { clicks: number, adClicks: number, investment: number, channels: Set<string> }> = {};
+        Object.entries(subIdStats).forEach(([subId, s]) => {
+            trafficBySubId[subId] = {
+                clicks: s.clicks,
+                adClicks: s.adClicks,
+                investment: s.investment,
+                channels: new Set(s.channels)
+            };
         });
 
         const parseCurrency = (val: any) => {
@@ -372,9 +434,16 @@ export function useMetrics() {
             else if (attribution.toLowerCase().includes('diferente')) indirectsCount++;
 
             const status = item['Status do Pedido'] || '';
-            if (status.toLowerCase() === 'cancelado') cancelledCount++;
-            else if (status.toLowerCase() === 'pendente') pendingCount++;
-            else if (status.toLowerCase() === 'concluído') completedCount++;
+            if (status.toLowerCase() === 'cancelado') {
+                cancelledCount++;
+                cancelledValue += netComm;
+            } else if (status.toLowerCase() === 'pendente') {
+                pendingCount++;
+                pendingValue += netComm;
+            } else if (status.toLowerCase() === 'concluído') {
+                completedCount++;
+                completedValue += netComm;
+            }
 
             const buyerType = item['Status do Comprador'] || '';
             if (buyerType.toLowerCase() === 'novo') newBuyersCount++;
@@ -386,15 +455,15 @@ export function useMetrics() {
             sellerCommissionTotal += sellerComm;
 
             const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-            let canonical = parts.join('-') || 'Sem Sub_id';
-            if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
+            let canonical = normalizeSubId(parts.join('-'));
 
             // Prioritize track_id link from database if available
             if (item._isFromDb && item._trackId) {
                 const track = dbTracks.find(t => t.id === item._trackId);
-                if (track) canonical = track.sub_id || 'Sem Sub_id';
+                if (track) canonical = normalizeSubId(track.sub_id);
             } else if (canonical !== 'Sem Sub_id' && !clickSubIds.has(canonical)) {
-                const possibleMatch = Array.from(clickSubIds).find(c => c.includes(canonical) || canonical.includes(c));
+                // Improved fuzzy match in the known set of Sub_IDs with traffic
+                const possibleMatch = Array.from(clickSubIds).find(c => isSubIdMatch(c, canonical));
                 if (possibleMatch) canonical = possibleMatch;
             }
 
@@ -468,7 +537,9 @@ export function useMetrics() {
                 type: (['DIRECT', 'direct', 'Direta', 'ORDERED_IN_SAME_SHOP'].includes(item._attribution || item._attributionType || item['Tipo de atribuição']))
                     ? 'Direta'
                     : 'Indireta',
-                commission: netComm
+                commission: netComm,
+                category: catName,
+                revenue: orderVal
             });
         });
 
@@ -485,130 +556,258 @@ export function useMetrics() {
         const categoriesRanking = Object.entries(categoryStats).map(([name, s]) => ({ category: name, ...s })).sort((a, b) => b.commission - a.commission);
         const channelsRanking = Object.entries(channelStats).map(([name, s]) => ({ channel: name, ...s })).sort((a, b) => b.commission - a.commission);
 
-        // === Simplified Funnel: Independent Clicks and Orders ===
-        const funnelSubIdMap: Record<string, { clicks: number, orders: number, revenue: number, commission: number }> = {};
-        const funnelChannelMap: Record<string, { clicks: number, orders: number, revenue: number, commission: number }> = {};
-        const funnelByCategoryMap: Record<string, { clicks: number, adClicks: number, orders: number, revenue: number, commission: number, investment: number }> = {};
+        // === UNIFIED DATA ENGINE v2 — STEP B: Master Registry (The Cube) ===
+        type UnifiedMetrics = { orders: number, revenue: number, commission: number, clicks: number, adClicks: number, investment: number };
+        type UnifiedDimension = { subId: string, channel: string, category: string, date: string, hour: string, product: string, productName: string, isDirect: boolean };
+        const masterRegistry: Array<{ dimension: UnifiedDimension, metrics: UnifiedMetrics }> = [];
 
-        // Initialize funnel maps from all clicks
-        filteredClicks.forEach(click => {
-            const rawSubId = click['Sub_id'] || '';
-            const subId = (rawSubId.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : rawSubId.split('-').filter(Boolean).join('-');
-            const channel = click['Referenciador'] || 'Desconhecido';
+        // Build unified records from all orders with proportional traffic attribution
+        allOrders.forEach(order => {
+            const traffic = trafficBySubId[order.subId] || { clicks: 0, adClicks: 0, investment: 0, channels: new Set() };
+            const subIdOrderCount = subIdStats[order.subId]?.orders || 1;
+            const ratio = 1 / subIdOrderCount;
 
-            if (!funnelSubIdMap[subId]) funnelSubIdMap[subId] = { clicks: 0, orders: 0, revenue: 0, commission: 0 };
-            funnelSubIdMap[subId].clicks += 1;
+            const dateObj = parseShopeeDate(order.date);
 
-            if (!funnelChannelMap[channel]) funnelChannelMap[channel] = { clicks: 0, orders: 0, revenue: 0, commission: 0 };
-            funnelChannelMap[channel].clicks += 1;
+            // Channel enrichment: if order has no channel, try traffic sources
+            let enrichedChannel = order.channel;
+            if (enrichedChannel === 'Desconhecido' && traffic.channels.size > 0) {
+                enrichedChannel = Array.from(traffic.channels).find(c => c !== 'Desconhecido') || Array.from(traffic.channels)[0] || 'Desconhecido';
+            }
+
+            masterRegistry.push({
+                dimension: {
+                    subId: order.subId,
+                    channel: enrichedChannel,
+                    category: order.category,
+                    date: dateObj ? format(dateObj, 'yyyy-MM-dd') : 'N/A',
+                    hour: dateObj ? format(dateObj, 'HH') : 'N/A',
+                    product: order.productName,
+                    productName: order.productName,
+                    isDirect: order.type === 'Direta'
+                },
+                metrics: {
+                    orders: 1,
+                    revenue: order.revenue,
+                    commission: order.commission,
+                    clicks: traffic.clicks * ratio,
+                    adClicks: traffic.adClicks * ratio,
+                    investment: traffic.investment * ratio
+                }
+            });
         });
 
-        // Add commission-side orders to funnel maps
-        unifiedCommission.forEach(item => {
-            const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-            let subId = parts.join('-') || 'Sem Sub_id';
-            if (subId.trim() === '' || !subId.replace(/-/g, '').trim()) subId = 'Sem Sub_id';
-            if (subId !== 'Sem Sub_id' && !funnelSubIdMap[subId]) {
-                const match = Object.keys(funnelSubIdMap).find(k => k.includes(subId) || subId.includes(k));
-                if (match) subId = match;
-            }
-            const channel = item['Canal'] || 'Desconhecido';
-            const catName = item['Categoria Global L1'] || 'Sem Categoria';
-            const netComm = parseFloat(item['Comissão líquida do afiliado(R$)']?.toString().replace(',', '.') || '0');
-            const orderVal = parseFloat(item['Valor de Compra(R$)']?.toString().replace(',', '.') || '0');
-
-            if (!funnelSubIdMap[subId]) funnelSubIdMap[subId] = { clicks: 0, orders: 0, revenue: 0, commission: 0 };
-            funnelSubIdMap[subId].orders += 1;
-            funnelSubIdMap[subId].revenue += orderVal;
-            funnelSubIdMap[subId].commission += netComm;
-
-            if (!funnelChannelMap[channel]) funnelChannelMap[channel] = { clicks: 0, orders: 0, revenue: 0, commission: 0 };
-            funnelChannelMap[channel].orders += 1;
-            funnelChannelMap[channel].revenue += orderVal;
-            funnelChannelMap[channel].commission += netComm;
-
-            // Category logic with click attribution
-            if (!funnelByCategoryMap[catName]) {
-                funnelByCategoryMap[catName] = { clicks: 0, adClicks: 0, orders: 0, revenue: 0, commission: 0, investment: 0 };
-            }
-            funnelByCategoryMap[catName].orders += 1;
-            funnelByCategoryMap[catName].revenue += orderVal;
-            funnelByCategoryMap[catName].commission += netComm;
-
-            const stats = subIdStats[subId] || { clicks: 0, adClicks: 0, investment: 0, orders: 0 };
-            if (stats.orders > 0) {
-                const ratio = 1 / stats.orders;
-                funnelByCategoryMap[catName].clicks += stats.clicks * ratio;
-                funnelByCategoryMap[catName].adClicks += stats.adClicks * ratio;
-                funnelByCategoryMap[catName].investment += stats.investment * ratio;
+        // Add traffic entries that had NO orders (to preserve investment/clicks in totals)
+        Object.entries(trafficBySubId).forEach(([subId, traffic]) => {
+            const hasOrders = subIdStats[subId]?.orders > 0;
+            if (!hasOrders && (traffic.clicks > 0 || traffic.adClicks > 0 || traffic.investment > 0)) {
+                masterRegistry.push({
+                    dimension: {
+                        subId,
+                        channel: Array.from(traffic.channels)[0] || 'Desconhecido',
+                        category: 'Sem Conversão',
+                        date: 'N/A',
+                        hour: 'N/A',
+                        product: 'N/A',
+                        productName: 'N/A',
+                        isDirect: false
+                    },
+                    metrics: {
+                        orders: 0,
+                        revenue: 0,
+                        commission: 0,
+                        clicks: traffic.clicks,
+                        adClicks: traffic.adClicks,
+                        investment: traffic.investment
+                    }
+                });
             }
         });
+
+        // === STEP C: Generic Aggregator (Dimension Picker) ===
+        const groupBy = (key: keyof UnifiedDimension) => {
+            const map: Record<string, UnifiedMetrics> = {};
+            masterRegistry.forEach(entry => {
+                const val = String(entry.dimension[key]);
+                if (!map[val]) map[val] = { orders: 0, revenue: 0, commission: 0, clicks: 0, adClicks: 0, investment: 0 };
+                map[val].orders += entry.metrics.orders;
+                map[val].revenue += entry.metrics.revenue;
+                map[val].commission += entry.metrics.commission;
+                map[val].clicks += entry.metrics.clicks;
+                map[val].adClicks += entry.metrics.adClicks;
+                map[val].investment += entry.metrics.investment;
+            });
+            return map;
+        };
+
+        // === STEP D: Report Projections ===
+        const funnelBySubIdMap = groupBy('subId');
+        const funnelByChannelMap = groupBy('channel');
+        const funnelByCategoryMap = groupBy('category');
+        const funnelByHourMap = groupBy('hour');
 
         const epc = totalClicks > 0 ? totalNetCommission / totalClicks : 0;
         const cpc = totalAdClicks > 0 ? totalInvestment / totalAdClicks : 0;
         const roas = totalInvestment > 0 ? totalNetCommission / totalInvestment : 0;
         const cpa = totalOrders > 0 ? totalInvestment / totalOrders : 0;
 
-        const funnelBySubId = Object.entries(funnelSubIdMap)
-            .map(([subId, s]) => {
-                const stats = subIdStats[subId] || { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0 };
-                return {
-                    subId,
-                    adClicks: stats.adClicks || 0,
-                    clicks: s.clicks,
-                    orders: s.orders,
-                    investment: stats.investment || 0,
-                    conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-                    revenue: s.revenue,
-                    commission: s.commission,
-                    epc: s.clicks > 0 ? s.commission / s.clicks : 0,
-                    cpc: (stats.adClicks || 0) > 0 ? (stats.investment || 0) / (stats.adClicks || 0) : 0,
-                };
-            })
+        const funnelBySubId = Object.entries(funnelBySubIdMap)
+            .map(([subId, m]) => ({
+                subId,
+                adClicks: Math.round(m.adClicks),
+                clicks: Math.round(m.clicks),
+                orders: m.orders,
+                investment: m.investment,
+                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                revenue: m.revenue,
+                commission: m.commission,
+                epc: m.clicks > 0 ? m.commission / m.clicks : 0,
+                cpc: m.adClicks > 0 ? m.investment / m.adClicks : 0,
+                channelNames: Array.from(subIdStats[subId]?.channels || []).join(', ') || '—'
+            }))
             .sort((a, b) => b.commission - a.commission);
 
-        const funnelByChannel = Object.entries(funnelChannelMap)
-            .map(([channel, s]) => ({
+        const funnelByChannel = Object.entries(funnelByChannelMap)
+            .map(([channel, m]) => ({
                 channel,
-                clicks: s.clicks,
-                orders: s.orders,
-                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-                revenue: s.revenue,
-                commission: s.commission,
-                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+                clicks: Math.round(m.clicks),
+                adClicks: Math.round(m.adClicks),
+                orders: m.orders,
+                investment: m.investment,
+                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                revenue: m.revenue,
+                commission: m.commission,
+                epc: m.clicks > 0 ? m.commission / m.clicks : 0,
+                roas: m.investment > 0 ? m.commission / m.investment : 0,
             }))
             .sort((a, b) => b.commission - a.commission);
 
         const funnelByCategory = Object.entries(funnelByCategoryMap)
-            .map(([category, s]) => ({
+            .map(([category, m]) => ({
                 category,
-                adClicks: Math.round(s.adClicks),
-                clicks: Math.round(s.clicks),
-                orders: s.orders,
-                revenue: s.revenue,
-                commission: s.commission,
-                investment: s.investment,
-                conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-                epc: s.clicks > 0 ? s.commission / s.clicks : 0,
+                adClicks: Math.round(m.adClicks),
+                clicks: Math.round(m.clicks),
+                orders: m.orders,
+                revenue: m.revenue,
+                commission: m.commission,
+                investment: m.investment,
+                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+                epc: m.clicks > 0 ? m.commission / m.clicks : 0,
             }))
             .sort((a, b) => b.commission - a.commission);
+
+        // funnelByProduct aggregation
+        const funnelByProductMap: Record<string, any> = {};
+        masterRegistry.forEach(item => {
+            const key = item.dimension.productName || 'Produto Desconhecido';
+            if (!funnelByProductMap[key]) {
+                funnelByProductMap[key] = { orders: 0, revenue: 0, commission: 0, clicks: 0, adClicks: 0, investment: 0 };
+            }
+            funnelByProductMap[key].orders += item.metrics.orders;
+            funnelByProductMap[key].revenue += item.metrics.revenue;
+            funnelByProductMap[key].commission += item.metrics.commission;
+            funnelByProductMap[key].clicks += item.metrics.clicks;
+            funnelByProductMap[key].adClicks += item.metrics.adClicks;
+            funnelByProductMap[key].investment += item.metrics.investment;
+        });
+
+        const funnelByProduct = Object.entries(funnelByProductMap).map(([name, m]) => ({
+            name,
+            orders: m.orders,
+            commission: m.commission,
+            clicks: Math.round(m.clicks),
+            adClicks: Math.round(m.adClicks),
+            investment: m.investment,
+            revenue: m.revenue,
+            conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+            roas: m.investment > 0 ? (m.commission / m.investment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+        })).sort((a, b) => b.commission - a.commission);
+
+        // funnelByDirectVsIndirect aggregation
+        const funnelByDirectVsIndirectMap: Record<string, any> = {
+            'Direta': { orders: 0, revenue: 0, commission: 0, clicks: 0, adClicks: 0, investment: 0 },
+            'Indireta': { orders: 0, revenue: 0, commission: 0, clicks: 0, adClicks: 0, investment: 0 }
+        };
+
+        masterRegistry.forEach(item => {
+            const typeKey = item.dimension.isDirect ? 'Direta' : 'Indireta';
+            funnelByDirectVsIndirectMap[typeKey].orders += item.metrics.orders;
+            funnelByDirectVsIndirectMap[typeKey].revenue += item.metrics.revenue;
+            funnelByDirectVsIndirectMap[typeKey].commission += item.metrics.commission;
+            funnelByDirectVsIndirectMap[typeKey].clicks += item.metrics.clicks;
+            funnelByDirectVsIndirectMap[typeKey].adClicks += item.metrics.adClicks;
+            funnelByDirectVsIndirectMap[typeKey].investment += item.metrics.investment;
+        });
+
+        const funnelByDirectVsIndirect = Object.entries(funnelByDirectVsIndirectMap).map(([type, m]) => ({
+            type,
+            orders: m.orders,
+            commission: m.commission,
+            clicks: Math.round(m.clicks),
+            adClicks: Math.round(m.adClicks),
+            investment: m.investment,
+            revenue: m.revenue,
+            conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+            roas: m.investment > 0 ? (m.commission / m.investment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+        }));
+
+        const funnelByHour = Array.from({ length: 24 }, (_, i) => {
+            const h = i.toString().padStart(2, '0');
+            const m = funnelByHourMap[h] || { orders: 0, revenue: 0, commission: 0, clicks: 0, adClicks: 0, investment: 0 };
+            return {
+                hour: `${h}:00`,
+                orders: m.orders,
+                commission: m.commission,
+                clicks: Math.round(m.clicks),
+                adClicks: Math.round(m.adClicks),
+                investment: m.investment,
+                revenue: m.revenue,
+                conversion: m.clicks > 0 ? ((m.orders / m.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+            };
+        });
+
+        const uniqueDates = new Set([
+            ...filteredClicks.map(c => {
+                const d = parseShopeeDate(c['Tempo dos Cliques']);
+                return d ? format(d, 'yyyy-MM-dd') : null;
+            }).filter(Boolean),
+            ...unifiedCommission.map(c => {
+                const d = parseShopeeDate(c['Horário do pedido']);
+                return d ? format(d, 'yyyy-MM-dd') : null;
+            }).filter(Boolean)
+        ]);
+        const avgOrdersPerDay = uniqueDates.size > 0 ? totalOrders / uniqueDates.size : 0;
+        const profitPct = totalInvestment > 0 ? ((totalNetCommission - totalInvestment) / totalInvestment) * 100 : 0;
 
         return {
             isEmpty: commissionData.length === 0 && clickData.length === 0 && dbConversions.length === 0 && dbTracks.length === 0,
             totalOrders, totalNetCommission, totalOrderValue, totalClicks, totalAdClicks, totalInvestment,
             epc, cpc, roas, cpa,
+            totalProfit: totalNetCommission - totalInvestment,
+            avgOrdersPerDay,
+            profitPct,
             funnelBySubId,
             funnelByChannel,
             funnelByCategory,
+            funnelByHour,
+            funnelByProduct,
+            funnelByDirectVsIndirect,
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             allOrders, productRanking, allProducts, categoriesRanking, channelsRanking,
-            conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
-            adClickToShopeeRate: totalAdClicks > 0 ? ((totalClicks / totalAdClicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
+            conversionRate: totalClicks > 0 ? ((totalOrders / totalClicks) * 100) : 0,
+            adClickToShopeeRate: totalAdClicks > 0 ? ((totalClicks / totalAdClicks) * 100) : 0,
             directsVsIndirects: [
                 { name: 'Diretas', value: directsCount, fill: '#f2a20d' },
                 { name: 'Indiretas', value: indirectsCount, fill: '#3b82f6' }
             ],
-            funnelStats: { completed: completedCount, pending: pendingCount, cancelled: cancelledCount },
+            funnelStats: {
+                completed: completedCount,
+                pending: pendingCount,
+                cancelled: cancelledCount,
+                completedValue,
+                pendingValue,
+                cancelledValue
+            },
             buyerStats: { new: newBuyersCount, existing: existingBuyersCount },
             commissionSource: { shopee: shopeeCommissionTotal, seller: sellerCommissionTotal },
             subIdRanking: Object.entries(subIdStats).map(([name, s]) => ({
@@ -617,7 +816,7 @@ export function useMetrics() {
                 orders: s.orders,
                 conversion: s.clicks > 0 ? ((s.orders / s.clicks) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00',
                 commission: s.commission,
-                channels: Array.from(s.channels).join(', ') || 'N/A'
+                channelNames: Array.from(s.channels).join(', ') || '—'
             })).sort((a, b) => b.commission - a.commission),
             subIdDetails: Object.fromEntries(Object.entries(subIdDetails).map(([subId, detail]) => [
                 subId, {
