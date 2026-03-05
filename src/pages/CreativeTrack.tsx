@@ -30,6 +30,7 @@ import {
     ChevronDown, ChevronRight, FileEdit, Archive, ArchiveRestore,
     Clock, XCircle, LayoutList, Kanban
 } from 'lucide-react';
+import { Tooltip } from '../components/ui/Tooltip';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { FacebookAdsSyncModal } from '../components/FacebookAdsSyncModal';
 import { formatBRL, formatPct } from '../utils/format';
@@ -3455,46 +3456,59 @@ export function CreativeTrack() {
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <button
-                                                        onClick={() => setShowSyncModal(true)}
-                                                        className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center gap-1"
-                                                    >
-                                                        <Link2 className="w-4 h-4" /> Vincular Anúncios
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setShowFunnelPicker(!showFunnelPicker)}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors ${linkedFunnel
-                                                            ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
-                                                            : 'text-neutral-400 hover:text-white hover:bg-white/10'
-                                                            }`}
-                                                    >
-                                                        <Filter className="w-4 h-4" /> {linkedFunnel ? linkedFunnel.name : 'Vincular Funil'}
-                                                    </button>
+                                                    <Tooltip title="Vincular Anúncios" description="Vincule este criativo aos seus anúncios do Facebook para rastreamento automático.">
+                                                        <button
+                                                            onClick={() => setShowSyncModal(true)}
+                                                            className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center justify-center"
+                                                        >
+                                                            <Link2 className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
+
+                                                    <Tooltip title="Vincular Funil" description="Selecione um funil de vendas para este criativo.">
+                                                        <button
+                                                            onClick={() => setShowFunnelPicker(!showFunnelPicker)}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors ${linkedFunnel
+                                                                ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
+                                                                : 'text-neutral-400 hover:text-white hover:bg-white/10'
+                                                                }`}
+                                                        >
+                                                            <Filter className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
 
 
-                                                    <button
-                                                        onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
-                                                        disabled={saving}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
-                                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
-                                                            : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
-                                                            }`}
+                                                    <Tooltip
+                                                        title={selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
+                                                        description={selectedTrack.is_archived ? 'Restaura o criativo para a visualização principal.' : 'Arquive criativos que não estão em uso para limpar sua visualização.'}
                                                     >
-                                                        {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                                                        {selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
-                                                    </button>
+                                                        <button
+                                                            onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
+                                                            disabled={saving}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
+                                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
+                                                                : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                                                                }`}
+                                                        >
+                                                            {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                                                        </button>
+                                                    </Tooltip>
 
-                                                    <button
-                                                        onClick={() => handleDeleteTrack(selectedTrack)}
-                                                        disabled={saving}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50 ${selectedTrack.is_archived
-                                                            ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
-                                                            : 'text-neutral-500 cursor-not-allowed'
-                                                            }`}
-                                                        title={selectedTrack.is_archived ? 'Excluir permanentemente' : 'Arquive antes de excluir'}
+                                                    <Tooltip
+                                                        title="Excluir"
+                                                        description={selectedTrack.is_archived ? 'Remova permanentemente este criativo e todos os seus dados.' : 'Arquive antes de excluir.'}
                                                     >
-                                                        <Trash2 className="w-4 h-4" /> Excluir
-                                                    </button>
+                                                        <button
+                                                            onClick={() => handleDeleteTrack(selectedTrack)}
+                                                            disabled={saving}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors disabled:opacity-50 ${selectedTrack.is_archived
+                                                                ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                                                                : 'text-neutral-500 cursor-not-allowed'
+                                                                }`}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
                                                 </div>
                                             )}
                                         </div>
@@ -4832,46 +4846,58 @@ export function CreativeTrack() {
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <button
-                                                        onClick={() => setShowSyncModal(true)}
-                                                        className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center gap-1"
-                                                    >
-                                                        <Link2 className="w-4 h-4" /> Vincular Anúncios
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setShowFunnelPicker(!showFunnelPicker)}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors ${linkedFunnel
-                                                            ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
-                                                            : 'text-neutral-400 hover:text-white hover:bg-white/10'
-                                                            }`}
-                                                    >
-                                                        <Filter className="w-4 h-4" /> {linkedFunnel ? linkedFunnel.name : 'Vincular Funil'}
-                                                    </button>
+                                                    <Tooltip title="Vincular Anúncios" description="Vincule este criativo aos seus anúncios do Facebook para rastreamento automático.">
+                                                        <button
+                                                            onClick={() => setShowSyncModal(true)}
+                                                            className="px-3 py-2 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors text-sm flex items-center justify-center"
+                                                        >
+                                                            <Link2 className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
+                                                    <Tooltip title="Vincular Funil" description="Selecione um funil de vendas para este criativo.">
+                                                        <button
+                                                            onClick={() => setShowFunnelPicker(!showFunnelPicker)}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors ${linkedFunnel
+                                                                ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
+                                                                : 'text-neutral-400 hover:text-white hover:bg-white/10'
+                                                                }`}
+                                                        >
+                                                            <Filter className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
 
 
-                                                    <button
-                                                        onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
-                                                        disabled={saving}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
-                                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
-                                                            : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
-                                                            }`}
+                                                    <Tooltip
+                                                        title={selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
+                                                        description={selectedTrack.is_archived ? 'Restaura o criativo para a visualização principal.' : 'Arquive criativos que não estão em uso para limpar sua visualização.'}
                                                     >
-                                                        {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                                                        {selectedTrack.is_archived ? 'Desarquivar' : 'Arquivar'}
-                                                    </button>
+                                                        <button
+                                                            onClick={() => handleArchiveTrack(selectedTrack, !selectedTrack.is_archived)}
+                                                            disabled={saving}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors border disabled:opacity-50 ${selectedTrack.is_archived
+                                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:text-emerald-300'
+                                                                : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                                                                }`}
+                                                        >
+                                                            {selectedTrack.is_archived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                                                        </button>
+                                                    </Tooltip>
 
-                                                    <button
-                                                        onClick={() => handleDeleteTrack(selectedTrack)}
-                                                        disabled={saving}
-                                                        className={`px-3 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50 ${selectedTrack.is_archived
-                                                            ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
-                                                            : 'text-neutral-500 cursor-not-allowed'
-                                                            }`}
-                                                        title={selectedTrack.is_archived ? 'Excluir permanentemente' : 'Arquive antes de excluir'}
+                                                    <Tooltip
+                                                        title="Excluir"
+                                                        description={selectedTrack.is_archived ? 'Remova permanentemente este criativo e todos os seus dados.' : 'Arquive antes de excluir.'}
                                                     >
-                                                        <Trash2 className="w-4 h-4" /> Excluir
-                                                    </button>
+                                                        <button
+                                                            onClick={() => handleDeleteTrack(selectedTrack)}
+                                                            disabled={saving}
+                                                            className={`px-3 py-2 rounded-lg text-sm flex items-center justify-center transition-colors disabled:opacity-50 ${selectedTrack.is_archived
+                                                                ? 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
+                                                                : 'text-neutral-500 cursor-not-allowed'
+                                                                }`}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </Tooltip>
                                                 </div>
                                             )}
                                         </div>

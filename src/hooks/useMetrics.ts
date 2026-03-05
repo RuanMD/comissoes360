@@ -239,7 +239,8 @@ export function useMetrics() {
         let totalOrderValue = 0;
         let totalSalesCount = 0; // Total sum of quantities
         let totalOrders = 0; // Distinct order IDs
-        let totalClicks = 0; // Will be calculated from shopee_clicks
+        const filteredCsvClicks = filteredClicks.length;
+        let totalClicks = filteredCsvClicks; // Inicia com cliques do CSV filtrados por data
         let totalAdClicks = 0;
         let totalInvestment = 0;
 
@@ -394,10 +395,14 @@ export function useMetrics() {
 
                 // FIX: Only add Shopee clicks when CSV doesn't already have them for this SubID/date (avoid double-counting)
                 const shopeeClicks = entry.shopee_clicks || 0;
-                if (shopeeClicks > 0 && (!csvClickDatesBySubId[subId] || !csvClickDatesBySubId[subId].has(entryDateKey))) {
-                    clickSubIds.add(subId);
-                    totalClicks += shopeeClicks;
+                if (shopeeClicks > 0) {
+                    const hasCsvForThisDay = csvClickDatesBySubId[subId] && csvClickDatesBySubId[subId].has(entryDateKey);
 
+                    if (!hasCsvForThisDay) {
+                        totalClicks += shopeeClicks;
+                    }
+
+                    clickSubIds.add(subId);
                     if (!subIdStats[subId]) subIdStats[subId] = { clicks: 0, adClicks: 0, investment: 0, orders: 0, commission: 0, channels: new Set() };
                     subIdStats[subId].clicks += shopeeClicks;
                     subIdStats[subId].channels.add(channel);

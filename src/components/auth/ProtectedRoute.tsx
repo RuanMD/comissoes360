@@ -4,7 +4,7 @@ import { useFeatureAccess, ROUTE_TO_FEATURE } from '../../hooks/useFeatureAccess
 import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute() {
-    const { session, loading, subscriptionStatus, mustChangePassword } = useAuth();
+    const { session, loading, subscriptionStatus, mustChangePassword, isAdmin } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -28,7 +28,7 @@ export function ProtectedRoute() {
         return <Navigate to="/reset-password" replace />;
     }
 
-    if (subscriptionStatus === 'expired') {
+    if (subscriptionStatus === 'expired' && !isAdmin) {
         // Assinatura expirada
         return <Navigate to="/checkout" replace />; // ou exibir um bloqueio na tela
     }

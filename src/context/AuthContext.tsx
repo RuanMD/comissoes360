@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const expiresAt = new Date(data.subscription_expires_at);
                 const now = new Date();
 
-                if (isActive && expiresAt >= now) {
+                if (data.is_admin || (isActive && expiresAt >= now)) {
                     setSubscriptionStatus('active');
                 } else {
                     setSubscriptionStatus('expired');
