@@ -123,7 +123,7 @@ function SortableStatusCard({ status, onEdit, onDelete }: { status: any, onEdit:
 }
 
 export function AdminStatusManagement() {
-    const { statuses, fetchStatuses, reorderStatuses } = useData();
+    const { statuses, sidebarStatuses, fetchStatuses, reorderStatuses, reorderSidebarStatuses } = useData();
     const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -150,6 +150,18 @@ export function AdminStatusManagement() {
 
             const newOrderValues = newOrderArray.map(s => s.id || s.slug);
             reorderStatuses(newOrderValues);
+        }
+    };
+
+    const handleSidebarDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const oldIndex = sidebarStatuses.findIndex(s => (s.id || s.slug) === active.id);
+            const newIndex = sidebarStatuses.findIndex(s => (s.id || s.slug) === over.id);
+            const newOrderArray = arrayMove(sidebarStatuses, oldIndex, newIndex);
+
+            const newOrderValues = newOrderArray.map(s => s.id || s.slug);
+            reorderSidebarStatuses(newOrderValues);
         }
     };
 
@@ -377,26 +389,61 @@ export function AdminStatusManagement() {
                 </div>
             )}
 
-            {/* List */}
-            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={statuses.map(s => s.id || s.slug)} strategy={rectSortingStrategy}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {statuses.map(status => (
-                            <SortableStatusCard
-                                key={status.id || status.slug}
-                                status={status}
-                                onEdit={(s) => {
-                                    setEditingStatus(s);
-                                    setEditName(s.name);
-                                    setEditColor(s.color);
-                                    setEditIcon(s.icon);
-                                }}
-                                onDelete={(id) => handleDelete(id)}
-                            />
-                        ))}
-                    </div>
-                </SortableContext>
-            </DndContext>
+            {/* List CRM */}
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 text-text-secondary">
+                    <LucideIcons.Layout className="w-5 h-5" />
+                    <h3 className="font-bold">Ordenação do CRM (Kanban)</h3>
+                </div>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={statuses.map(s => s.id || s.slug)} strategy={rectSortingStrategy}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {statuses.map(status => (
+                                <SortableStatusCard
+                                    key={`crm-${status.id || status.slug}`}
+                                    status={status}
+                                    onEdit={(s) => {
+                                        setEditingStatus(s);
+                                        setEditName(s.name);
+                                        setEditColor(s.color);
+                                        setEditIcon(s.icon);
+                                    }}
+                                    onDelete={(id) => handleDelete(id)}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
+            </div>
+
+            <div className="w-full h-px bg-border-dark my-4" />
+
+            {/* List Sidebar */}
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 text-text-secondary">
+                    <LucideIcons.ListOrdered className="w-5 h-5" />
+                    <h3 className="font-bold">Ordenação da Lista Lateral (Sidebar)</h3>
+                </div>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleSidebarDragEnd}>
+                    <SortableContext items={sidebarStatuses.map(s => s.id || s.slug)} strategy={rectSortingStrategy}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {sidebarStatuses.map(status => (
+                                <SortableStatusCard
+                                    key={`sidebar-${status.id || status.slug}`}
+                                    status={status}
+                                    onEdit={(s) => {
+                                        setEditingStatus(s);
+                                        setEditName(s.name);
+                                        setEditColor(s.color);
+                                        setEditIcon(s.icon);
+                                    }}
+                                    onDelete={(id) => handleDelete(id)}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
+            </div>
 
             {/* Edit Modal / Form */}
             {editingStatus && (
@@ -502,13 +549,6 @@ export function AdminStatusManagement() {
                 </div>
             )}
 
-            {/* Legend for existing statuses */}
-            <div className="bg-surface-dark border border-border-dark p-6 rounded-2xl w-full">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                    <Palette className="w-4 h-4 text-primary" />
-                    Status e Cores
-                </h3>
-            </div>
         </section>
     );
 }

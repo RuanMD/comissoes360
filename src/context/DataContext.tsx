@@ -2,7 +2,7 @@ import { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import Papa from 'papaparse';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
-import { parseShopeeDate } from '../hooks/useMetrics';
+import { parseShopeeDate, normalizeSubIdForMatch as normalizeSubId } from '../utils/shopee';
 import { format } from 'date-fns';
 
 export type ReportType = 'clicks' | 'commission' | 'orders' | 'unknown' | 'multiple';
@@ -21,8 +21,10 @@ export interface DataContextType {
     customRange: CustomDateRange;
     setCustomRange: (range: CustomDateRange) => void;
     statuses: any[];
+    sidebarStatuses: any[];
     fetchStatuses: () => Promise<void>;
     reorderStatuses: (newOrder: string[]) => Promise<void>;
+    reorderSidebarStatuses: (newOrder: string[]) => Promise<void>;
     hasStartedAnalysis: boolean;
     setHasStartedAnalysis: (val: boolean) => void;
     isAutoSyncing: boolean;
@@ -46,6 +48,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [dateFilter, setDateFilter] = useState<DateFilterStr>('all');
     const [customRange, setCustomRange] = useState<CustomDateRange>({ start: '', end: '' });
     const [statuses, setStatuses] = useState<any[]>([]);
+    const [sidebarStatuses, setSidebarStatuses] = useState<any[]>([]);
     const [hasStartedAnalysis, setHasStartedAnalysis] = useState<boolean>(false);
     const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
 
@@ -63,6 +66,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
         const prefs = (prefsRes.data?.user_preferences as any) || {};
         const statusOrder = prefs.status_order || [];
+        const sidebarStatusOrder = prefs.sidebar_status_order || [];
 
         // Merge system defaults with database records
         const allStatuses = DEFAULT_SYSTEM_STATUSES.map(def => {
@@ -73,18 +77,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const customOnes = dbData.filter(s => !s.slug).map(s => ({ ...s, isSystem: false }));
         const combined = [...allStatuses, ...customOnes].map(s => ({ ...s, id: s.id || s.slug }));
 
-        if (statusOrder.length > 0) {
-            combined.sort((a, b) => {
-                const idxA = statusOrder.indexOf(a.id);
-                const idxB = statusOrder.indexOf(b.id);
+        const sortStatuses = (list: any[], order: string[]) => {
+            if (order.length === 0) return [...list];
+            return [...list].sort((a, b) => {
+                const idxA = order.indexOf(a.id);
+                const idxB = order.indexOf(b.id);
                 if (idxA === -1 && idxB === -1) return 0;
                 if (idxA === -1) return 1;
                 if (idxB === -1) return -1;
                 return idxA - idxB;
             });
-        }
+        };
 
-        setStatuses(combined);
+        setStatuses(sortStatuses(combined, statusOrder));
+        setSidebarStatuses(sortStatuses(combined, sidebarStatusOrder));
     };
 
     const reorderStatuses = async (newOrder: string[]) => {
@@ -109,12 +115,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
             .eq('id', user.id);
     };
 
+    const reorderSidebarStatuses = async (newOrder: string[]) => {
+        if (!user) return;
+        setSidebarStatuses(prev => {
+            const sorted = [...prev].sort((a, b) => {
+                const idxA = newOrder.indexOf(a.id);
+                const idxB = newOrder.indexOf(b.id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+            return sorted;
+        });
+
+        const { data } = await supabase.from('users').select('user_preferences').eq('id', user.id).single();
+        const current = (data?.user_preferences as Record<string, unknown>) ?? {};
+        await supabase
+            .from('users')
+            .update({ user_preferences: { ...current, sidebar_status_order: newOrder } })
+            .eq('id', user.id);
+    };
+
     useEffect(() => {
         if (user) fetchStatuses();
     }, [user]);
 
-    // Normaliza sub_id removendo separadores (vírgula, espaço, hífen) para matching robusto
-    const normalizeSubId = (s: string) => s.replace(/[-,\s]+/g, '').toLowerCase();
+    // `normalizeSubId` agora vem importado de `../utils/shopee`
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -179,7 +206,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 clickData.forEach(click => {
                     const raw = click['Sub_id'] || '';
-                    const canonical = (raw.split('-').filter(Boolean).join('-') || '').trim() === '' ? 'Sem Sub_id' : raw.split('-').filter(Boolean).join('-');
+                    const canonical = normalizeSubId(raw) === '' ? 'Sem Sub_id' : raw;
                     neededSubIds.add(canonical);
                     if (click['Referenciador'] && click['Referenciador'] !== 'Desconhecido') {
                         subIdToChannelMap.set(canonical, click['Referenciador']);
@@ -188,7 +215,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
                 commissionData.forEach(item => {
                     const parts = [item['Sub_id1'], item['Sub_id2'], item['Sub_id3'], item['Sub_id4'], item['Sub_id5']].filter(Boolean);
-                    const canonical = (parts.join('-') || '').trim() === '' || !parts.join('-').replace(/-/g, '').trim() ? 'Sem Sub_id' : parts.join('-');
+                    const raw = parts.join('-');
+                    const canonical = normalizeSubId(raw) === '' ? 'Sem Sub_id' : raw;
                     neededSubIds.add(canonical);
                     if (item['Canal'] && item['Canal'] !== 'Desconhecido') {
                         subIdToChannelMap.set(canonical, item['Canal']);
@@ -233,9 +261,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 const channelUpdates: Record<string, string> = {};
 
                 const getMatch = (raw: string) => {
-                    let canonical = (raw || '').split('-').filter(Boolean).join('-') || 'Sem Sub_id';
-                    if (canonical.trim() === '' || !canonical.replace(/-/g, '').trim()) canonical = 'Sem Sub_id';
-                    const normCanonical = normalizeSubId(canonical);
+                    const normRaw = normalizeSubId(raw || '');
+                    const finalRaw = normRaw === '' ? 'Sem Sub_id' : (raw || '');
+                    const normCanonical = normalizeSubId(finalRaw);
                     const track = updatedTracks.find(t =>
                         t.sub_id && normalizeSubId(t.sub_id) === normCanonical
                     );
@@ -393,11 +421,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     const contextValue = useMemo(() => ({
         commissionData, clickData, fileName, handleFileUpload, reportType, clearData,
-        dateFilter, setDateFilter, customRange, setCustomRange, statuses, fetchStatuses,
-        reorderStatuses, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
+        dateFilter, setDateFilter, customRange, setCustomRange, statuses, sidebarStatuses, fetchStatuses,
+        reorderStatuses, reorderSidebarStatuses, hasStartedAnalysis, setHasStartedAnalysis, isAutoSyncing
     }), [
         commissionData, clickData, fileName, reportType,
-        dateFilter, customRange, statuses, hasStartedAnalysis, isAutoSyncing
+        dateFilter, customRange, statuses, sidebarStatuses, hasStartedAnalysis, isAutoSyncing
     ]);
 
     return (

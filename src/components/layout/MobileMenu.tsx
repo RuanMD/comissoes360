@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
     X, LogOut, Settings, BarChart3, TrendingUp,
-    Package, Moon, Link, Upload, RefreshCw
+    Package, Moon, Link, Upload, RefreshCw, MessageSquare, Target
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
@@ -49,6 +49,8 @@ export function MobileMenu({ isOpen, onClose, onFileUpload, onRefresh }: MobileM
         { path: '/produtos', icon: Package, label: 'Produtos', featureKey: 'produtos' },
         { path: '/temporal', icon: BarChart3, label: 'Temporal', featureKey: 'temporal' },
         { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas', featureKey: 'diretas_indiretas' },
+        { path: '/criativo-track', icon: Target, label: 'Criativo Track', featureKey: 'criativo_track' },
+        { path: '/legendas', icon: MessageSquare, label: 'Legendas', featureKey: 'legendas' },
         { path: '/gerador-links', icon: Link, label: 'Gerador de Links', featureKey: 'gerador_links' },
     ];
 
@@ -104,10 +106,10 @@ export function MobileMenu({ isOpen, onClose, onFileUpload, onRefresh }: MobileM
                                         key={item.path}
                                         to={item.path}
                                         onClick={onClose}
-                                        className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-surface-highlight/40 border border-border-dark rounded-2xl active:scale-95 transition-all"
+                                        className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-surface-highlight/40 border border-border-dark rounded-2xl active:scale-95 transition-all min-w-0"
                                     >
-                                        <item.icon className="w-5 h-5 text-primary" />
-                                        <span className="text-sm font-semibold">{navLabels[item.featureKey] || item.label}</span>
+                                        <item.icon className="w-5 h-5 text-primary flex-shrink-0" />
+                                        <span className="text-sm font-semibold truncate">{navLabels[item.featureKey] || item.label}</span>
                                     </NavLink>
                                 ))}
                                 {isAdmin && (

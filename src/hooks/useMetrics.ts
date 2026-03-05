@@ -3,17 +3,7 @@ import { useData } from './useData';
 import { startOfDay, endOfDay, subDays, isWithinInterval, format } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { db } from '../lib/db';
-
-export function parseShopeeDate(dateStr: string) {
-    if (!dateStr) return null;
-    try {
-        const d = new Date(dateStr);
-        if (!isNaN(d.getTime())) return d;
-        return null;
-    } catch {
-        return null;
-    }
-}
+import { parseShopeeDate, normalizeSubIdForMatch as normalizeSubId, isSubIdMatch } from '../utils/shopee';
 
 export function useMetrics() {
     const { commissionData, clickData, dateFilter, customRange } = useData();
@@ -177,8 +167,8 @@ export function useMetrics() {
             'Sub_id1': (!item.utm_content || !item.utm_content.replace(/-/g, '').trim())
                 ? 'Sem Sub_id'
                 : item.utm_content || (dbTracks.find(t => t.id === item.track_id)?.sub_id) || '',
-            'Tempo dos Cliques': item.click_time ? format(new Date(item.click_time), 'yyyy-MM-dd HH:mm:ss') : '',
-            'Horário do pedido': item.purchase_time ? format(new Date(item.purchase_time), 'yyyy-MM-dd HH:mm:ss') : '',
+            'Tempo dos Cliques': item.click_time ? (parseShopeeDate(item.click_time) ? format(parseShopeeDate(item.click_time)!, 'yyyy-MM-dd HH:mm:ss') : item.click_time) : '',
+            'Horário do pedido': item.purchase_time ? (parseShopeeDate(item.purchase_time) ? format(parseShopeeDate(item.purchase_time)!, 'yyyy-MM-dd HH:mm:ss') : item.purchase_time) : '',
             'Canal': item.referrer || 'Desconhecido',
             _isFromDb: true,
             _trackId: item.track_id,
@@ -200,38 +190,7 @@ export function useMetrics() {
 
         return combined;
     }, [commissionData, dbConversions, dateFilter, customRange]);
-    // Helper for robust Sub_ID normalization: removes double hyphens, trailing/leading hyphens, and trims
-    const normalizeSubId = (sid: any): string => {
-        if (!sid || typeof sid !== 'string') return 'Sem Sub_id';
-        const normalized = sid.split('-').filter(Boolean).join('-').trim();
-        return normalized === '' ? 'Sem Sub_id' : normalized;
-    };
-
-    // Helper for fuzzy matching Sub_IDs (handles plurals like INTERESSE vs INTERESSES)
-    const isSubIdMatch = (s1: string, s2: string): boolean => {
-        const n1 = normalizeSubId(s1);
-        const n2 = normalizeSubId(s2);
-        if (n1 === 'Sem Sub_id' || n2 === 'Sem Sub_id') return n1 === n2;
-        if (n1 === n2) return true;
-
-        // Strip plurals 's' at the end of tokens OR before digits to handle INTERESSE/INTERESSES/INTERESSES01
-        const simplify = (s: string) => {
-            const low = s.toLowerCase();
-            // Remove 's' if it's at the end of a word segment OR before a digit
-            // segments are separated by non-alphanumerics (usually '-')
-            return low.replace(/([a-z]{3,})s(?=\d|-|$)/g, '$1')
-                .split('-')
-                .filter(Boolean)
-                .join('-');
-        };
-
-        const sim1 = simplify(n1);
-        const sim2 = simplify(n2);
-        if (sim1 === sim2) return true;
-
-        // Fallback: one contains the other (basic fuzzy)
-        return n1.includes(n2) || n2.includes(n1);
-    };
+    // Funções utilitárias normalizeSubId e isSubIdMatch importadas de '../utils/shopee'
 
     // 3. Correlate Data and Calculate Metrics
     const metrics = useMemo(() => {

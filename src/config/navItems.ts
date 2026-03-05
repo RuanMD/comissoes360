@@ -1,4 +1,4 @@
-import { LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, Clapperboard, Target, Link } from 'lucide-react';
+import { LayoutDashboard, Filter, Database, TrendingUp, BarChart3, Moon, Package, Clapperboard, Target, Link, MessageSquare } from 'lucide-react';
 import type { FeatureKey } from '../hooks/useFeatureAccess';
 
 export interface NavItem {
@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
     { path: '/diretas-vs-indiretas', icon: Moon, label: 'Diretas x Indiretas', featureKey: 'diretas_indiretas' },
     { path: '/status', icon: Filter, label: 'Gestão de Status', featureKey: 'status_management' },
     { path: '/criativo-track', icon: Clapperboard, label: 'Criativo Track', featureKey: 'criativo_track' },
+    { path: '/legendas', icon: MessageSquare, label: 'Legendas', featureKey: 'legendas' },
     { path: '/gerador-links', icon: Link, label: 'Gerador de Links', featureKey: 'gerador_links' },
 ];
 

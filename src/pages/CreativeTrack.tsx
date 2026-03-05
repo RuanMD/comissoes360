@@ -28,7 +28,7 @@ import {
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
     ChevronDown, ChevronRight, FileEdit, Archive, ArchiveRestore,
-    Clock, XCircle, LayoutList, Kanban
+    Clock, XCircle, LayoutList, Kanban, MessageSquare, Hash, Variable
 } from 'lucide-react';
 import { Tooltip } from '../components/ui/Tooltip';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -223,11 +223,25 @@ interface ShopeeConversion {
     synced_at: string;
 }
 
+interface Caption {
+    id: string;
+    title: string;
+    content: string;
+    hashtags: string[];
+    created_at: string;
+}
+
+interface Hashtag {
+    id: string;
+    tag: string;
+    created_at: string;
+}
+
 
 export function CreativeTrack() {
     const { user } = useAuth();
     const { showToast } = useToast();
-    const { dateFilter, customRange, statuses } = useData();
+    const { dateFilter, customRange, statuses, sidebarStatuses } = useData();
 
     const [tracks, setTracks] = useState<Track[]>([]);
     const [loading, setLoading] = useState(true);
@@ -250,6 +264,9 @@ export function CreativeTrack() {
     const [showKanbanModal, setShowKanbanModal] = useState(false);
 
     const creativeTracks = useMemo(() => {
+        // Definir pesos para cada status baseado na ordem definida pelo usuário para a Sidebar
+        const statusPriority = new Map(sidebarStatuses.map((s, idx) => [s.slug || s.name.toLowerCase(), idx]));
+
         return tracks
             .filter(t => !t.name.startsWith('Orgânico -'))
             .filter(t => {
@@ -257,8 +274,19 @@ export function CreativeTrack() {
                 if (archiveFilter === 'archived') return !!t.is_archived;
                 return true; // 'all'
             })
-            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true }));
-    }, [tracks, archiveFilter]);
+            .sort((a, b) => {
+                // 1. Prioridade por Status
+                const priorityA = statusPriority.get(a.status) ?? 999;
+                const priorityB = statusPriority.get(b.status) ?? 999;
+
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+
+                // 2. Ordem Alfabética (fallback)
+                return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base', numeric: true });
+            });
+    }, [tracks, archiveFilter, sidebarStatuses]);
 
     const nextSubId = useMemo(() => {
         const numbers = tracks
@@ -406,7 +434,7 @@ export function CreativeTrack() {
     const [inlineEditForm, setInlineEditForm] = useState<EntryForm>({ ...emptyEntryForm });
 
     // Tabs Navigation State
-    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions' | 'custom'>('metrics');
+    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions' | 'custom' | 'legendas'>('metrics');
 
     // Product Details State
     const [editingProduct, setEditingProduct] = useState(false);
@@ -418,6 +446,11 @@ export function CreativeTrack() {
         sold: '',
         rating: ''
     });
+
+    const [captions, setCaptions] = useState<Caption[]>([]);
+    const [hashtags, setHashtags] = useState<Hashtag[]>([]);
+    const [selectedCaptionId, setSelectedCaptionId] = useState<string>('');
+    const [selectedHashtagIds, setSelectedHashtagIds] = useState<string[]>([]);
 
     // Fetch product data for existing track
     const [fetchingProductData, setFetchingProductData] = useState(false);
@@ -631,6 +664,8 @@ export function CreativeTrack() {
                 // Pass currentTracks to ensure fetchAllEntries has the latest data immediately
                 fetchAllEntries(currentTracks.map(t => t.id));
                 fetchAllUserConversions();
+                fetchCaptions();
+                fetchHashtags();
             }
         };
         initData();
@@ -705,6 +740,22 @@ export function CreativeTrack() {
         if (data?.facebook_api_key) setFbToken(data.facebook_api_key);
     };
 
+    const fetchUserFunnels = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data, error } = await supabase
+                .from('funnels')
+                .select('*')
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+            setUserFunnels(data || []);
+        } catch (error) {
+            console.error('Error fetching user funnels:', error);
+        }
+    };
+
     const fetchFbLinkedAds = async (trackId: string) => {
         const { data } = await supabase
             .from('creative_track_fb_ads')
@@ -721,14 +772,33 @@ export function CreativeTrack() {
         setFbMetrics(data || []);
     };
 
-    const fetchUserFunnels = async () => {
+
+    const fetchCaptions = async () => {
         if (!user) return;
-        const { data } = await supabase
-            .from('funnels')
-            .select('id, name, days, maintenance_conditions')
+        const { data, error } = await supabase
+            .from('captions')
+            .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
-        setUserFunnels(data || []);
+        if (error) {
+            console.error('Erro ao buscar legendas:', error);
+            return;
+        }
+        setCaptions(data || []);
+    };
+
+    const fetchHashtags = async () => {
+        if (!user) return;
+        const { data, error } = await supabase
+            .from('hashtags')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('tag', { ascending: true });
+        if (error) {
+            console.error('Erro ao buscar hashtags:', error);
+            return;
+        }
+        setHashtags(data || []);
     };
 
     // ========== CREATE TRACK ==========
@@ -1004,13 +1074,13 @@ export function CreativeTrack() {
             setSelectedTrack(updated);
             setTracks(prev => prev.map(t => t.id === updated.id ? updated : t));
             setEditingTrack(false);
-            showToast('Track atualizado localmente!');
-
-            // Queue sync
+            // Queue sync (with implicit status update)
             await syncService.addToQueue({
                 type: 'UPDATE_TRACK',
                 payload: { id: selectedTrack.id, updates }
             });
+
+            showToast('Track atualizado!');
         } catch (error) {
             console.error(error);
             showToast('Erro ao atualizar track.', 'error');
@@ -2071,7 +2141,7 @@ export function CreativeTrack() {
                 return [data, ...prev].sort((a, b) => b.date.localeCompare(a.date));
             });
             setEntryForm({ ...emptyEntryForm });
-            showToast('Registro salvo!');
+            showToast('Registro salvo com sucesso!', 'success');
         } catch (error) {
             console.error(error);
             showToast('Erro ao salvar registro.', 'error');
@@ -2087,7 +2157,7 @@ export function CreativeTrack() {
             const { error } = await supabase.from('creative_track_entries').delete().eq('id', entry.id);
             if (error) throw error;
             setEntries(prev => prev.filter(e => e.id !== entry.id));
-            showToast('Registro excluído!');
+            showToast('Registro excluído com sucesso!', 'success');
         } catch (error) {
             console.error(error);
             showToast('Erro ao excluir registro.', 'error');
@@ -3540,6 +3610,12 @@ export function CreativeTrack() {
                                         >
                                             <ShoppingCart className="w-4 h-4" /> Conversões
                                         </button>
+                                        <button
+                                            onClick={() => setActiveTab('legendas')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'legendas' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <MessageSquare className="w-4 h-4" /> Legendas
+                                        </button>
                                     </div>
 
                                     <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
@@ -4327,6 +4403,159 @@ export function CreativeTrack() {
 
                                     </div>
 
+                                    <div className={activeTab === 'legendas' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Caption Select */}
+                                            <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-3">
+                                                <div className="flex items-center gap-2 text-sm font-bold text-white mb-2">
+                                                    <MessageSquare className="w-4 h-4 text-primary" />
+                                                    Templates de Legenda
+                                                </div>
+                                                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border-dark">
+                                                    {captions.length === 0 ? (
+                                                        <div className="text-xs text-text-secondary py-4 text-center">Nenhuma legenda cadastrada.</div>
+                                                    ) : (
+                                                        captions.map(cap => (
+                                                            <button
+                                                                key={cap.id}
+                                                                onClick={() => {
+                                                                    setSelectedCaptionId(cap.id);
+                                                                    setSelectedHashtagIds(cap.hashtags || []);
+                                                                }}
+                                                                className={`p-3 rounded-xl border text-left transition-all ${selectedCaptionId === cap.id
+                                                                    ? 'border-primary bg-primary/10'
+                                                                    : 'border-border-dark hover:border-primary/50 text-text-secondary'}`}
+                                                            >
+                                                                <div className="text-xs font-bold mb-1 text-white">{cap.title}</div>
+                                                                <div className="text-[10px] line-clamp-2 leading-relaxed">{cap.content}</div>
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Hashtag Select */}
+                                            <div className="bg-surface-dark border border-border-dark rounded-2xl p-4 flex flex-col gap-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-2 text-sm font-bold text-white">
+                                                        <Hash className="w-4 h-4 text-blue-400" />
+                                                        Hashtags Complementares
+                                                    </div>
+                                                    <span className="text-[10px] text-text-secondary bg-blue-500/10 px-2 py-0.5 rounded-full">
+                                                        {selectedHashtagIds.length} selecionadas
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border-dark">
+                                                    {hashtags.length === 0 ? (
+                                                        <div className="text-xs text-text-secondary py-4 text-center w-full">Nenhuma hashtag cadastrada.</div>
+                                                    ) : (
+                                                        hashtags.map(ht => (
+                                                            <button
+                                                                key={ht.id}
+                                                                onClick={() => {
+                                                                    if (selectedHashtagIds.includes(ht.id)) {
+                                                                        setSelectedHashtagIds(prev => prev.filter(id => id !== ht.id));
+                                                                    } else {
+                                                                        setSelectedHashtagIds(prev => [...prev, ht.id]);
+                                                                    }
+                                                                }}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${selectedHashtagIds.includes(ht.id)
+                                                                    ? 'border-blue-500 bg-blue-500/10 text-blue-400 font-bold'
+                                                                    : 'border-border-dark text-text-secondary hover:border-blue-500/50 hover:text-white'}`}
+                                                            >
+                                                                {ht.tag}
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Final Preview & Actions */}
+                                        {selectedCaptionId && (
+                                            <div className="bg-surface-dark border border-primary/30 rounded-2xl p-6 flex flex-col gap-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2 text-sm font-bold text-white">
+                                                        <Variable className="w-4 h-4 text-primary" />
+                                                        Preview da Legenda (com Variáveis)
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const cap = captions.find(c => c.id === selectedCaptionId);
+                                                            if (!cap) return;
+
+                                                            let finalContent = cap.content;
+                                                            const replacements: Record<string, string | number | null | undefined> = {
+                                                                nome_produto: selectedTrack?.product_name || selectedTrack?.name,
+                                                                id_afiliado: selectedTrack?.id,
+                                                                preco: selectedTrack?.product_price_min || selectedTrack?.product_price,
+                                                                link: selectedTrack?.affiliate_link,
+                                                                link_shopee: selectedTrack?.product_link || selectedTrack?.product_offer_link
+                                                            };
+
+                                                            Object.entries(replacements).forEach(([key, val]) => {
+                                                                const regex = new RegExp(`{{${key}}}`, 'g');
+                                                                finalContent = finalContent.replace(regex, String(val || ''));
+                                                            });
+
+                                                            const selectedTags = hashtags
+                                                                .filter(ht => selectedHashtagIds.includes(ht.id))
+                                                                .map(ht => ht.tag)
+                                                                .join(' ');
+
+                                                            const result = `${finalContent}\n\n${selectedTags}`;
+                                                            navigator.clipboard.writeText(result.trim());
+                                                            showToast('Legenda copiada com sucesso!');
+                                                        }}
+                                                        className="flex items-center gap-2 px-4 py-2 bg-primary text-background-dark rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5" /> Copiar Tudo
+                                                    </button>
+                                                </div>
+
+                                                <div className="bg-background-dark/50 border border-border-dark rounded-xl p-4">
+                                                    <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">
+                                                        {(() => {
+                                                            const cap = captions.find(c => c.id === selectedCaptionId);
+                                                            if (!cap) return '';
+
+                                                            let finalContent = cap.content;
+                                                            const replacements: Record<string, string | number | null | undefined> = {
+                                                                nome_produto: selectedTrack?.product_name || selectedTrack?.name,
+                                                                id_afiliado: selectedTrack?.id,
+                                                                preco: selectedTrack?.product_price_min || selectedTrack?.product_price,
+                                                                link: selectedTrack?.affiliate_link,
+                                                                link_shopee: selectedTrack?.product_link || selectedTrack?.product_offer_link
+                                                            };
+
+                                                            Object.entries(replacements).forEach(([key, val]) => {
+                                                                const regex = new RegExp(`{{${key}}}`, 'g');
+                                                                finalContent = finalContent.replace(regex, String(val || ''));
+                                                            });
+
+                                                            const selectedTags = hashtags
+                                                                .filter(ht => selectedHashtagIds.includes(ht.id))
+                                                                .map(ht => ht.tag)
+                                                                .join(' ');
+
+                                                            return (
+                                                                <>
+                                                                    {finalContent}
+                                                                    {selectedTags && <div className="mt-4 text-blue-400 font-medium">{selectedTags}</div>}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-4 text-[10px] text-text-secondary italic">
+                                                    <span>Dica: Utilize `{"{{"}nome_produto{"}}"}`, `{"{{"}id_afiliado{"}}"}`, `{"{{"}preco{"}}"}`, `{"{{"}link{"}}"}`, `{"{{"}link_shopee{"}}"}` nas suas legendas.</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+
                                     <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
                                         {/* Entries Table */}
                                         {
@@ -4356,8 +4585,8 @@ export function CreativeTrack() {
                                                                     <th className="text-right p-3">Cliq. Shopee</th>
                                                                     <th className="text-right p-3">CPC</th>
                                                                     <th className="text-right p-3">Pedidos</th>
-                                                                    <th className="text-right p-3">Comissão</th>
                                                                     <th className="text-right p-3">Investimento</th>
+                                                                    <th className="text-right p-3">Comissão</th>
                                                                     <th className="text-right p-3">Lucro</th>
                                                                     <th className="text-right p-3">%</th>
                                                                     <th className="text-center p-3"></th>
@@ -4502,8 +4731,8 @@ export function CreativeTrack() {
                                                                             <td className="p-3 text-right text-neutral-300">{entry.shopee_clicks}</td>
                                                                             <td className="p-3 text-right text-neutral-300">R$ {formatBRL(Number(entry.cpc))}</td>
                                                                             <td className="p-3 text-right text-blue-400 font-semibold">{entry.orders}</td>
-                                                                            <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
                                                                             <td className="p-3 text-right text-orange-400">R$ {formatBRL(Number(entry.investment))}</td>
+                                                                            <td className="p-3 text-right text-primary font-semibold">R$ {formatBRL(Number(entry.commission_value))}</td>
                                                                             <td className={`p-3 text-right font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(profit)}</td>
                                                                             <td className={`p-3 text-right text-xs ${pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(pct)}%</td>
                                                                             <td className="p-3 text-center">
@@ -4536,8 +4765,8 @@ export function CreativeTrack() {
                                                                             <td className="p-3 text-right text-neutral-300">{totals.shopee_clicks}</td>
                                                                             <td className="p-3 text-right text-neutral-300">R$ {formatBRL(avgCpc)}</td>
                                                                             <td className="p-3 text-right text-blue-400">{totals.orders}</td>
-                                                                            <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
                                                                             <td className="p-3 text-right text-orange-400">R$ {formatBRL(totals.investment)}</td>
+                                                                            <td className="p-3 text-right text-primary">R$ {formatBRL(totals.commission)}</td>
                                                                             <td className={`p-3 text-right ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>R$ {formatBRL(totalProfit)}</td>
                                                                             <td className={`p-3 text-right text-xs ${totalRoi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(totalRoi)}%</td>
                                                                             <td className="p-3"></td>
@@ -6031,8 +6260,8 @@ export function CreativeTrack() {
                             </div>
                         </div>
                     </div>
-                )
-            }
-        </div >
+                )}
+        </div>
     );
 }
+

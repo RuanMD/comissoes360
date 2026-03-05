@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment, useMemo } from 'react';
-import { useMetrics, parseShopeeDate } from '../hooks/useMetrics';
+import { useMetrics } from '../hooks/useMetrics';
+import { parseShopeeDate } from '../utils/shopee';
 import { useData } from '../hooks/useData';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastContext';

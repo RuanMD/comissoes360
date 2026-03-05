@@ -18,6 +18,7 @@ export const ALL_FEATURE_KEYS = [
     'criativo_track',
     'status_management',
     'gerador_links',
+    'legendas',
 ] as const;
 
 export type FeatureKey = (typeof ALL_FEATURE_KEYS)[number];
@@ -37,6 +38,7 @@ export const ROUTE_TO_FEATURE: Record<string, FeatureKey> = {
     '/criativo-track': 'criativo_track',
     '/status': 'status_management',
     '/gerador-links': 'gerador_links',
+    '/legendas': 'legendas',
 };
 
 /**
@@ -54,6 +56,7 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
     criativo_track: 'Criativo Track',
     status_management: 'Gestão de Status',
     gerador_links: 'Gerador de Links',
+    legendas: 'Legendas',
 };
 
 interface UseFeatureAccessReturn {

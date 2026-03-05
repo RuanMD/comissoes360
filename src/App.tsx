@@ -17,6 +17,7 @@ import { FunnelAnalysis } from './pages/FunnelAnalysis';
 import { CreativeTrack } from './pages/CreativeTrack';
 import { FunnelBuilder } from './pages/FunnelBuilder';
 import { LinkGenerator } from './pages/LinkGenerator';
+import { Captions } from './pages/Captions';
 
 // Admin
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -79,6 +80,7 @@ export default function App() {
                                     <Route path="/diretas-vs-indiretas" element={<FeatureGuard><DirectsVsIndirects /></FeatureGuard>} />
                                     <Route path="/status" element={<FeatureGuard><AdminStatusManagement /></FeatureGuard>} />
                                     <Route path="/criativo-track" element={<FeatureGuard><CreativeTrack /></FeatureGuard>} />
+                                    <Route path="/legendas" element={<FeatureGuard><Captions /></FeatureGuard>} />
                                     <Route path="/gerador-links" element={<FeatureGuard><LinkGenerator /></FeatureGuard>} />
                                 </Route>
                             </Route>
