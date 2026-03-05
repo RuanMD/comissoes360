@@ -773,6 +773,16 @@ export function useMetrics() {
             funnelByHour,
             funnelByProduct,
             funnelByDirectVsIndirect,
+            dailyPerformance: Object.entries(groupBy('date')).map(([date, m]) => ({
+                date,
+                investment: m.investment,
+                profit: m.commission - m.investment,
+                commission: m.commission,
+                shopeeClicks: Math.round(m.clicks),
+                adClicks: Math.round(m.adClicks),
+                orders: m.orders,
+                cpc: m.adClicks > 0 ? m.investment / m.adClicks : 0
+            })).sort((a, b) => a.date.localeCompare(b.date)),
             dailyChart: Object.entries(dailyOrders).map(([date, count]) => ({ date, count })),
             allOrders, productRanking, allProducts, categoriesRanking, channelsRanking,
             totalSalesCount,

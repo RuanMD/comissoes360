@@ -21,6 +21,7 @@ import {
     rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { SortableKpiCard } from '../components/dashboard/SortableKpiCard';
+import { DailyPerformanceChart } from '../components/dashboard/DailyPerformanceChart';
 
 export function FunnelAnalysis() {
     const metrics = useMetrics();
@@ -179,6 +180,9 @@ export function FunnelAnalysis() {
                     </div>
                 </div>
             </div>
+
+            {/* Daily Performance Chart */}
+            <DailyPerformanceChart data={(metrics as any).dailyPerformance || []} />
 
             {/* Sortable KPI Cards */}
             <DndContext
