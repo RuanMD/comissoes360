@@ -14,6 +14,8 @@ import {
     arrayMove,
 } from '@dnd-kit/sortable';
 import { SortableKpiCard } from '../components/dashboard/SortableKpiCard';
+import { PostagemTab } from '../components/dashboard/PostagemTab';
+import { CampanhasTab } from '../components/dashboard/CampanhasTab';
 import { supabase } from '../lib/supabase';
 import { syncService } from '../lib/syncService';
 import { useAuth } from '../context/AuthContext';
@@ -28,7 +30,8 @@ import {
     PlayCircle, StopCircle, PackageSearch, Truck, Star, Tag,
     Video, Store, Image as ImageIcon, ShieldCheck, ShieldAlert, AlertTriangle,
     ChevronDown, ChevronRight, FileEdit, Archive, ArchiveRestore,
-    Clock, XCircle, LayoutList, Kanban, MessageSquare, Hash, Variable
+    Clock, XCircle, LayoutList, Kanban, MessageSquare, Hash, Variable,
+    Megaphone, MonitorPlay
 } from 'lucide-react';
 import { Tooltip } from '../components/ui/Tooltip';
 import { format, subDays, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -434,7 +437,7 @@ export function CreativeTrack() {
     const [inlineEditForm, setInlineEditForm] = useState<EntryForm>({ ...emptyEntryForm });
 
     // Tabs Navigation State
-    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions' | 'custom' | 'legendas'>('metrics');
+    const [activeTab, setActiveTab] = useState<'metrics' | 'product' | 'conversions' | 'custom' | 'legendas' | 'postagem' | 'campanhas'>('metrics');
 
     // Product Details State
     const [editingProduct, setEditingProduct] = useState(false);
@@ -495,7 +498,8 @@ export function CreativeTrack() {
 
     // Dynamic Status Style Helper
     const getStatusStyle = (statusName: string = '') => {
-        const found = statuses?.find(s => s.slug === statusName || s.name.toLowerCase() === statusName.toLowerCase());
+        const target = statusName || '';
+        const found = statuses?.find(s => s.slug === target || s.name?.toLowerCase() === target.toLowerCase());
         if (found) {
             return {
                 color: found.color,
@@ -3144,7 +3148,7 @@ export function CreativeTrack() {
                                                     backgroundColor: getStatusStyle(track.status).color,
                                                     boxShadow: `0 0 8px ${getStatusStyle(track.status).color}80`
                                                 }}
-                                                title={track.status.charAt(0).toUpperCase() + track.status.slice(1)}
+                                                title={(track.status || '').charAt(0).toUpperCase() + (track.status || '').slice(1)}
                                             />
                                             {trackEntryCounts[track.id] > 0 && (
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-colors ${isActive ? 'bg-background-dark/20 text-background-dark' : 'bg-primary/10 text-primary group-hover:bg-primary/20'}`}>
@@ -3380,6 +3384,8 @@ export function CreativeTrack() {
                                             </div>
                                         </div>
                                     )}
+
+
                                 </div>
                             ) : (
                                 <>
@@ -3615,6 +3621,18 @@ export function CreativeTrack() {
                                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'legendas' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
                                         >
                                             <MessageSquare className="w-4 h-4" /> Legendas
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('postagem')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'postagem' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <Megaphone className="w-4 h-4" /> Postagem
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('campanhas')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'campanhas' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <MonitorPlay className="w-4 h-4" /> Campanhas
                                         </button>
                                     </div>
 
@@ -4555,6 +4573,22 @@ export function CreativeTrack() {
                                         )}
                                     </div>
 
+                                    <div className={activeTab === 'postagem' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        <PostagemTab
+                                            trackId={selectedTrack?.id || ''}
+                                            trackName={selectedTrack?.name || ''}
+                                            fbToken={fbToken}
+                                            initialCaption={captions.find(c => c.id === selectedCaptionId)?.content || captions[0]?.content || ''}
+                                        />
+                                    </div>
+
+                                    <div className={activeTab === 'campanhas' ? 'flex flex-col gap-4' : 'hidden'}>
+                                        <CampanhasTab
+                                            trackId={selectedTrack?.id || ''}
+                                            trackName={selectedTrack?.name || ''}
+                                            fbToken={fbToken}
+                                        />
+                                    </div>
 
                                     <div className={activeTab === 'metrics' ? 'flex flex-col gap-4' : 'hidden'}>
                                         {/* Entries Table */}
@@ -5157,6 +5191,24 @@ export function CreativeTrack() {
                                             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'conversions' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
                                         >
                                             <ShoppingCart className="w-4 h-4" /> Conversões
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('legendas')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'legendas' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <MessageSquare className="w-4 h-4" /> Legendas
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('postagem')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'postagem' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <Megaphone className="w-4 h-4" /> Postagem
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('campanhas')}
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${activeTab === 'campanhas' ? 'bg-primary text-background-dark shadow-lg shadow-primary/20' : 'bg-surface-dark text-text-secondary border border-border-dark hover:text-white hover:border-primary/50'}`}
+                                        >
+                                            <MonitorPlay className="w-4 h-4" /> Campanhas
                                         </button>
                                     </div>
 
